@@ -1,10 +1,10 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreateEquipmentDTO, createEquipmentSchema } from './dto/createEquipment.dto';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { CreateEquipmentDTO, createEquipmentSchema } from './dto/createEquipment.dto.js';
 
 @Injectable()
 export class EquipmentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async equipmentExists(equipmentName: string): Promise<boolean> {
     const equipment = await this.prisma.equipment.findFirst({
@@ -17,7 +17,7 @@ export class EquipmentService {
     if (data.equipmentName) {
       data.equipmentName = data.equipmentName.trim();
     }
-    
+
     // Validate input using Zod schema
     const validatedData = createEquipmentSchema.parse(data);
 
@@ -36,6 +36,13 @@ export class EquipmentService {
         minequipmentQuantity: validatedData.minEquipmentQuantity || 0,
         equipmentShelfId: validatedData.equipmentShelfId,
       }
+    });
+  }
+
+  async getAllEquipments() {
+    // Retrieve all equipment records, ordered by equipmentName to utilize the index
+    return this.prisma.equipment.findMany({
+      orderBy: { equipmentName: 'asc' }
     });
   }
 }
