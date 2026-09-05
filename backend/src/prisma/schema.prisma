@@ -1,0 +1,260 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlserver"
+}
+
+
+// ============================================================
+// AUTHORIZATION
+// ============================================================
+
+model Role {
+  roleId   String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  roleName String? @db.VarChar(100)
+
+  users       User[]
+  permissions Permission[]
+
+  @@map("Role")
+}
+
+
+model Permission {
+  permissionId   String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  permissionName String? @db.VarChar(100)
+
+  roleId String? @db.UniqueIdentifier
+
+  role Role? @relation(
+    fields: [roleId],
+    references: [roleId]
+  )
+
+  @@map("Permission")
+}
+
+
+// ============================================================
+// USER
+// ============================================================
+
+model User {
+  userId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+
+  userName    String? @db.VarChar(100)
+  userEmail   String? @db.VarChar(150)
+  hashPassword String? @db.VarChar(255)
+
+  roleId String? @db.UniqueIdentifier
+
+  userStatus String? @db.VarChar(50)
+
+  role Role? @relation(
+    fields: [roleId],
+    references: [roleId]
+  )
+
+  sessions Session[]
+
+  @@map("User")
+}
+
+
+// ============================================================
+// SESSION
+// ============================================================
+
+model Session {
+  sessionId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+
+  createdAt DateTime? @default(now()) @db.DateTime2
+  expiresAt DateTime? @db.DateTime2
+
+  userId String? @db.UniqueIdentifier
+
+  user User? @relation(
+    fields: [userId],
+    references: [userId]
+  )
+
+  @@map("Session")
+}
+
+
+// ============================================================
+// EQUIPMENT
+// ============================================================
+
+model Equipment {
+  equipmentId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+
+  equipmentName String? @db.VarChar(100)
+
+  hasSerialNumber Boolean @default(false)
+
+  equipmentQuantity    Int @default(0)
+  minequipmentQuantity Int @default(0)
+
+  equipmentShelfId String? @db.UniqueIdentifier
+
+  serialNumbers       SerialNumber[]
+  mouvements          Mouvement[]
+  equipmentShelfs     EquipmentShelfs[]
+  equipmentMouvements EquipmentMouvement[]
+
+  @@index([equipmentName])
+  @@index([hasSerialNumber])
+  @@index([equipmentShelfId])
+  @@index([minequipmentQuantity])
+  @@map("Equipment")
+}
+
+
+// ============================================================
+// SERIAL NUMBER
+// ============================================================
+
+model SerialNumber {
+  serialNumberId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+
+  serialNumberCode   String? @db.VarChar(150)
+  serialNumberStatus String? @db.VarChar(50)
+
+  equipmentId String? @db.UniqueIdentifier
+  shelfId     String? @db.UniqueIdentifier
+
+  equipment Equipment? @relation(
+    fields: [equipmentId],
+    references: [equipmentId]
+  )
+
+  shelf Shelf? @relation(
+    fields: [shelfId],
+    references: [shelfId]
+  )
+
+  @@map("SerialNumber")
+}
+
+
+// ============================================================
+// SHELF
+// ============================================================
+
+model Shelf {
+  shelfId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+
+  shelfName     String? @db.VarChar(100)
+  shelfQuantity Int     @default(0)
+
+  equipmentShelfId String? @db.UniqueIdentifier
+
+  serialNumbers SerialNumber[]
+
+  sourceMouvements Mouvement[] @relation("SourceShelf")
+
+  destinationMouvements Mouvement[] @relation("DestinationShelf")
+
+  equipmentMouvements EquipmentMouvement[]
+
+  equipmentShelf EquipmentShelfs? @relation(
+    "ShelfEquipmentShelf",
+    fields: [equipmentShelfId],
+    references: [equipmentShelfId]
+  )
+
+  @@map("Shelf")
+}
+
+
+// ============================================================
+// MOUVEMENT
+// ============================================================
+
+model Mouvement {
+  mouvementId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+
+  mouvementStatus   String? @db.VarChar(50)
+  mouvementQuantity Int?
+
+  equipmentId String? @db.UniqueIdentifier
+
+  sourceShelfId      String? @db.UniqueIdentifier
+  destinationShelfId String? @db.UniqueIdentifier
+
+  equipment Equipment? @relation(
+    fields: [equipmentId],
+    references: [equipmentId]
+  )
+
+  sourceShelf Shelf? @relation(
+    "SourceShelf",
+    fields: [sourceShelfId],
+    references: [shelfId]
+  )
+
+  destinationShelf Shelf? @relation(
+    "DestinationShelf",
+    fields: [destinationShelfId],
+    references: [shelfId]
+  )
+
+  @@map("Mouvement")
+}
+
+
+// ============================================================
+// EQUIPMENT SHELFS
+// ============================================================
+
+model EquipmentShelfs {
+  equipmentShelfId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+
+  equipmentQuantity Int @default(0)
+
+  equipmentId String? @db.UniqueIdentifier
+
+  equipment Equipment? @relation(
+    fields: [equipmentId],
+    references: [equipmentId]
+  )
+
+  shelves Shelf[] @relation("ShelfEquipmentShelf")
+
+  @@map("EquipmentShelfs")
+}
+
+
+// ============================================================
+// EQUIPMENT MOUVEMENTS
+//
+// NOTE:
+// Your actual SSMS table is named "EqipmentMouvements"
+// exactly as shown in your diagram.
+// Prisma model name is cleaned up but @@map keeps SQL name.
+// ============================================================
+
+model EquipmentMouvement {
+  equipmentMouvementsId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+
+  equipmentQuantity Int @default(0)
+
+  equipmentId String? @db.UniqueIdentifier
+  shelfId     String? @db.UniqueIdentifier
+
+  equipment Equipment? @relation(
+    fields: [equipmentId],
+    references: [equipmentId]
+  )
+
+  shelf Shelf? @relation(
+    fields: [shelfId],
+    references: [shelfId]
+  )
+
+  @@map("EqipmentMouvements")
+}
