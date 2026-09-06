@@ -175,7 +175,12 @@ export class EquipmentService {
     });
   }
 
-  async getSerialNumbersByEquipmentId(equipmentId: string) {
+  async getSerialNumbersByEquipmentId(equipmentId: string, paginationDTO: PaginationDTO) {
+    const limit = paginationDTO.limit;
+    const page = paginationDTO.page;
+    const skip = (page - 1) * limit;
+    const take = limit;
+
     const exist = await this.equipmentExists(equipmentId)
     if (!exist) {
       throw new NotFoundException(`Equipment with ID '${equipmentId}' not found`);
@@ -183,7 +188,9 @@ export class EquipmentService {
 
     // Return all serial number tuples that belong to this equipment
     return this.prisma.serialNumber.findMany({
-      where: { equipmentId }
+      where: { equipmentId },
+      skip,
+      take,
     });
   }
 

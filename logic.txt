@@ -47,11 +47,11 @@ repair and start mouvement from null source to a shelf and start another mouveme
 to null destination with change status 
 
 
-                                               ___________________________________
-                                              |                                   |
-                                              |           API DESIGN              |
-                                              |                                   |
-                                              |___________________________________|
+                                 ___________________________________
+                                |                                   |
+                                |            API DESIGN             |
+                                |                                   |
+                                |___________________________________|
 
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -94,17 +94,9 @@ DELETE /equipment/:id
 
 GET    /equipment/:equipmentId/serialNumbers
        getSerialNumbersByEquipmentId() first validate equipment id input then check if the equipment exists using equipmentExists() 
-                                       then return all serial number tuples that belong to this equipment
+                                       then return all serial number tuples that belong to this equipment from serialNumber model
+                                       using pagination method
 
-
-GET    /equipment/:id/shelves
-       getEquipmentShelves()     search about equipment with selecting shelves then return equipment id and name and quantity with listing shelf id and 
-                                 name and quantity for each shelf
-
-
-
-GET    /equipment/shelves        
-       getAllEquipmentsWithShelves()    listing all equipment with their shelves 
 
 
 equipmentExists()
