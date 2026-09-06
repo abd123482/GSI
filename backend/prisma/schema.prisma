@@ -7,7 +7,6 @@ datasource db {
   provider = "sqlserver"
 }
 
-
 // ============================================================
 // AUTHORIZATION
 // ============================================================
@@ -22,195 +21,185 @@ model Role {
   @@map("Role")
 }
 
+// ============================================================
+// PERMISSION
+// ============================================================
 
 model Permission {
   permissionId   String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
   permissionName String? @db.VarChar(100)
 
   roleId String? @db.UniqueIdentifier
+  role   Role?   @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction)
 
-  role Role? @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction)
-
+  @@index([roleId])
   @@map("Permission")
 }
-
 
 // ============================================================
 // USER
 // ============================================================
 
 model User {
-  userId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
-  userName    String? @db.VarChar(100)
-  userEmail   String? @db.VarChar(150)
+  userId       String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  userName     String? @db.VarChar(100)
+  userEmail    String? @db.VarChar(150)
   hashPassword String? @db.VarChar(255)
 
-  roleId String? @db.UniqueIdentifier
-
+  roleId     String? @db.UniqueIdentifier
   userStatus String? @db.VarChar(50)
 
-  role Role? @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction)
-
+  role     Role?     @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction)
   sessions Session[]
 
+  @@index([roleId])
+  @@index([userEmail])
+  @@index([userName])
   @@map("User")
 }
-
 
 // ============================================================
 // SESSION
 // ============================================================
 
 model Session {
-  sessionId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
+  sessionId String    @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
   createdAt DateTime? @default(now()) @db.DateTime2
   expiresAt DateTime? @db.DateTime2
 
   userId String? @db.UniqueIdentifier
+  user   User?   @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
 
-  user User? @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
-
+  @@index([userId])
+  @@index([expiresAt])
   @@map("Session")
 }
-
 
 // ============================================================
 // EQUIPMENT
 // ============================================================
 
 model Equipment {
-  equipmentId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
-  equipmentName String? @db.VarChar(100)
-
-  hasSerialNumber Boolean @default(false)
-
-  equipmentQuantity    Int @default(0)
-  minequipmentQuantity Int @default(0)
-
-  equipmentShelfId String? @db.UniqueIdentifier
+  equipmentId          String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  equipmentName        String? @db.VarChar(100)
+  hasSerialNumber      Boolean @default(false)
+  equipmentQuantity    Int     @default(0)
+  minequipmentQuantity Int     @default(0)
 
   serialNumbers       SerialNumber[]
   mouvements          Mouvement[]
-  equipmentShelfs     EquipmentShelfs[]
   equipmentMouvements EquipmentMouvement[]
+  equipmentShelfs     EquipmentShelfs[]
 
   @@index([equipmentName])
+  @@index([hasSerialNumber])
   @@map("Equipment")
 }
-
 
 // ============================================================
 // SERIAL NUMBER
 // ============================================================
 
 model SerialNumber {
-  serialNumberId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
+  serialNumberId     String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
   serialNumberCode   String? @db.VarChar(150)
   serialNumberStatus String? @db.VarChar(50)
 
   equipmentId String? @db.UniqueIdentifier
   shelfId     String? @db.UniqueIdentifier
 
-  equipment Equipment? @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction)
-  shelf Shelf? @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
+  equipment  Equipment?  @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction)
+  shelf      Shelf?      @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
+  mouvements Mouvement[]
 
+  @@index([equipmentId])
+  @@index([shelfId])
+  @@index([serialNumberCode])
+  @@index([serialNumberStatus])
   @@map("SerialNumber")
 }
-
 
 // ============================================================
 // SHELF
 // ============================================================
 
 model Shelf {
-  shelfId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
+  shelfId       String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
   shelfName     String? @db.VarChar(100)
   shelfQuantity Int     @default(0)
 
-  equipmentShelfId String? @db.UniqueIdentifier
+  serialNumbers         SerialNumber[]
+  sourceMouvements      Mouvement[]          @relation("SourceShelf")
+  destinationMouvements Mouvement[]          @relation("DestinationShelf")
+  equipmentMouvements   EquipmentMouvement[]
+  equipmentShelfs       EquipmentShelfs[]
 
-  serialNumbers SerialNumber[]
-
-  sourceMouvements Mouvement[] @relation("SourceShelf")
-
-  destinationMouvements Mouvement[] @relation("DestinationShelf")
-
-  equipmentMouvements EquipmentMouvement[]
-
-  equipmentShelf EquipmentShelfs? @relation("ShelfEquipmentShelf", fields: [equipmentShelfId], references: [equipmentShelfId], onDelete: NoAction, onUpdate: NoAction)
-
+  @@index([shelfName])
   @@map("Shelf")
 }
-
 
 // ============================================================
 // MOUVEMENT
 // ============================================================
 
 model Mouvement {
-  mouvementId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
+  mouvementId       String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
   mouvementStatus   String? @db.VarChar(50)
   mouvementQuantity Int?
 
-  equipmentId String? @db.UniqueIdentifier
-
+  equipmentId        String? @db.UniqueIdentifier
+  serialNumberId     String? @db.UniqueIdentifier
   sourceShelfId      String? @db.UniqueIdentifier
   destinationShelfId String? @db.UniqueIdentifier
 
-  equipment Equipment? @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction)
+  equipment        Equipment?    @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction)
+  serialNumber     SerialNumber? @relation(fields: [serialNumberId], references: [serialNumberId], onDelete: NoAction, onUpdate: NoAction)
+  sourceShelf      Shelf?        @relation("SourceShelf", fields: [sourceShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
+  destinationShelf Shelf?        @relation("DestinationShelf", fields: [destinationShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
 
-  sourceShelf Shelf? @relation("SourceShelf", fields: [sourceShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
-
-  destinationShelf Shelf? @relation("DestinationShelf", fields: [destinationShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
-
+  @@index([equipmentId])
+  @@index([serialNumberId])
+  @@index([sourceShelfId])
+  @@index([destinationShelfId])
+  @@index([mouvementStatus])
   @@map("Mouvement")
 }
-
 
 // ============================================================
 // EQUIPMENT SHELFS
 // ============================================================
 
 model EquipmentShelfs {
-  equipmentShelfId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  equipmentShelfId  String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  equipmentId       String @db.UniqueIdentifier
+  shelfId           String @db.UniqueIdentifier
+  equipmentQuantity Int    @default(0)
 
-  equipmentQuantity Int @default(0)
+  equipment Equipment @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction)
+  shelf     Shelf     @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
 
-  equipmentId String? @db.UniqueIdentifier
-
-  equipment Equipment? @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction)
-
-  shelves Shelf[] @relation("ShelfEquipmentShelf")
-
+  @@unique([equipmentId, shelfId])
+  @@index([equipmentId])
+  @@index([shelfId])
+  @@index([equipmentQuantity])
   @@map("EquipmentShelfs")
 }
 
-
 // ============================================================
 // EQUIPMENT MOUVEMENTS
-//
-// NOTE:
-// Your actual SSMS table is named "EqipmentMouvements"
-// exactly as shown in your diagram.
-// Prisma model name is cleaned up but @@map keeps SQL name.
 // ============================================================
 
 model EquipmentMouvement {
   equipmentMouvementsId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
-  equipmentQuantity Int @default(0)
+  equipmentQuantity     Int    @default(0)
 
   equipmentId String? @db.UniqueIdentifier
   shelfId     String? @db.UniqueIdentifier
 
   equipment Equipment? @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction)
-  shelf Shelf? @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
+  shelf     Shelf?     @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
 
+  @@index([equipmentId])
+  @@index([shelfId])
   @@map("EqipmentMouvements")
 }

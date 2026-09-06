@@ -5,7 +5,6 @@ export const updateEquipmentSchema = z.object({
   hasSerialNumber: z.boolean().optional(),
   equipmentQuantity: z.number().int().nonnegative().optional(),
   minEquipmentQuantity: z.number().int().nonnegative().optional(),
-  equipmentShelfId: z.number().int().positive().optional(),
 });
 
 export type UpdateEquipmentDTO = z.infer<typeof updateEquipmentSchema>;
