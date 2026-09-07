@@ -43,26 +43,35 @@ model Permission {
 // ============================================================
 
 model User {
-  userId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  userId       String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
 
-  userName    String? @db.VarChar(100)
-  userEmail   String? @db.VarChar(150)
+  // Clerk identity
+  clerkUserId  String? @db.VarChar(255)
+
+  userName     String? @db.VarChar(100)
+  userEmail    String? @db.VarChar(150)
+
+  // OLD AUTH — stop using this with Clerk
   hashPassword String? @db.VarChar(255)
 
-  roleId String? @db.UniqueIdentifier
+  roleId       String? @db.UniqueIdentifier
+  userStatus   String? @db.VarChar(50)
 
-  userStatus String? @db.VarChar(50)
-
-  role Role? @relation(
+  role         Role? @relation(
     fields: [roleId],
-    references: [roleId]
+    references: [roleId],
+    onDelete: NoAction,
+    onUpdate: NoAction
   )
 
   sessions Session[]
 
+  @@index([clerkUserId])
+  @@index([roleId])
+  @@index([userEmail])
+  @@index([userName])
   @@map("User")
 }
-
 
 // ============================================================
 // SESSION

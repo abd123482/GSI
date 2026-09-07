@@ -10,7 +10,7 @@ import {
 
 @Injectable()
 export class EquipmentMovementService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * Checks if an equipment with the given ID exists

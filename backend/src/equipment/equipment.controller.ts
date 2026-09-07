@@ -4,7 +4,10 @@ import type { CreateEquipmentDTO } from './dto/createEquipment.dto.js';
 import type { UpdateEquipmentDTO } from './dto/updateEquipment.dto.js';
 import type { PaginationDTO } from './dto/pagination.dto.js';
 import * as searchEquipmentDto from './dto/searchEquipment.dto.js';
+import { ClerkAuthGuard } from '../auth/clerk-auth.guard.js';
+import { UseGuards } from '@nestjs/common';
 
+@UseGuards(ClerkAuthGuard)
 @Controller('equipment')
 export class EquipmentController {
   constructor(private readonly equipmentService: EquipmentService) { }

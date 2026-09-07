@@ -7,9 +7,11 @@ import { EquipmentModule } from './equipment/equipment.module.js';
 import { SerialNumberModule } from './serial-numbers/serialNumber.module.js';
 import { EquipmentMovementModule } from './movements/equipmentMovement.module.js';
 import { ShelfModule } from './shelves/shelves.module.js';
+import { AuthModule } from './auth/auth.module.js';
 
 @Module({
   imports: [
+    AuthModule,
     EquipmentModule,
     SerialNumberModule,
     EquipmentMovementModule,
@@ -24,4 +26,4 @@ import { ShelfModule } from './shelves/shelves.module.js';
     AppService,
   ],
 })
-export class AppModule {}
+export class AppModule { }

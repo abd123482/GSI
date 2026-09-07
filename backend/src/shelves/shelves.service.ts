@@ -7,7 +7,7 @@ import { SearchShelfDTO } from './dto/searchShelf.dto.js';
 
 @Injectable()
 export class ShelfService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async existShelf(shelfName: string): Promise<boolean> {
     const shelf = await this.prisma.shelf.findFirst({
@@ -56,23 +56,6 @@ export class ShelfService {
       skip,
       take: limit,
       where: { shelfName },
-      orderBy: { shelfName: 'asc' },
-    });
-  }
-
-  async searchShelves(searchShelfDTO: SearchShelfDTO, pagination: PaginationDTO) {
-    const { limit = 10, page = 1 } = pagination ?? {};
-    const skip = (page - 1) * limit;
-    const where: any = {};
-    if (searchShelfDTO.shelfName) {
-      where.shelfName = {
-        contains: searchShelfDTO.shelfName,
-      };
-    }
-    return await this.prisma.shelf.findMany({
-      skip,
-      take: limit,
-      where,
       orderBy: { shelfName: 'asc' },
     });
   }
