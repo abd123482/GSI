@@ -1,22 +1,17 @@
 import {
-    Controller,
-    Get,
-    Req,
-    UseGuards,
+  Controller,
+  Get,
+  UseGuards,
 } from '@nestjs/common';
-
-import {
-    ClerkAuthGuard,
-    type AuthenticatedRequest,
-} from './clerk-auth.guard.js';
+import { ClerkAuthGuard } from './clerk-auth.guard.js';
+import { CurrentUser } from './decorators/current-user.decorator.js';
+import type { AuthenticatedUser } from './types/authenticated-user.type.js';
 
 @Controller('auth')
 export class AuthController {
-    @UseGuards(ClerkAuthGuard)
-    @Get('me')
-    getCurrentUser(
-        @Req() request: AuthenticatedRequest,
-    ) {
-        return request.authUser;
-    }
+  @UseGuards(ClerkAuthGuard)
+  @Get('me')
+  getCurrentUser(@CurrentUser() user: AuthenticatedUser) {
+    return user;
+  }
 }

@@ -25,18 +25,32 @@ export class ShelfService {
     return await this.prisma.shelf.create({
       data: {
         shelfName: dto.shelfName,
+        shelfQuantity: dto.shelfQuantity !== undefined ? Number(dto.shelfQuantity) : 0,
       },
     });
   }
 
   async getAllShelves(pagination: PaginationDTO) {
-    const { limit = 10, page = 1 } = pagination ?? {};
+    const page = pagination?.page ? Number(pagination.page) : 1;
+    const limit = pagination?.limit ? Number(pagination.limit) : 10;
     const skip = (page - 1) * limit;
-    return await this.prisma.shelf.findMany({
-      skip,
-      take: limit,
-      orderBy: { shelfName: 'asc' },
-    });
+
+    const [shelves, totalShelves] = await Promise.all([
+      this.prisma.shelf.findMany({
+        skip,
+        take: limit,
+        orderBy: { shelfName: 'asc' },
+      }),
+      this.prisma.shelf.count(),
+    ]);
+
+    return {
+      shelves,
+      totalShelves,
+      totalPages: Math.ceil(totalShelves / limit) || 1,
+      currentPage: page,
+      limit,
+    };
   }
 
   async getShelfById(pagination: PaginationDTO, id: string) {
@@ -60,6 +74,36 @@ export class ShelfService {
     });
   }
 
+  async searchShelves(searchShelfDTO: SearchShelfDTO, pagination: PaginationDTO) {
+    const page = pagination?.page ? Number(pagination.page) : 1;
+    const limit = pagination?.limit ? Number(pagination.limit) : 10;
+    const skip = (page - 1) * limit;
+    const where: any = {};
+    if (searchShelfDTO?.shelfName) {
+      where.shelfName = {
+        contains: searchShelfDTO.shelfName,
+      };
+    }
+
+    const [shelves, totalShelves] = await Promise.all([
+      this.prisma.shelf.findMany({
+        skip,
+        take: limit,
+        where,
+        orderBy: { shelfName: 'asc' },
+      }),
+      this.prisma.shelf.count({ where }),
+    ]);
+
+    return {
+      shelves,
+      totalShelves,
+      totalPages: Math.ceil(totalShelves / limit) || 1,
+      currentPage: page,
+      limit,
+    };
+  }
+
   async updateShelf(dto: UpdateShelfDTO, id: string) {
     const existingShelf = await this.prisma.shelf.findUnique({
       where: { shelfId: id },
@@ -79,6 +123,7 @@ export class ShelfService {
       where: { shelfId: id },
       data: {
         ...(dto.shelfName !== undefined && { shelfName: dto.shelfName }),
+        ...(dto.shelfQuantity !== undefined && { shelfQuantity: Number(dto.shelfQuantity) }),
       },
     });
   }
@@ -88,10 +133,53 @@ export class ShelfService {
       where: { shelfId: id },
     });
     if (!existingShelf) {
-      throw new NotFoundException(`Shelf with ID '${id}' not found`);
+      throw new NotFoundException(`Étagère avec l'identifiant '${id}' introuvable.`);
     }
-    return await this.prisma.shelf.delete({
-      where: { shelfId: id },
-    });
+
+    // 1. Check if equipment is stored on this shelf
+    try {
+      const activeEquipment = await this.prisma.equipmentShelfs.findFirst({
+        where: {
+          shelfId: id,
+          equipmentQuantity: { gt: 0 },
+        },
+      });
+
+      if (activeEquipment) {
+        throw new BadRequestException(
+          'Impossible de supprimer cette étagère : elle contient encore des équipements en stock.',
+        );
+      }
+
+      // Clean up any empty equipment-to-shelf mappings (quantity = 0)
+      await this.prisma.equipmentShelfs.deleteMany({
+        where: { shelfId: id },
+      });
+    } catch (err: any) {
+      if (err instanceof BadRequestException) throw err;
+      // If equipmentShelfs query fails for any reason, continue to deletion attempt
+    }
+
+    // 2. Perform deletion and gracefully catch foreign key constraints
+    try {
+      return await this.prisma.shelf.delete({
+        where: { shelfId: id },
+      });
+    } catch (err: any) {
+      // Handle foreign key constraint violations from SQL Server (Prisma P2003 or reference constraints)
+      if (
+        err.code === 'P2003' ||
+        err.message?.includes('REFERENCE constraint') ||
+        err.message?.includes('foreign key') ||
+        err.message?.includes('conflicted with the REFERENCE constraint')
+      ) {
+        throw new BadRequestException(
+          'Impossible de supprimer cette étagère : elle est encore liée à des équipements ou des mouvements dans SQL Server.',
+        );
+      }
+      throw new BadRequestException(
+        err.message || 'Erreur lors de la suppression de l’étagère dans SQL Server.',
+      );
+    }
   }
 }

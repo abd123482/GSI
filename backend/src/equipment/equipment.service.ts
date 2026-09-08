@@ -57,7 +57,30 @@ export class EquipmentService {
     const equipments = await this.prisma.equipment.findMany({
       skip,
       take,
-      orderBy: { equipmentName: 'asc' }
+      orderBy: { equipmentName: 'asc' },
+      include: {
+        serialNumbers: {
+          orderBy: { serialNumberCode: 'asc' },
+          include: {
+            shelf: {
+              select: {
+                shelfId: true,
+                shelfName: true,
+              },
+            },
+          },
+        },
+        equipmentShelfs: {
+          include: {
+            shelf: {
+              select: {
+                shelfId: true,
+                shelfName: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     const totalEquipments = await this.prisma.equipment.count();
@@ -65,33 +88,64 @@ export class EquipmentService {
     return {
       equipments,
       totalEquipments,
-      totalPages: Math.ceil(totalEquipments / limit),
+      totalPages: Math.ceil(totalEquipments / limit) || 1,
       currentPage: page,
-      limit
+      limit,
     };
   }
 
-  async searchEquipments(query: SearchEquipmentDTO, paginationDTO: PaginationDTO) {
+  async searchEquipments(
+    query: SearchEquipmentDTO,
+    paginationDTO: PaginationDTO = { page: 1, limit: 10 },
+  ) {
     // First validate inputs of searching equipment from SearchEquipmentDTO
     const validatedData = searchEquipmentSchema.parse(query);
 
-    const limit = paginationDTO.limit;
-    const page = paginationDTO.page;
+    const limit = paginationDTO?.limit || 10;
+    const page = paginationDTO?.page || 1;
     const skip = (page - 1) * limit;
     const take = limit;
 
     const where: any = {};
-    if (validatedData.equipmentName !== undefined) where.equipmentName = validatedData.equipmentName;
-    if (validatedData.hasSerialNumber !== undefined) where.hasSerialNumber = validatedData.hasSerialNumber;
-    if (validatedData.equipmentQuantity !== undefined) where.equipmentQuantity = validatedData.equipmentQuantity;
-    if (validatedData.minEquipmentQuantity !== undefined) where.minequipmentQuantity = validatedData.minEquipmentQuantity;
-    if (validatedData.equipmentShelfId !== undefined) where.equipmentShelfId = validatedData.equipmentShelfId;
+    if (validatedData.equipmentName !== undefined)
+      where.equipmentName = { contains: validatedData.equipmentName };
+    if (validatedData.hasSerialNumber !== undefined)
+      where.hasSerialNumber = validatedData.hasSerialNumber;
+    if (validatedData.equipmentQuantity !== undefined)
+      where.equipmentQuantity = validatedData.equipmentQuantity;
+    if (validatedData.minEquipmentQuantity !== undefined)
+      where.minequipmentQuantity = validatedData.minEquipmentQuantity;
+    if (validatedData.equipmentShelfId !== undefined)
+      where.equipmentShelfId = validatedData.equipmentShelfId;
 
     const equipments = await this.prisma.equipment.findMany({
       where,
       skip,
       take,
-      orderBy: { equipmentName: 'asc' }
+      orderBy: { equipmentName: 'asc' },
+      include: {
+        serialNumbers: {
+          orderBy: { serialNumberCode: 'asc' },
+          include: {
+            shelf: {
+              select: {
+                shelfId: true,
+                shelfName: true,
+              },
+            },
+          },
+        },
+        equipmentShelfs: {
+          include: {
+            shelf: {
+              select: {
+                shelfId: true,
+                shelfName: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     const totalEquipments = await this.prisma.equipment.count({
@@ -101,32 +155,48 @@ export class EquipmentService {
     return {
       equipments,
       totalEquipments,
-      totalPages: Math.ceil(totalEquipments / limit),
+      totalPages: Math.ceil(totalEquipments / limit) || 1,
       currentPage: page,
-      limit
+      limit,
     };
   }
 
-  async getEquipmentById(id: string, paginationDTO: PaginationDTO) {
-    const limit = paginationDTO.limit;
-    const page = paginationDTO.page;
-    const skip = (page - 1) * limit;
-    const take = limit;
-
-    const where: any = {};
-    if (id !== undefined) where.equipmentId = id;
-
+  async getEquipmentById(id: string, paginationDTO?: PaginationDTO) {
     if (!id || id.trim() === '') {
       throw new BadRequestException('Equipment ID is required');
     }
-    const equipment = await this.prisma.equipment.findMany({
-      where,
-      skip,
-      take,
+
+    const equipment = await this.prisma.equipment.findUnique({
+      where: { equipmentId: id.trim() },
+      include: {
+        serialNumbers: {
+          orderBy: { serialNumberCode: 'asc' },
+          include: {
+            shelf: {
+              select: {
+                shelfId: true,
+                shelfName: true,
+              },
+            },
+          },
+        },
+        equipmentShelfs: {
+          include: {
+            shelf: {
+              select: {
+                shelfId: true,
+                shelfName: true,
+              },
+            },
+          },
+        },
+      },
     });
+
     if (!equipment) {
       throw new NotFoundException(`Equipment with ID '${id}' not found`);
     }
+
     return equipment;
   }
 
@@ -137,41 +207,118 @@ export class EquipmentService {
     // Check if equipment already exists
     const existingEquipment = await this.prisma.equipment.findUnique({
       where: { equipmentId: id },
+      include: { serialNumbers: true },
     });
 
     if (!existingEquipment) {
-      throw new NotFoundException(`Equipment with ID '${id}' not found`);
+      throw new NotFoundException(`Équipement avec l'identifiant '${id}' introuvable.`);
     }
 
-    // Update equipment scalar fields
-    return await this.prisma.equipment.update({
-      where: { equipmentId: id },
-      data: {
-        ...(validatedData.equipmentName !== undefined && { equipmentName: validatedData.equipmentName }),
-        ...(validatedData.hasSerialNumber !== undefined && { hasSerialNumber: validatedData.hasSerialNumber }),
-        ...(validatedData.equipmentQuantity !== undefined && { equipmentQuantity: validatedData.equipmentQuantity }),
-        ...(validatedData.minEquipmentQuantity !== undefined && { minequipmentQuantity: validatedData.minEquipmentQuantity }),
-      },
-      include: {
-        equipmentShelfs: {
-          include: {
-            shelf: true,
+    // Check name uniqueness if equipmentName is modified
+    if (
+      validatedData.equipmentName &&
+      validatedData.equipmentName !== existingEquipment.equipmentName
+    ) {
+      const nameExists = await this.prisma.equipment.findFirst({
+        where: {
+          equipmentName: validatedData.equipmentName,
+          equipmentId: { not: id },
+        },
+      });
+      if (nameExists) {
+        throw new BadRequestException(
+          `Un équipement nommé '${validatedData.equipmentName}' existe déjà.`,
+        );
+      }
+    }
+
+    // Perform update in a transaction
+    return await this.prisma.$transaction(async (tx) => {
+      // If converting from serialized to non-serialized: delete child serial numbers
+      if (validatedData.hasSerialNumber === false && existingEquipment.hasSerialNumber) {
+        // Delete all movements referencing these serial numbers
+        const snIds = existingEquipment.serialNumbers.map((s) => s.serialNumberId);
+        if (snIds.length > 0) {
+          await tx.mouvement.deleteMany({
+            where: { serialNumberId: { in: snIds } },
+          });
+          await tx.serialNumber.deleteMany({
+            where: { equipmentId: id },
+          });
+        }
+      }
+
+      return await tx.equipment.update({
+        where: { equipmentId: id },
+        data: {
+          ...(validatedData.equipmentName !== undefined && {
+            equipmentName: validatedData.equipmentName,
+          }),
+          ...(validatedData.hasSerialNumber !== undefined && {
+            hasSerialNumber: validatedData.hasSerialNumber,
+          }),
+          ...(validatedData.equipmentQuantity !== undefined && {
+            equipmentQuantity: validatedData.equipmentQuantity,
+          }),
+          ...(validatedData.minEquipmentQuantity !== undefined && {
+            minequipmentQuantity: validatedData.minEquipmentQuantity,
+          }),
+        },
+        include: {
+          serialNumbers: {
+            include: {
+              shelf: true,
+            },
+          },
+          equipmentShelfs: {
+            include: {
+              shelf: true,
+            },
           },
         },
-      },
+      });
     });
   }
 
   async deleteEquipment(id: string) {
-    // First search about equipment using getEquipmentById
-    const existingEquipment = await this.equipmentExists(id);
+    const existingEquipment = await this.prisma.equipment.findUnique({
+      where: { equipmentId: id },
+      include: {
+        serialNumbers: true,
+        equipmentShelfs: true,
+      },
+    });
 
     if (!existingEquipment) {
-      throw new NotFoundException(`Equipment with ID '${id}' not found`);
+      throw new NotFoundException(`Équipement avec l'identifiant '${id}' introuvable.`);
     }
-    // Then delete it
-    return this.prisma.equipment.delete({
-      where: { equipmentId: id }
+
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. Delete all child serial numbers and their movement references
+      const snIds = existingEquipment.serialNumbers.map((s) => s.serialNumberId);
+      if (snIds.length > 0) {
+        await tx.mouvement.deleteMany({
+          where: { serialNumberId: { in: snIds } },
+        });
+        await tx.serialNumber.deleteMany({
+          where: { equipmentId: id },
+        });
+      }
+
+      // 2. Delete equipment movements
+      await tx.mouvement.deleteMany({
+        where: { equipmentId: id },
+      });
+
+      // 3. Delete equipment shelf allocations
+      await tx.equipmentShelfs.deleteMany({
+        where: { equipmentId: id },
+      });
+
+      // 4. Finally delete the equipment
+      return await tx.equipment.delete({
+        where: { equipmentId: id },
+      });
     });
   }
 

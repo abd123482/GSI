@@ -1,5 +1,10 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
 
+/**
+ * Next.js 16 Proxy convention with Clerk.
+ * Attaches auth state to requests without fragile regex path blocking,
+ * leaving granular security checks to protected layouts, pages, and route handlers.
+ */
 export default clerkMiddleware();
 
 export const config = {

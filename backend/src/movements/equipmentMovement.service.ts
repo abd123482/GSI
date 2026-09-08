@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import {
   CreateEquipmentMovementDTO,
   createEquipmentMovementSchema,
+  CreateEntryMovementWithEquipmentDTO,
+  createEntryMovementWithEquipmentSchema,
   SearchEquipmentMovementDTO,
   searchEquipmentMovementSchema,
   PaginationDTO,
@@ -486,4 +488,124 @@ export class EquipmentMovementService {
       },
     });
   }
+
+  /**
+   * Creates equipment and optional serial numbers directly in an ENTRY movement.
+   * - Sets movement source shelf to null.
+   * - Destination shelf can be null (unassigned) or a specific shelf.
+   * - Guarantees serial number uniqueness across the system.
+   */
+  async createEntryMovementWithEquipment(dto: CreateEntryMovementWithEquipmentDTO) {
+    const validated = createEntryMovementWithEquipmentSchema.parse(dto);
+
+    // 1. Check if equipment with the same name already exists
+    const existingEquipment = await this.prisma.equipment.findFirst({
+      where: { equipmentName: validated.equipmentName },
+    });
+    if (existingEquipment) {
+      throw new BadRequestException(
+        `Un équipement nommé '${validated.equipmentName}' existe déjà dans le système.`,
+      );
+    }
+
+    // 2. Check destination shelf if specified (can be null/unassigned)
+    if (validated.destinationShelfId) {
+      const shelfExists = await this.shelfExists(validated.destinationShelfId);
+      if (!shelfExists) {
+        throw new NotFoundException(
+          `L'étagère de destination avec l'identifiant '${validated.destinationShelfId}' est introuvable.`,
+        );
+      }
+    }
+
+    // 3. If serialized, check uniqueness of all serial number codes in the database
+    if (validated.hasSerialNumber && validated.serialNumbers && validated.serialNumbers.length > 0) {
+      const existingSerials = await this.prisma.serialNumber.findMany({
+        where: {
+          serialNumberCode: {
+            in: validated.serialNumbers,
+          },
+        },
+        select: { serialNumberCode: true },
+      });
+
+      if (existingSerials.length > 0) {
+        const dupes = existingSerials.map((s) => s.serialNumberCode).join(', ');
+        throw new BadRequestException(
+          `Les numéros de série suivants existent déjà dans la base de données : ${dupes}`,
+        );
+      }
+    }
+
+    // 4. Perform atomic transactional creation
+    return await this.prisma.$transaction(async (tx) => {
+      // 4a. Create the Equipment tuple
+      const equipment = await tx.equipment.create({
+        data: {
+          equipmentName: validated.equipmentName,
+          hasSerialNumber: validated.hasSerialNumber,
+          equipmentQuantity: validated.equipmentQuantity,
+          minequipmentQuantity: validated.minEquipmentQuantity ?? 0,
+        },
+      });
+
+      // 4b. Create SerialNumber tuples if serialized
+      const createdSerialNumbers = [];
+      if (validated.hasSerialNumber && validated.serialNumbers) {
+        for (const code of validated.serialNumbers) {
+          const sn = await tx.serialNumber.create({
+            data: {
+              serialNumberCode: code,
+              serialNumberStatus: 'AVAILABLE',
+              equipmentId: equipment.equipmentId,
+              shelfId: validated.destinationShelfId ?? null,
+            },
+          });
+          createdSerialNumbers.push(sn);
+        }
+      }
+
+      // 4c. Update or insert EquipmentShelfs if destination shelf is assigned
+      if (validated.destinationShelfId) {
+        await tx.equipmentShelfs.upsert({
+          where: {
+            equipmentId_shelfId: {
+              equipmentId: equipment.equipmentId,
+              shelfId: validated.destinationShelfId,
+            },
+          },
+          update: {
+            equipmentQuantity: {
+              increment: validated.equipmentQuantity,
+            },
+          },
+          create: {
+            equipmentId: equipment.equipmentId,
+            shelfId: validated.destinationShelfId,
+            equipmentQuantity: validated.equipmentQuantity,
+          },
+        });
+      }
+
+      // 4d. Record the ENTRY movement tuple (sourceShelfId is null, destinationShelfId nullable)
+      const movement = await tx.mouvement.create({
+        data: {
+          equipmentId: equipment.equipmentId,
+          sourceShelfId: null, // As specified: movement source is null!
+          destinationShelfId: validated.destinationShelfId ?? null, // Can be null if not assigned directly to a shelf
+          mouvementQuantity: validated.equipmentQuantity,
+          mouvementStatus: validated.movementStatus || 'ENTRY',
+        },
+      });
+
+      return {
+        movement,
+        equipment: {
+          ...equipment,
+          serialNumbers: createdSerialNumbers,
+        },
+      };
+    });
+  }
 }
+

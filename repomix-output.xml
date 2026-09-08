@@ -135,8 +135,25 @@ backend/
     migrations/
       0_init/
         migration.sql
+      add_clerk_user_id_unique.sql
     schema.prisma
   src/
+    auth/
+      decorators/
+        current-user.decorator.ts
+        permissions.decorator.ts
+        roles.decorator.ts
+      guards/
+        permissions.guard.ts
+        roles.guard.ts
+      types/
+        authenticated-user.type.ts
+      auth.controller.ts
+      auth.module.ts
+      auth.service.ts
+      auth.spec.ts
+      clerk-auth.guard.ts
+      clerk-webhook.controller.ts
     equipment/
       dto/
         createEquipment.dto.ts
@@ -183,6 +200,7 @@ backend/
     app.controller.ts
     app.module.ts
     app.service.ts
+    main.ts
   test/
     app.e2e-spec.ts
   .env.example
@@ -218,6 +236,8 @@ frontend/
       layout.tsx
       page.tsx
     components/
+      auth/
+        AuthStatusCard.tsx
       ui/
         alert-dialog.tsx
         alert.tsx
@@ -251,8 +271,10 @@ frontend/
         textarea.tsx
         tooltip.tsx
     hooks/
+      use-api.ts
       use-mobile.ts
     lib/
+      api.ts
       notion-theme.ts
       utils.ts
     middleware.ts
@@ -273,228 +295,714 @@ logic.txt
 <files>
 This section contains the contents of the repository's files.
 
-<file path="frontend/src/app/sign-in/[[...sign-in]]/page.tsx">
-import { SignIn } from '@clerk/nextjs';
-import { notionClerkAppearance } from '@/lib/notion-theme';
+<file path="backend/prisma/migrations/add_clerk_user_id_unique.sql">
+-- Safe idempotent migration to ensure clerkUserId and filtered unique index on dbo.[User]
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.columns 
+    WHERE name = 'clerkUserId' 
+      AND object_id = OBJECT_ID(N'dbo.[User]')
+)
+BEGIN
+    ALTER TABLE dbo.[User] ADD clerkUserId VARCHAR(255) NULL;
+    PRINT 'Added clerkUserId column to dbo.[User]';
+END
+ELSE
+BEGIN
+    PRINT 'Column clerkUserId already exists on dbo.[User]';
+END;
 
-export default function SignInPage() {
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.indexes 
+    WHERE name = 'UX_User_ClerkUserId' 
+      AND object_id = OBJECT_ID(N'dbo.[User]')
+)
+BEGIN
+    CREATE UNIQUE NONCLUSTERED INDEX UX_User_ClerkUserId
+    ON dbo.[User](clerkUserId)
+    WHERE clerkUserId IS NOT NULL;
+    PRINT 'Created unique filtered index UX_User_ClerkUserId on dbo.[User]';
+END
+ELSE
+BEGIN
+    PRINT 'Unique index UX_User_ClerkUserId already exists on dbo.[User]';
+END;
+</file>
+
+<file path="backend/src/auth/decorators/current-user.decorator.ts">
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../clerk-auth.guard.js';
+import type { AuthenticatedUser } from '../types/authenticated-user.type.js';
+
+export const CurrentUser = createParamDecorator(
+  (data: keyof AuthenticatedUser | undefined, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest<AuthenticatedRequest>();
+    const user = request.authUser;
+    return data && user ? user[data] : user;
+  },
+);
+</file>
+
+<file path="backend/src/auth/decorators/permissions.decorator.ts">
+import { SetMetadata } from '@nestjs/common';
+
+export const PERMISSIONS_KEY = 'permissions';
+export const RequirePermissions = (...permissions: string[]) =>
+  SetMetadata(PERMISSIONS_KEY, permissions);
+</file>
+
+<file path="backend/src/auth/decorators/roles.decorator.ts">
+import { SetMetadata } from '@nestjs/common';
+
+export const ROLES_KEY = 'roles';
+export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
+</file>
+
+<file path="backend/src/auth/guards/permissions.guard.ts">
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { PERMISSIONS_KEY } from '../decorators/permissions.decorator.js';
+import type { AuthenticatedRequest } from '../clerk-auth.guard.js';
+
+@Injectable()
+export class PermissionsGuard implements CanActivate {
+  constructor(private readonly reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(
+      PERMISSIONS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
+    if (!requiredPermissions || requiredPermissions.length === 0) {
+      return true;
+    }
+
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const user = request.authUser;
+
+    if (!user) {
+      throw new ForbiddenException('Access denied: Unauthenticated user');
+    }
+
+    const userPermissions = user.permissions || [];
+    const hasAllPermissions = requiredPermissions.every((permission) =>
+      userPermissions.includes(permission),
+    );
+
+    if (!hasAllPermissions) {
+      const missing = requiredPermissions.filter(
+        (p) => !userPermissions.includes(p),
+      );
+      throw new ForbiddenException(
+        `Access denied: Missing required permission(s): ${missing.join(', ')}`,
+      );
+    }
+
+    return true;
+  }
+}
+</file>
+
+<file path="backend/src/auth/guards/roles.guard.ts">
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { ROLES_KEY } from '../decorators/roles.decorator.js';
+import type { AuthenticatedRequest } from '../clerk-auth.guard.js';
+
+@Injectable()
+export class RolesGuard implements CanActivate {
+  constructor(private readonly reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (!requiredRoles || requiredRoles.length === 0) {
+      return true;
+    }
+
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const user = request.authUser;
+
+    if (!user || !user.roleName) {
+      throw new ForbiddenException('Access denied: User has no assigned role');
+    }
+
+    const hasRole = requiredRoles.includes(user.roleName);
+    if (!hasRole) {
+      throw new ForbiddenException(
+        `Access denied: Required role(s) [${requiredRoles.join(', ')}] not held by user (current role: ${user.roleName})`,
+      );
+    }
+
+    return true;
+  }
+}
+</file>
+
+<file path="backend/src/auth/types/authenticated-user.type.ts">
+export interface AuthenticatedUser {
+  userId: string;
+  clerkUserId: string;
+  userName: string | null;
+  userEmail: string | null;
+  roleId: string | null;
+  roleName: string | null;
+  permissions: string[];
+  status: string | null;
+}
+</file>
+
+<file path="backend/src/auth/auth.spec.ts">
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { UnauthorizedException, ForbiddenException, ExecutionContext } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { ClerkAuthGuard } from './clerk-auth.guard.js';
+import { RolesGuard } from './guards/roles.guard.js';
+import { PermissionsGuard } from './guards/permissions.guard.js';
+import { AuthService } from './auth.service.js';
+import * as clerkBackend from '@clerk/backend';
+
+vi.mock('@clerk/backend', () => {
+  return {
+    createClerkClient: vi.fn().mockReturnValue({
+      users: {
+        getUser: vi.fn(),
+      },
+    }),
+    verifyToken: vi.fn(),
+  };
+});
+
+describe('Clerk & RBAC Authentication Integration Tests', () => {
+  let authService: AuthService;
+  let clerkAuthGuard: ClerkAuthGuard;
+  let mockPrisma: any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    process.env.CLERK_JWT_KEY = 'test_jwt_key';
+    process.env.FRONTEND_URL = 'http://localhost:3000';
+
+    mockPrisma = {
+      user: {
+        findFirst: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+    };
+
+    authService = new AuthService(mockPrisma as any);
+    clerkAuthGuard = new ClerkAuthGuard(authService);
+  });
+
+  function createMockContext(headers: Record<string, string> = {}, authUser?: any): ExecutionContext {
+    const request: any = {
+      headers,
+      authUser,
+    };
+    return {
+      switchToHttp: () => ({
+        getRequest: () => request,
+        getResponse: () => ({}),
+      }),
+      getHandler: () => ({}),
+      getClass: () => ({}),
+    } as unknown as ExecutionContext;
+  }
+
+  describe('ClerkAuthGuard', () => {
+    it('1. should throw 401 Unauthorized when Bearer token is missing', async () => {
+      const context = createMockContext({});
+      await expect(clerkAuthGuard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(clerkAuthGuard.canActivate(context)).rejects.toThrow('Authentication required');
+    });
+
+    it('2. should throw 401 Unauthorized when token is invalid or verification fails', async () => {
+      const context = createMockContext({ authorization: 'Bearer invalid_token' });
+      vi.mocked(clerkBackend.verifyToken).mockRejectedValue(new Error('Token signature invalid'));
+
+      await expect(clerkAuthGuard.canActivate(context)).rejects.toThrow('Invalid or expired Clerk session');
+    });
+
+    it('3. should succeed and attach AuthenticatedUser to request for valid active user', async () => {
+      const context = createMockContext({ authorization: 'Bearer valid_clerk_token' });
+      vi.mocked(clerkBackend.verifyToken).mockResolvedValueOnce({ sub: 'user_clerk_123' } as any);
+
+      mockPrisma.user.findFirst.mockResolvedValueOnce({
+        userId: 'uuid-1234',
+        clerkUserId: 'user_clerk_123',
+        userName: 'John Doe',
+        userEmail: 'john@example.com',
+        userStatus: 'ACTIVE',
+        roleId: 'role-admin-id',
+        role: {
+          roleName: 'ADMIN',
+          permissions: [{ permissionName: 'equipment.read' }, { permissionName: 'equipment.create' }],
+        },
+      });
+
+      const result = await clerkAuthGuard.canActivate(context);
+      expect(result).toBe(true);
+
+      const req = context.switchToHttp().getRequest<any>();
+      expect(req.authUser).toEqual({
+        userId: 'uuid-1234',
+        clerkUserId: 'user_clerk_123',
+        userName: 'John Doe',
+        userEmail: 'john@example.com',
+        roleId: 'role-admin-id',
+        roleName: 'ADMIN',
+        permissions: ['equipment.read', 'equipment.create'],
+        status: 'ACTIVE',
+      });
+    });
+
+    it('4. should throw 403 Forbidden when local userStatus is DISABLED or INACTIVE', async () => {
+      const context = createMockContext({ authorization: 'Bearer valid_clerk_token' });
+      vi.mocked(clerkBackend.verifyToken).mockResolvedValue({ sub: 'user_clerk_disabled' } as any);
+
+      mockPrisma.user.findFirst.mockResolvedValueOnce({
+        userId: 'uuid-disabled',
+        clerkUserId: 'user_clerk_disabled',
+        userStatus: 'DISABLED',
+      });
+
+      await expect(clerkAuthGuard.canActivate(context)).rejects.toThrow(/Access is forbidden/);
+    });
+  });
+
+  describe('AuthService User Creation & Idempotency', () => {
+    it('5. should create local SQL user on first request when not found', async () => {
+      mockPrisma.user.findFirst.mockResolvedValueOnce(null);
+
+      const mockGetUser = vi.fn().mockResolvedValueOnce({
+        id: 'user_new_clerk',
+        firstName: 'Alice',
+        lastName: 'Wonder',
+        primaryEmailAddressId: 'email-1',
+        emailAddresses: [{ id: 'email-1', emailAddress: 'alice@somipharm.com' }],
+      });
+      (authService as any).clerk = { users: { getUser: mockGetUser } };
+
+      mockPrisma.user.create.mockResolvedValueOnce({
+        userId: 'uuid-alice',
+        clerkUserId: 'user_new_clerk',
+        userName: 'Alice Wonder',
+        userEmail: 'alice@somipharm.com',
+        userStatus: 'ACTIVE',
+        roleId: null,
+      });
+
+      const user = await authService.getOrCreateLocalUser('user_new_clerk');
+      expect(user.userId).toBe('uuid-alice');
+      expect(mockPrisma.user.create).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            clerkUserId: 'user_new_clerk',
+            userName: 'Alice Wonder',
+            userEmail: 'alice@somipharm.com',
+            userStatus: 'ACTIVE',
+          }),
+        }),
+      );
+    });
+
+    it('6. should handle concurrent race condition (P2002) and return existing user', async () => {
+      mockPrisma.user.findFirst.mockResolvedValueOnce(null);
+
+      const p2002Error: any = new Error('Unique constraint failed on the constraint: UX_User_ClerkUserId');
+      p2002Error.code = 'P2002';
+      mockPrisma.user.create.mockRejectedValueOnce(p2002Error);
+
+      mockPrisma.user.findFirst.mockResolvedValueOnce({
+        userId: 'uuid-winner',
+        clerkUserId: 'user_concurrent',
+        userStatus: 'ACTIVE',
+      });
+
+      const user = await authService.getOrCreateLocalUser('user_concurrent');
+      expect(user.userId).toBe('uuid-winner');
+    });
+  });
+
+  describe('RolesGuard & PermissionsGuard', () => {
+    let reflector: Reflector;
+    let rolesGuard: RolesGuard;
+    let permissionsGuard: PermissionsGuard;
+
+    beforeEach(() => {
+      reflector = new Reflector();
+      rolesGuard = new RolesGuard(reflector);
+      permissionsGuard = new PermissionsGuard(reflector);
+    });
+
+    it('7. should allow user having required role and forbid user with different role', () => {
+      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['ADMIN']);
+
+      const adminContext = createMockContext({}, { roleName: 'ADMIN' });
+      expect(rolesGuard.canActivate(adminContext)).toBe(true);
+
+      const techContext = createMockContext({}, { roleName: 'TECHNICIAN' });
+      expect(() => rolesGuard.canActivate(techContext)).toThrow(ForbiddenException);
+    });
+
+    it('8. should allow user having required permissions and forbid user missing any permission', () => {
+      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['equipment.read', 'equipment.write']);
+
+      const authorizedContext = createMockContext({}, { permissions: ['equipment.read', 'equipment.write', 'equipment.delete'] });
+      expect(permissionsGuard.canActivate(authorizedContext)).toBe(true);
+
+      const unauthorizedContext = createMockContext({}, { permissions: ['equipment.read'] });
+      expect(() => permissionsGuard.canActivate(unauthorizedContext)).toThrow(ForbiddenException);
+    });
+  });
+});
+</file>
+
+<file path="backend/src/auth/clerk-webhook.controller.ts">
+import {
+  BadRequestException,
+  Controller,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  InternalServerErrorException,
+  Logger,
+  Post,
+  Req,
+} from '@nestjs/common';
+import type { Request } from 'express';
+import { Webhook } from 'svix';
+import { AuthService } from './auth.service.js';
+
+@Controller('auth/webhooks')
+export class ClerkWebhookController {
+  private readonly logger = new Logger(ClerkWebhookController.name);
+
+  constructor(private readonly authService: AuthService) {}
+
+  @Post('clerk')
+  @HttpCode(HttpStatus.OK)
+  async handleClerkWebhook(
+    @Req() req: Request,
+    @Headers('svix-id') svixId?: string,
+    @Headers('svix-timestamp') svixTimestamp?: string,
+    @Headers('svix-signature') svixSignature?: string,
+  ) {
+    const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      this.logger.error('CLERK_WEBHOOK_SECRET is not configured on the server');
+      throw new InternalServerErrorException('Webhook secret not configured');
+    }
+
+    if (!svixId || !svixTimestamp || !svixSignature) {
+      throw new BadRequestException('Missing required Svix webhook verification headers');
+    }
+
+    const payload = (req as any).rawBody
+      ? (req as any).rawBody.toString('utf8')
+      : JSON.stringify(req.body);
+
+    const wh = new Webhook(webhookSecret);
+    let event: any;
+
+    try {
+      event = wh.verify(payload, {
+        'svix-id': svixId,
+        'svix-timestamp': svixTimestamp,
+        'svix-signature': svixSignature,
+      });
+    } catch (err: any) {
+      this.logger.warn(`Clerk webhook signature verification failed: ${err?.message}`);
+      throw new BadRequestException('Invalid webhook signature');
+    }
+
+    const eventType = event.type;
+    const data = event.data;
+    this.logger.log(`Received Clerk webhook event: ${eventType}`);
+
+    switch (eventType) {
+      case 'user.created':
+      case 'user.updated': {
+        const clerkUserId = data.id;
+        const email =
+          data.email_addresses?.find(
+            (item: any) => item.id === data.primary_email_address_id,
+          )?.email_address ??
+          data.email_addresses?.[0]?.email_address ??
+          null;
+
+        const fullName =
+          [data.first_name, data.last_name].filter(Boolean).join(' ') ||
+          data.username ||
+          email;
+
+        await this.authService.syncUserFromClerk(clerkUserId, {
+          userName: fullName,
+          userEmail: email,
+        });
+        break;
+      }
+
+      case 'user.deleted': {
+        const clerkUserId = data.id;
+        await this.authService.disableUserFromClerk(clerkUserId);
+        this.logger.log(`Soft-disabled local user for deleted Clerk user: ${clerkUserId}`);
+        break;
+      }
+
+      default:
+        this.logger.debug(`Ignored unhandled Clerk webhook event: ${eventType}`);
+    }
+
+    return { received: true };
+  }
+}
+</file>
+
+<file path="frontend/src/components/auth/AuthStatusCard.tsx">
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useAuth, useUser } from '@clerk/nextjs';
+import { useApi } from '@/hooks/use-api';
+import { CheckCircle2, ShieldCheck, Database, RefreshCw, AlertCircle } from 'lucide-react';
+
+interface AuthMeResponse {
+  userId: string;
+  clerkUserId: string;
+  userName: string | null;
+  userEmail: string | null;
+  roleId: string | null;
+  roleName: string | null;
+  permissions: string[];
+  status: string | null;
+}
+
+export function AuthStatusCard() {
+  const { isSignedIn } = useAuth();
+  const { user: clerkUser } = useUser();
+  const api = useApi();
+
+  const [data, setData] = useState<AuthMeResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchAuthMe = async () => {
+    if (!isSignedIn) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.get<AuthMeResponse>('/auth/me');
+      setData(response.data);
+    } catch (err: any) {
+      console.error('Failed to fetch /auth/me:', err);
+      const msg =
+        err.response?.data?.message ||
+        err.message ||
+        'Impossible de joindre le serveur NestJS';
+      setError(Array.isArray(msg) ? msg.join(', ') : msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isSignedIn) {
+      fetchAuthMe();
+    }
+  }, [isSignedIn]);
+
+  if (!isSignedIn) return null;
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-[#f6f5f4] p-4 text-[#37352f]">
-      {/* Notion-style minimal brand header */}
-      <div className="mb-6 flex flex-col items-center text-center">
-        <div className="w-11 h-11 rounded-lg bg-[#37352f] text-white font-bold text-xl flex items-center justify-center shadow-xs mb-3 border border-[#252420]">
-          S
+    <div className="w-full bg-[#faf9f8] border border-[#e5e3df] rounded-xl p-5 text-left space-y-4 shadow-xs">
+      <div className="flex items-center justify-between border-b border-[#eceae6] pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-[#eef6ec] border border-[#cbe4c6] flex items-center justify-center text-[#2b7824]">
+            <Database className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-[#1a1a1a]">
+              Synchronisation SQL Server
+            </h3>
+            <p className="text-[11px] text-[#787670]">
+              Statut de la session Clerk & identité locale NestJS
+            </p>
+          </div>
         </div>
-        <h1 className="text-base font-semibold tracking-tight text-[#1a1a1a]">
-          Somipharm Workspace
-        </h1>
-        <p className="text-xs text-[#787671] mt-0.5">
-          Système interne de maintenance & gestion de stock
-        </p>
+
+        <button
+          type="button"
+          onClick={fetchAuthMe}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md bg-white hover:bg-[#f0eeec] border border-[#d3d0ca] text-[#37352f] transition-colors cursor-pointer disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <span>Vérifier</span>
+        </button>
       </div>
 
-      {/* Notion styled SignIn card */}
-      <SignIn appearance={notionClerkAppearance} />
-    </main>
+      {loading && !data && (
+        <div className="py-4 text-center text-xs text-[#787670] flex items-center justify-center gap-2">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+          <span>Validation du token Clerk auprès de NestJS...</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-3 bg-[#fdf3f2] border border-[#f5c6cb] rounded-lg text-xs text-[#b82a2a] flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div>
+            <span className="font-medium">Erreur d'authentification API:</span> {error}
+          </div>
+        </div>
+      )}
+
+      {data && (
+        <div className="space-y-2.5 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="p-2.5 bg-white rounded-lg border border-[#e5e3df]">
+              <span className="text-[10px] uppercase font-bold text-[#787670] tracking-wider block">
+                Statut Compte SQL
+              </span>
+              <span className="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#eef6ec] text-[#2b7824]">
+                <CheckCircle2 className="w-3 h-3" />
+                {data.status ?? 'ACTIVE'}
+              </span>
+            </div>
+
+            <div className="p-2.5 bg-white rounded-lg border border-[#e5e3df]">
+              <span className="text-[10px] uppercase font-bold text-[#787670] tracking-wider block">
+                Rôle Applicatif (RBAC)
+              </span>
+              <span className="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#f0effe] text-[#5645d4]">
+                <ShieldCheck className="w-3 h-3" />
+                {data.roleName ?? 'Aucun rôle assigné'}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-2.5 bg-white rounded-lg border border-[#e5e3df] space-y-1 font-mono text-[11px]">
+            <div className="flex justify-between items-center text-[#5d5b54]">
+              <span>SQL Server UUID:</span>
+              <span className="text-[#1a1a1a] font-semibold select-all truncate max-w-[200px]" title={data.userId}>
+                {data.userId}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-[#5d5b54]">
+              <span>Clerk User ID:</span>
+              <span className="text-[#1a1a1a] font-semibold select-all truncate max-w-[200px]" title={data.clerkUserId}>
+                {data.clerkUserId}
+              </span>
+            </div>
+          </div>
+
+          {data.permissions && data.permissions.length > 0 && (
+            <div className="p-2.5 bg-white rounded-lg border border-[#e5e3df] space-y-1.5">
+              <span className="text-[10px] uppercase font-bold text-[#787670] tracking-wider block">
+                Permissions accordées ({data.permissions.length})
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {data.permissions.map((perm) => (
+                  <span
+                    key={perm}
+                    className="px-1.5 py-0.5 bg-[#f0eeec] text-[#37352f] rounded text-[10px] font-mono"
+                  >
+                    {perm}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 </file>
 
-<file path="frontend/src/app/sign-up/[[...sign-up]]/page.tsx">
-import { SignUp } from '@clerk/nextjs';
-import { notionClerkAppearance } from '@/lib/notion-theme';
+<file path="frontend/src/hooks/use-api.ts">
+'use client';
 
-export default function SignUpPage() {
-  return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-[#f6f5f4] p-4 text-[#37352f]">
-      {/* Notion-style minimal brand header */}
-      <div className="mb-6 flex flex-col items-center text-center">
-        <div className="w-11 h-11 rounded-lg bg-[#37352f] text-white font-bold text-xl flex items-center justify-center shadow-xs mb-3 border border-[#252420]">
-          S
-        </div>
-        <h1 className="text-base font-semibold tracking-tight text-[#1a1a1a]">
-          Somipharm Workspace
-        </h1>
-        <p className="text-xs text-[#787671] mt-0.5">
-          Création de compte collaborateur
-        </p>
-      </div>
+import { useMemo } from 'react';
+import { useAuth } from '@clerk/nextjs';
+import axios, { AxiosInstance } from 'axios';
+import { API_BASE_URL } from '@/lib/api';
 
-      {/* Notion styled SignUp card */}
-      <SignUp appearance={notionClerkAppearance} />
-    </main>
-  );
-}
-</file>
-
-<file path="frontend/src/lib/notion-theme.ts">
 /**
- * Notion Design System tokens & Clerk Appearance configuration
- * Derived from Notion-design-analysis specification
+ * Reusable hook providing an Axios client that automatically fetches and
+ * attaches the current Clerk session Bearer token for NestJS API requests.
  */
+export function useApi(): AxiosInstance {
+  const { getToken, isSignedIn } = useAuth();
 
-export const notionColors = {
-  primary: '#5645d4',
-  primaryPressed: '#4534b3',
-  primaryDeep: '#3a2a99',
-  onPrimary: '#ffffff',
-  brandNavy: '#0a1530',
-  brandNavyDeep: '#070f24',
-  brandNavyMid: '#1a2a52',
-  linkBlue: '#0075de',
-  linkBluePressed: '#005bab',
-  canvas: '#ffffff',
-  surface: '#f6f5f4',
-  surfaceSoft: '#fafaf9',
-  hairline: '#e5e3df',
-  hairlineSoft: '#ede9e4',
-  hairlineStrong: '#c8c4be',
-  ink: '#1a1a1a',
-  charcoal: '#37352f',
-  slate: '#5d5b54',
-  steel: '#787671',
-  stone: '#a4a097',
-  muted: '#bbb8b1',
-  onDark: '#ffffff',
-  semanticSuccess: '#1aae39',
-  semanticWarning: '#dd5b00',
-  semanticError: '#e03131',
-};
-
-export const notionClerkAppearance = {
-  variables: {
-    colorPrimary: notionColors.primary,
-    colorText: notionColors.charcoal,
-    colorTextSecondary: notionColors.slate,
-    colorBackground: notionColors.canvas,
-    colorInputBackground: notionColors.canvas,
-    colorInputText: notionColors.ink,
-    borderRadius: '8px',
-    fontFamily:
-      "var(--font-sans, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif)",
-    fontSize: '14px',
-  },
-  elements: {
-    // Hide social logins & divider per project requirements
-    socialButtons: '!hidden',
-    socialButtonsBlockButton: '!hidden',
-    socialButtonsProviderIcon: '!hidden',
-    dividerRow: '!hidden',
-    dividerText: '!hidden',
-    dividerLine: '!hidden',
-
-    // Notion Card Surface (12px rounded, 1px solid #e5e3df hairline, subtle elevation)
-    card: {
-      backgroundColor: notionColors.canvas,
-      borderRadius: '12px',
-      border: `1px solid ${notionColors.hairline}`,
-      boxShadow: 'rgba(15, 15, 15, 0.05) 0px 4px 16px 0px',
-      padding: '32px',
-      maxWidth: '440px',
-      width: '100%',
-    },
-    rootBox: {
-      width: '100%',
-      display: 'flex',
-      justifyContent: 'center',
-    },
-
-    // Notion Typography Header
-    headerTitle: {
-      color: notionColors.ink,
-      fontSize: '22px',
-      fontWeight: '600',
-      letterSpacing: '-0.4px',
-    },
-    headerSubtitle: {
-      color: notionColors.slate,
-      fontSize: '14px',
-      fontWeight: '400',
-      marginTop: '4px',
-      lineHeight: '1.5',
-    },
-
-    // Form inputs (Notion text-input: 8px radius, hairline border, focus primary purple)
-    formFieldLabel: {
-      color: notionColors.charcoal,
-      fontSize: '13px',
-      fontWeight: '500',
-      marginBottom: '4px',
-    },
-    formFieldInput: {
-      backgroundColor: notionColors.canvas,
-      color: notionColors.ink,
-      border: `1px solid ${notionColors.hairlineStrong}`,
-      borderRadius: '8px',
-      fontSize: '14px',
-      height: '42px',
-      padding: '8px 12px',
-      transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
-      '&:focus': {
-        borderColor: notionColors.primary,
-        boxShadow: '0 0 0 2px rgba(86, 69, 212, 0.2)',
+  const api = useMemo(() => {
+    const client = axios.create({
+      baseURL: API_BASE_URL,
+      headers: {
+        'Content-Type': 'application/json',
       },
-    },
+      timeout: 15000,
+    });
 
-    // Notion Signature Primary Button (button-primary: 8px radius, #5645d4 Notion purple)
-    formButtonPrimary: {
-      backgroundColor: notionColors.primary,
-      color: notionColors.onPrimary,
-      borderRadius: '8px',
-      fontSize: '14px',
-      fontWeight: '500',
-      height: '42px',
-      padding: '10px 18px',
-      boxShadow: 'none',
-      transition: 'background-color 0.15s ease',
-      '&:hover': {
-        backgroundColor: notionColors.primaryPressed,
+    client.interceptors.request.use(
+      async (config) => {
+        if (isSignedIn) {
+          try {
+            const token = await getToken();
+            if (token) {
+              config.headers.Authorization = `Bearer ${token}`;
+            }
+          } catch (err) {
+            console.error('[useApi] Error acquiring Clerk session token:', err);
+          }
+        }
+        return config;
       },
-      '&:active': {
-        backgroundColor: notionColors.primaryDeep,
-      },
-    },
+      (error) => Promise.reject(error),
+    );
 
-    // Footer actions & inline links (link-blue: #0075de)
-    footerActionLink: {
-      color: notionColors.linkBlue,
-      fontSize: '13px',
-      fontWeight: '500',
-      '&:hover': {
-        color: notionColors.linkBluePressed,
-        textDecoration: 'underline',
-      },
-    },
-    footerActionText: {
-      color: notionColors.slate,
-      fontSize: '13px',
-    },
+    return client;
+  }, [getToken, isSignedIn]);
 
-    // Identity preview (e.g. during verification)
-    identityPreviewText: {
-      color: notionColors.ink,
-      fontWeight: '500',
-    },
-    identityPreviewEditButton: {
-      color: notionColors.linkBlue,
-    },
-  },
-};
+  return api;
+}
 </file>
 
-<file path="frontend/src/middleware.ts">
-import { clerkMiddleware } from '@clerk/nextjs/server';
+<file path="frontend/src/lib/api.ts">
+import axios, { AxiosInstance } from 'axios';
 
-export default clerkMiddleware();
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-export const config = {
-  matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
-  ],
-};
+/**
+ * Base unauthenticated Axios client for public endpoints or SSR calls.
+ */
+export const apiClient: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  timeout: 15000,
+});
 </file>
 
 <file path="backend/.agents/skills/prisma-cli/references/agent-safety.md">
@@ -11515,6 +12023,328 @@ Follow `references/schema-changes.md` and `references/driver-adapters.md` first,
 -- This is an empty migration.
 </file>
 
+<file path="backend/src/auth/auth.controller.ts">
+import {
+  Controller,
+  Get,
+  UseGuards,
+} from '@nestjs/common';
+import { ClerkAuthGuard } from './clerk-auth.guard.js';
+import { CurrentUser } from './decorators/current-user.decorator.js';
+import type { AuthenticatedUser } from './types/authenticated-user.type.js';
+
+@Controller('auth')
+export class AuthController {
+  @UseGuards(ClerkAuthGuard)
+  @Get('me')
+  getCurrentUser(@CurrentUser() user: AuthenticatedUser) {
+    return user;
+  }
+}
+</file>
+
+<file path="backend/src/auth/auth.module.ts">
+import {
+  Global,
+  Module,
+} from '@nestjs/common';
+
+import { PrismaModule } from '../prisma/prisma.module.js';
+import { AuthController } from './auth.controller.js';
+import { AuthService } from './auth.service.js';
+import { ClerkAuthGuard } from './clerk-auth.guard.js';
+import { ClerkWebhookController } from './clerk-webhook.controller.js';
+import { RolesGuard } from './guards/roles.guard.js';
+import { PermissionsGuard } from './guards/permissions.guard.js';
+
+@Global()
+@Module({
+  imports: [PrismaModule],
+  controllers: [
+    AuthController,
+    ClerkWebhookController,
+  ],
+  providers: [
+    AuthService,
+    ClerkAuthGuard,
+    RolesGuard,
+    PermissionsGuard,
+  ],
+  exports: [
+    AuthService,
+    ClerkAuthGuard,
+    RolesGuard,
+    PermissionsGuard,
+  ],
+})
+export class AuthModule {}
+</file>
+
+<file path="backend/src/auth/auth.service.ts">
+import { Injectable, Logger } from '@nestjs/common';
+import { createClerkClient } from '@clerk/backend';
+import { PrismaService } from '../prisma/prisma.service.js';
+
+@Injectable()
+export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+  private readonly clerk = createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY!,
+  });
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Primary resolver: finds or lazily creates a local SQL Server user for the given clerkUserId.
+   * Includes role and permissions for RBAC enforcement.
+   * Handles concurrent creation race conditions gracefully.
+   */
+  async getOrCreateLocalUser(clerkUserId: string) {
+    // 1. Is this Clerk account already matched in SQL Server?
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        clerkUserId,
+      },
+      include: {
+        role: {
+          include: {
+            permissions: true,
+          },
+        },
+      },
+    });
+
+    if (existingUser) {
+      return existingUser;
+    }
+
+    // 2. First request from this Clerk user: retrieve their profile from Clerk
+    let clerkUser: any;
+    try {
+      clerkUser = await this.clerk.users.getUser(clerkUserId);
+    } catch (err) {
+      this.logger.warn(`Could not retrieve user details from Clerk for ${clerkUserId}:`, err);
+    }
+
+    const email =
+      clerkUser?.emailAddresses?.find(
+        (item: any) => item.id === clerkUser.primaryEmailAddressId,
+      )?.emailAddress ??
+      clerkUser?.emailAddresses?.[0]?.emailAddress ??
+      null;
+
+    const fullName =
+      [clerkUser?.firstName, clerkUser?.lastName]
+        .filter(Boolean)
+        .join(' ') ||
+      clerkUser?.username ||
+      email;
+
+    // 3. Create matching SQL Server User with race condition protection
+    try {
+      return await this.prisma.user.create({
+        data: {
+          clerkUserId,
+          userName: fullName,
+          userEmail: email,
+          userStatus: 'ACTIVE',
+        },
+        include: {
+          role: {
+            include: {
+              permissions: true,
+            },
+          },
+        },
+      });
+    } catch (error: any) {
+      // If concurrent request created the record first (Prisma P2002 or unique constraint)
+      if (
+        error?.code === 'P2002' ||
+        error?.message?.includes('UX_User_ClerkUserId') ||
+        error?.message?.includes('UNIQUE')
+      ) {
+        this.logger.log(
+          `Handled concurrent user creation race condition for clerkUserId: ${clerkUserId}`,
+        );
+        const resolvedUser = await this.prisma.user.findFirst({
+          where: { clerkUserId },
+          include: {
+            role: {
+              include: {
+                permissions: true,
+              },
+            },
+          },
+        });
+        if (resolvedUser) {
+          return resolvedUser;
+        }
+      }
+
+      this.logger.error(
+        `Failed to create local user for clerkUserId ${clerkUserId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Synchronizes profile details received from Clerk webhook (user.created, user.updated).
+   * Never overwrites roleId or application-specific internal data.
+   */
+  async syncUserFromClerk(
+    clerkUserId: string,
+    profile: { userName?: string | null; userEmail?: string | null },
+  ) {
+    const existing = await this.prisma.user.findFirst({
+      where: { clerkUserId },
+    });
+
+    if (existing) {
+      return await this.prisma.user.update({
+        where: { userId: existing.userId },
+        data: {
+          ...(profile.userName !== undefined && { userName: profile.userName }),
+          ...(profile.userEmail !== undefined && { userEmail: profile.userEmail }),
+        },
+      });
+    }
+
+    // If user does not exist yet, create with ACTIVE status
+    return await this.prisma.user.create({
+      data: {
+        clerkUserId,
+        userName: profile.userName ?? null,
+        userEmail: profile.userEmail ?? null,
+        userStatus: 'ACTIVE',
+      },
+    });
+  }
+
+  /**
+   * Soft-deletes user when deleted in Clerk (user.deleted).
+   * Keeps the SQL record to preserve audit integrity in movements/equipment logs.
+   */
+  async disableUserFromClerk(clerkUserId: string) {
+    const existing = await this.prisma.user.findFirst({
+      where: { clerkUserId },
+    });
+
+    if (!existing) {
+      this.logger.warn(`Clerk webhook attempted to delete non-existent user: ${clerkUserId}`);
+      return null;
+    }
+
+    return await this.prisma.user.update({
+      where: { userId: existing.userId },
+      data: {
+        userStatus: 'DISABLED',
+      },
+    });
+  }
+}
+</file>
+
+<file path="backend/src/auth/clerk-auth.guard.ts">
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { verifyToken } from '@clerk/backend';
+import type { Request } from 'express';
+import { AuthService } from './auth.service.js';
+import type { AuthenticatedUser } from './types/authenticated-user.type.js';
+
+export type AuthenticatedRequest = Request & {
+  authUser?: AuthenticatedUser;
+};
+
+@Injectable()
+export class ClerkAuthGuard implements CanActivate {
+  private readonly logger = new Logger(ClerkAuthGuard.name);
+
+  constructor(private readonly authService: AuthService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const authorization = request.headers.authorization;
+
+    if (!authorization || !authorization.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    const token = authorization.substring(7).trim();
+    if (!token) {
+      throw new UnauthorizedException('Authentication required: Bearer token is empty');
+    }
+
+    let claims: { sub?: string };
+    try {
+      claims = await verifyToken(token, {
+        jwtKey: process.env.CLERK_JWT_KEY!,
+        authorizedParties: process.env.FRONTEND_URL
+          ? [process.env.FRONTEND_URL]
+          : undefined,
+      });
+    } catch (err: any) {
+      this.logger.debug(`Clerk token verification failed: ${err?.message || err}`);
+      throw new UnauthorizedException('Invalid or expired Clerk session');
+    }
+
+    const clerkUserId = claims?.sub;
+    if (!clerkUserId) {
+      throw new UnauthorizedException('Invalid Clerk token payload');
+    }
+
+    let dbUser: any;
+    try {
+      dbUser = await this.authService.getOrCreateLocalUser(clerkUserId);
+    } catch (dbErr: any) {
+      this.logger.error(`Database error resolving user for Clerk ID ${clerkUserId}:`, dbErr);
+      throw new InternalServerErrorException('Failed to resolve local user account');
+    }
+
+    if (!dbUser) {
+      throw new ForbiddenException('User account could not be found or created');
+    }
+
+    // Task 9: User Status Enforcement
+    // ACTIVE -> allowed
+    // DISABLED / BLOCKED / INACTIVE -> 403 Forbidden
+    const status = (dbUser.userStatus || '').toUpperCase();
+    if (status !== 'ACTIVE') {
+      throw new ForbiddenException(
+        `User account is not active (status: ${dbUser.userStatus ?? 'UNKNOWN'}). Access is forbidden.`,
+      );
+    }
+
+    const permissions: string[] = (dbUser.role?.permissions ?? [])
+      .map((p: any) => p.permissionName)
+      .filter(Boolean);
+
+    request.authUser = {
+      userId: dbUser.userId,
+      clerkUserId: dbUser.clerkUserId ?? clerkUserId,
+      userName: dbUser.userName ?? null,
+      userEmail: dbUser.userEmail ?? null,
+      roleId: dbUser.roleId ?? null,
+      roleName: dbUser.role?.roleName ?? null,
+      permissions,
+      status: dbUser.userStatus ?? null,
+    };
+
+    return true;
+  }
+}
+</file>
+
 <file path="backend/src/equipment/dto/pagination.dto.ts">
 // pagination.dto.ts
 
@@ -11626,7 +12456,9 @@ import {
   Param,
   Query,
   ParseUUIDPipe,
+  UseGuards,
 } from '@nestjs/common';
+import { ClerkAuthGuard } from '../auth/clerk-auth.guard.js';
 import { EquipmentMovementService } from './equipmentMovement.service.js';
 import type {
   CreateEquipmentMovementDTO,
@@ -11634,6 +12466,7 @@ import type {
   PaginationDTO,
 } from './dto/index.js';
 
+@UseGuards(ClerkAuthGuard)
 @Controller(['equipment-movement', 'equipment-movements'])
 export class EquipmentMovementController {
   constructor(private readonly equipmentMovementService: EquipmentMovementService) {}
@@ -11721,761 +12554,6 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 export class EquipmentMovementModule {}
 </file>
 
-<file path="backend/src/movements/equipmentMovement.service.ts">
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
-import {
-  CreateEquipmentMovementDTO,
-  createEquipmentMovementSchema,
-  SearchEquipmentMovementDTO,
-  searchEquipmentMovementSchema,
-  PaginationDTO,
-} from './dto/index.js';
-
-@Injectable()
-export class EquipmentMovementService {
-  constructor(private readonly prisma: PrismaService) { }
-
-  /**
-   * Checks if an equipment with the given ID exists
-   */
-  async equipmentExists(equipmentId: string): Promise<boolean> {
-    if (!equipmentId || typeof equipmentId !== 'string' || equipmentId.trim() === '') {
-      return false;
-    }
-    const count = await this.prisma.equipment.count({
-      where: { equipmentId: equipmentId.trim() },
-    });
-    return count > 0;
-  }
-
-  /**
-   * Checks if a serial number with the given ID exists
-   */
-  async serialNumberExists(serialNumberId: string): Promise<boolean> {
-    if (!serialNumberId || typeof serialNumberId !== 'string' || serialNumberId.trim() === '') {
-      return false;
-    }
-    const count = await this.prisma.serialNumber.count({
-      where: { serialNumberId: serialNumberId.trim() },
-    });
-    return count > 0;
-  }
-
-  /**
-   * Checks if a shelf with the given ID exists
-   */
-  async shelfExists(shelfId: string): Promise<boolean> {
-    if (!shelfId || typeof shelfId !== 'string' || shelfId.trim() === '') {
-      return false;
-    }
-    const count = await this.prisma.shelf.count({
-      where: { shelfId: shelfId.trim() },
-    });
-    return count > 0;
-  }
-
-  /**
-   * Checks if an equipment movement with the given ID exists
-   */
-  async equipmentMovementExists(movementId: string): Promise<boolean> {
-    if (!movementId || typeof movementId !== 'string' || movementId.trim() === '') {
-      return false;
-    }
-    const count = await this.prisma.mouvement.count({
-      where: { mouvementId: movementId.trim() },
-    });
-    return count > 0;
-  }
-
-  /**
-   * Validates business rules of a movement
-   */
-  async validateMovement(dto: CreateEquipmentMovementDTO): Promise<void> {
-    if (dto.movementQuantity <= 0) {
-      throw new BadRequestException('Movement quantity must be greater than 0');
-    }
-
-    if (!dto.sourceShelfId && !dto.destinationShelfId) {
-      throw new BadRequestException('At least one of source shelf or destination shelf must be provided');
-    }
-
-    if (dto.sourceShelfId && dto.destinationShelfId && dto.sourceShelfId === dto.destinationShelfId) {
-      throw new BadRequestException('Source shelf and destination shelf cannot be the same');
-    }
-
-    // If serialized equipment
-    if (dto.serialNumberId) {
-      if (dto.movementQuantity !== 1) {
-        throw new BadRequestException('Movement quantity for serialized equipment must be 1');
-      }
-
-      if (dto.sourceShelfId) {
-        const serialNumber = await this.prisma.serialNumber.findUnique({
-          where: { serialNumberId: dto.serialNumberId },
-        });
-        if (serialNumber?.shelfId && serialNumber.shelfId !== dto.sourceShelfId) {
-          throw new BadRequestException('Serial number is not located on the specified source shelf');
-        }
-      }
-    }
-  }
-
-  /**
-   * Creates a new equipment movement tuple
-   */
-  async createEquipmentMovement(dto: CreateEquipmentMovementDTO) {
-    // 1. Validate inputs of creating a new equipment movement from CreateEquipmentMovementDTO
-    const validatedData = createEquipmentMovementSchema.parse(dto);
-
-    // 2. Check if the equipment exists using equipmentExists()
-    const equipmentExists = await this.equipmentExists(validatedData.equipmentId);
-    if (!equipmentExists) {
-      throw new NotFoundException(`Equipment with ID '${validatedData.equipmentId}' not found`);
-    }
-
-    // 3. If serialNumberId is provided: check if the serial number exists and belongs to equipment
-    if (validatedData.serialNumberId) {
-      const serialNumberExists = await this.serialNumberExists(validatedData.serialNumberId);
-      if (!serialNumberExists) {
-        throw new NotFoundException(`Serial number with ID '${validatedData.serialNumberId}' not found`);
-      }
-
-      const serialNumber = await this.prisma.serialNumber.findUnique({
-        where: { serialNumberId: validatedData.serialNumberId },
-      });
-
-      if (serialNumber?.equipmentId !== validatedData.equipmentId) {
-        throw new BadRequestException('Serial number does not belong to the specified equipment');
-      }
-    }
-
-    // 4. If sourceShelfId is provided: check if the source shelf exists using shelfExists()
-    if (validatedData.sourceShelfId) {
-      const sourceShelfExists = await this.shelfExists(validatedData.sourceShelfId);
-      if (!sourceShelfExists) {
-        throw new NotFoundException(`Source shelf with ID '${validatedData.sourceShelfId}' not found`);
-      }
-    }
-
-    // 5. If destinationShelfId is provided: check if the destination shelf exists using shelfExists()
-    if (validatedData.destinationShelfId) {
-      const destinationShelfExists = await this.shelfExists(validatedData.destinationShelfId);
-      if (!destinationShelfExists) {
-        throw new NotFoundException(`Destination shelf with ID '${validatedData.destinationShelfId}' not found`);
-      }
-    }
-
-    // 6. Validate movement business rules
-    await this.validateMovement(validatedData);
-
-    // 7. Execute movement, stock update, and serial number updates in a transaction
-    return await this.prisma.$transaction(async (tx) => {
-      // 7a. If source shelf is provided (Transfer or Exit):
-      if (validatedData.sourceShelfId) {
-        const sourceEquipmentShelf = await tx.equipmentShelfs.findUnique({
-          where: {
-            equipmentId_shelfId: {
-              equipmentId: validatedData.equipmentId,
-              shelfId: validatedData.sourceShelfId,
-            },
-          },
-        });
-
-        if (!sourceEquipmentShelf || sourceEquipmentShelf.equipmentQuantity < validatedData.movementQuantity) {
-          throw new BadRequestException(
-            `Insufficient equipment quantity on source shelf. Available: ${sourceEquipmentShelf?.equipmentQuantity ?? 0}, Requested: ${validatedData.movementQuantity}`,
-          );
-        }
-
-        await tx.equipmentShelfs.update({
-          where: {
-            equipmentId_shelfId: {
-              equipmentId: validatedData.equipmentId,
-              shelfId: validatedData.sourceShelfId,
-            },
-          },
-          data: {
-            equipmentQuantity: {
-              decrement: validatedData.movementQuantity,
-            },
-          },
-        });
-
-        // If pure exit (no destination shelf), decrement total equipment quantity
-        if (!validatedData.destinationShelfId) {
-          await tx.equipment.update({
-            where: { equipmentId: validatedData.equipmentId },
-            data: {
-              equipmentQuantity: {
-                decrement: validatedData.movementQuantity,
-              },
-            },
-          });
-        }
-      }
-
-      // 7b. If destination shelf is provided (Transfer or Entry):
-      if (validatedData.destinationShelfId) {
-        await tx.equipmentShelfs.upsert({
-          where: {
-            equipmentId_shelfId: {
-              equipmentId: validatedData.equipmentId,
-              shelfId: validatedData.destinationShelfId,
-            },
-          },
-          update: {
-            equipmentQuantity: {
-              increment: validatedData.movementQuantity,
-            },
-          },
-          create: {
-            equipmentId: validatedData.equipmentId,
-            shelfId: validatedData.destinationShelfId,
-            equipmentQuantity: validatedData.movementQuantity,
-          },
-        });
-
-        // If pure entry (no source shelf), increment total equipment quantity
-        if (!validatedData.sourceShelfId) {
-          await tx.equipment.update({
-            where: { equipmentId: validatedData.equipmentId },
-            data: {
-              equipmentQuantity: {
-                increment: validatedData.movementQuantity,
-              },
-            },
-          });
-        }
-      }
-
-      // 7c. Update serial number location if provided
-      if (validatedData.serialNumberId) {
-        await tx.serialNumber.update({
-          where: { serialNumberId: validatedData.serialNumberId },
-          data: {
-            shelfId: validatedData.destinationShelfId ?? null,
-          },
-        });
-      }
-
-      // 7d. Create movement audit record
-      const movement = await tx.mouvement.create({
-        data: {
-          equipmentId: validatedData.equipmentId,
-          serialNumberId: validatedData.serialNumberId,
-          sourceShelfId: validatedData.sourceShelfId,
-          destinationShelfId: validatedData.destinationShelfId,
-          mouvementQuantity: validatedData.movementQuantity,
-          mouvementStatus: validatedData.movementType,
-        },
-        include: {
-          equipment: true,
-          serialNumber: true,
-          sourceShelf: true,
-          destinationShelf: true,
-        },
-      });
-
-      return movement;
-    });
-  }
-
-  /**
-   * Finds and returns all tuples of EquipmentMovement schema with pagination
-   */
-  async getAllEquipmentMovements(pagination: PaginationDTO) {
-    const { limit = 10, page = 1 } = pagination;
-    const skip = (page - 1) * limit;
-
-    return await this.prisma.mouvement.findMany({
-      skip,
-      take: limit,
-      include: {
-        equipment: true,
-        serialNumber: true,
-        sourceShelf: true,
-        destinationShelf: true,
-      },
-      orderBy: {
-        mouvementId: 'desc',
-      },
-    });
-  }
-
-  /**
-   * Searches for equipment movement tuples that match the searching options with pagination
-   */
-  async searchEquipmentMovements(dto: SearchEquipmentMovementDTO, pagination: PaginationDTO) {
-    const validatedData = searchEquipmentMovementSchema.parse(dto);
-    const { limit = 10, page = 1 } = pagination;
-    const skip = (page - 1) * limit;
-
-    const where: any = {};
-    if (validatedData.equipmentId) where.equipmentId = validatedData.equipmentId;
-    if (validatedData.serialNumberId) where.serialNumberId = validatedData.serialNumberId;
-    if (validatedData.sourceShelfId) where.sourceShelfId = validatedData.sourceShelfId;
-    if (validatedData.destinationShelfId) where.destinationShelfId = validatedData.destinationShelfId;
-    if (validatedData.movementQuantity !== undefined) where.mouvementQuantity = validatedData.movementQuantity;
-    if (validatedData.movementType) where.mouvementStatus = validatedData.movementType;
-
-    return await this.prisma.mouvement.findMany({
-      where,
-      skip,
-      take: limit,
-      include: {
-        equipment: true,
-        serialNumber: true,
-        sourceShelf: true,
-        destinationShelf: true,
-      },
-    });
-  }
-
-  /**
-   * Validates movement ID input, checks existence, and returns the complete tuple
-   */
-  async getEquipmentMovementById(pagination: PaginationDTO, id: string) {
-    if (!id || typeof id !== 'string' || id.trim() === '') {
-      throw new BadRequestException('Movement ID is required');
-    }
-
-    const exists = await this.equipmentMovementExists(id.trim());
-    if (!exists) {
-      throw new NotFoundException(`Equipment movement with ID '${id}' not found`);
-    }
-
-    const { limit = 10, page = 1 } = pagination;
-    const skip = (page - 1) * limit;
-
-    return await this.prisma.mouvement.findMany({
-      where: { mouvementId: id.trim() },
-      skip,
-      take: limit,
-      include: {
-        equipment: true,
-        serialNumber: true,
-        sourceShelf: true,
-        destinationShelf: true,
-      },
-    });
-  }
-
-  /**
-   * Validates movement type input and returns all tuples that have the specified movement type with pagination
-   */
-  async getMovementsByType(pagination: PaginationDTO, type: string) {
-    if (!type || typeof type !== 'string' || type.trim() === '') {
-      throw new BadRequestException('Movement type is required');
-    }
-
-    const { limit = 10, page = 1 } = pagination;
-    const skip = (page - 1) * limit;
-
-    return await this.prisma.mouvement.findMany({
-      where: {
-        mouvementStatus: type.trim(),
-      },
-      skip,
-      take: limit,
-      include: {
-        equipment: true,
-        serialNumber: true,
-        sourceShelf: true,
-        destinationShelf: true,
-      },
-    });
-  }
-
-  /**
-   * Validates equipment ID input, checks existence, and returns all movements for that equipment with pagination
-   */
-  async getMovementsByEquipmentId(pagination: PaginationDTO, equipmentId: string) {
-    if (!equipmentId || typeof equipmentId !== 'string' || equipmentId.trim() === '') {
-      throw new BadRequestException('Equipment ID is required');
-    }
-
-    const exists = await this.equipmentExists(equipmentId.trim());
-    if (!exists) {
-      throw new NotFoundException(`Equipment with ID '${equipmentId}' not found`);
-    }
-
-    const { limit = 10, page = 1 } = pagination;
-    const skip = (page - 1) * limit;
-
-    return await this.prisma.mouvement.findMany({
-      where: {
-        equipmentId: equipmentId.trim(),
-      },
-      skip,
-      take: limit,
-      include: {
-        equipment: true,
-        serialNumber: true,
-        sourceShelf: true,
-        destinationShelf: true,
-      },
-    });
-  }
-
-  /**
-   * Validates serial number ID input, checks existence, and returns all movements for that serial number with pagination
-   */
-  async getMovementsBySerialNumberId(pagination: PaginationDTO, serialNumberId: string) {
-    if (!serialNumberId || typeof serialNumberId !== 'string' || serialNumberId.trim() === '') {
-      throw new BadRequestException('Serial number ID is required');
-    }
-
-    const exists = await this.serialNumberExists(serialNumberId.trim());
-    if (!exists) {
-      throw new NotFoundException(`Serial number with ID '${serialNumberId}' not found`);
-    }
-
-    const { limit = 10, page = 1 } = pagination;
-    const skip = (page - 1) * limit;
-
-    return await this.prisma.mouvement.findMany({
-      where: {
-        serialNumberId: serialNumberId.trim(),
-      },
-      skip,
-      take: limit,
-      include: {
-        equipment: true,
-        serialNumber: true,
-        sourceShelf: true,
-        destinationShelf: true,
-      },
-    });
-  }
-
-  /**
-   * Validates shelf ID input, checks existence, and returns all movements where this shelf is the source shelf with pagination
-   */
-  async getMovementsBySourceShelfId(pagination: PaginationDTO, shelfId: string) {
-    if (!shelfId || typeof shelfId !== 'string' || shelfId.trim() === '') {
-      throw new BadRequestException('Shelf ID is required');
-    }
-
-    const exists = await this.shelfExists(shelfId.trim());
-    if (!exists) {
-      throw new NotFoundException(`Shelf with ID '${shelfId}' not found`);
-    }
-
-    const { limit = 10, page = 1 } = pagination;
-    const skip = (page - 1) * limit;
-
-    return await this.prisma.mouvement.findMany({
-      where: {
-        sourceShelfId: shelfId.trim(),
-      },
-      skip,
-      take: limit,
-      include: {
-        equipment: true,
-        serialNumber: true,
-        sourceShelf: true,
-        destinationShelf: true,
-      },
-    });
-  }
-
-  /**
-   * Validates shelf ID input, checks existence, and returns all movements where this shelf is the destination shelf with pagination
-   */
-  async getMovementsByDestinationShelfId(pagination: PaginationDTO, shelfId: string) {
-    if (!shelfId || typeof shelfId !== 'string' || shelfId.trim() === '') {
-      throw new BadRequestException('Shelf ID is required');
-    }
-
-    const exists = await this.shelfExists(shelfId.trim());
-    if (!exists) {
-      throw new NotFoundException(`Shelf with ID '${shelfId}' not found`);
-    }
-
-    const { limit = 10, page = 1 } = pagination;
-    const skip = (page - 1) * limit;
-
-    return await this.prisma.mouvement.findMany({
-      where: {
-        destinationShelfId: shelfId.trim(),
-      },
-      skip,
-      take: limit,
-      include: {
-        equipment: true,
-        serialNumber: true,
-        sourceShelf: true,
-        destinationShelf: true,
-      },
-    });
-  }
-}
-</file>
-
-<file path="backend/src/prisma/schema.prisma">
-generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
-}
-
-datasource db {
-  provider = "sqlserver"
-}
-
-
-// ============================================================
-// AUTHORIZATION
-// ============================================================
-
-model Role {
-  roleId   String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-  roleName String? @db.VarChar(100)
-
-  users       User[]
-  permissions Permission[]
-
-  @@map("Role")
-}
-
-
-model Permission {
-  permissionId   String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-  permissionName String? @db.VarChar(100)
-
-  roleId String? @db.UniqueIdentifier
-
-  role Role? @relation(
-    fields: [roleId],
-    references: [roleId]
-  )
-
-  @@map("Permission")
-}
-
-
-// ============================================================
-// USER
-// ============================================================
-
-model User {
-  userId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
-  userName    String? @db.VarChar(100)
-  userEmail   String? @db.VarChar(150)
-  hashPassword String? @db.VarChar(255)
-
-  roleId String? @db.UniqueIdentifier
-
-  userStatus String? @db.VarChar(50)
-
-  role Role? @relation(
-    fields: [roleId],
-    references: [roleId]
-  )
-
-  sessions Session[]
-
-  @@map("User")
-}
-
-
-// ============================================================
-// SESSION
-// ============================================================
-
-model Session {
-  sessionId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
-  createdAt DateTime? @default(now()) @db.DateTime2
-  expiresAt DateTime? @db.DateTime2
-
-  userId String? @db.UniqueIdentifier
-
-  user User? @relation(
-    fields: [userId],
-    references: [userId]
-  )
-
-  @@map("Session")
-}
-
-
-// ============================================================
-// EQUIPMENT
-// ============================================================
-
-model Equipment {
-  equipmentId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
-  equipmentName String? @db.VarChar(100)
-
-  hasSerialNumber Boolean @default(false)
-
-  equipmentQuantity    Int @default(0)
-  minequipmentQuantity Int @default(0)
-
-  equipmentShelfId String? @db.UniqueIdentifier
-
-  serialNumbers       SerialNumber[]
-  mouvements          Mouvement[]
-  equipmentShelfs     EquipmentShelfs[]
-  equipmentMouvements EquipmentMouvement[]
-
-  @@index([equipmentName])
-  @@index([hasSerialNumber])
-  @@index([equipmentShelfId])
-  @@index([minequipmentQuantity])
-  @@map("Equipment")
-}
-
-
-// ============================================================
-// SERIAL NUMBER
-// ============================================================
-
-model SerialNumber {
-  serialNumberId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
-  serialNumberCode   String? @db.VarChar(150)
-  serialNumberStatus String? @db.VarChar(50)
-
-  equipmentId String? @db.UniqueIdentifier
-  shelfId     String? @db.UniqueIdentifier
-
-  equipment Equipment? @relation(
-    fields: [equipmentId],
-    references: [equipmentId]
-  )
-
-  shelf Shelf? @relation(
-    fields: [shelfId],
-    references: [shelfId]
-  )
-
-  @@map("SerialNumber")
-}
-
-
-// ============================================================
-// SHELF
-// ============================================================
-
-model Shelf {
-  shelfId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
-  shelfName     String? @db.VarChar(100)
-  shelfQuantity Int     @default(0)
-
-  equipmentShelfId String? @db.UniqueIdentifier
-
-  serialNumbers SerialNumber[]
-
-  sourceMouvements Mouvement[] @relation("SourceShelf")
-
-  destinationMouvements Mouvement[] @relation("DestinationShelf")
-
-  equipmentMouvements EquipmentMouvement[]
-
-  equipmentShelf EquipmentShelfs? @relation(
-    "ShelfEquipmentShelf",
-    fields: [equipmentShelfId],
-    references: [equipmentShelfId]
-  )
-
-  @@map("Shelf")
-}
-
-
-// ============================================================
-// MOUVEMENT
-// ============================================================
-
-model Mouvement {
-  mouvementId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
-  mouvementStatus   String? @db.VarChar(50)
-  mouvementQuantity Int?
-
-  equipmentId String? @db.UniqueIdentifier
-
-  sourceShelfId      String? @db.UniqueIdentifier
-  destinationShelfId String? @db.UniqueIdentifier
-
-  equipment Equipment? @relation(
-    fields: [equipmentId],
-    references: [equipmentId]
-  )
-
-  sourceShelf Shelf? @relation(
-    "SourceShelf",
-    fields: [sourceShelfId],
-    references: [shelfId]
-  )
-
-  destinationShelf Shelf? @relation(
-    "DestinationShelf",
-    fields: [destinationShelfId],
-    references: [shelfId]
-  )
-
-  @@map("Mouvement")
-}
-
-
-// ============================================================
-// EQUIPMENT SHELFS
-// ============================================================
-
-model EquipmentShelfs {
-  equipmentShelfId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
-  equipmentQuantity Int @default(0)
-
-  equipmentId String? @db.UniqueIdentifier
-
-  equipment Equipment? @relation(
-    fields: [equipmentId],
-    references: [equipmentId]
-  )
-
-  shelves Shelf[] @relation("ShelfEquipmentShelf")
-
-  @@map("EquipmentShelfs")
-}
-
-
-// ============================================================
-// EQUIPMENT MOUVEMENTS
-//
-// NOTE:
-// Your actual SSMS table is named "EqipmentMouvements"
-// exactly as shown in your diagram.
-// Prisma model name is cleaned up but @@map keeps SQL name.
-// ============================================================
-
-model EquipmentMouvement {
-  equipmentMouvementsId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-
-  equipmentQuantity Int @default(0)
-
-  equipmentId String? @db.UniqueIdentifier
-  shelfId     String? @db.UniqueIdentifier
-
-  equipment Equipment? @relation(
-    fields: [equipmentId],
-    references: [equipmentId]
-  )
-
-  shelf Shelf? @relation(
-    fields: [shelfId],
-    references: [shelfId]
-  )
-
-  @@map("EqipmentMouvements")
-}
-</file>
-
 <file path="backend/src/serial-numbers/dto/createSerialNumber.dto.ts">
 import { z } from 'zod';
 
@@ -12551,7 +12629,9 @@ import {
   Param,
   Query,
   ParseUUIDPipe,
+  UseGuards,
 } from '@nestjs/common';
+import { ClerkAuthGuard } from '../auth/clerk-auth.guard.js';
 import { SerialNumberService } from './serialNumber.service.js';
 import type {
   CreateSerialNumberDTO,
@@ -12560,6 +12640,7 @@ import type {
   PaginationDTO
 } from './dto/index.js';
 
+@UseGuards(ClerkAuthGuard)
 @Controller('serial-number')
 export class SerialNumberController {
   constructor(private readonly serialNumberService: SerialNumberService) { }
@@ -12850,7 +12931,9 @@ import {
   Param,
   Query,
   ParseUUIDPipe,
+  UseGuards,
 } from '@nestjs/common';
+import { ClerkAuthGuard } from '../auth/clerk-auth.guard.js';
 import { ShelfService } from './shelves.service.js';
 import type {
   CreateShelfDTO,
@@ -12859,6 +12942,7 @@ import type {
   PaginationDTO,
 } from './dto/index.js';
 
+@UseGuards(ClerkAuthGuard)
 @Controller('shelves')
 export class ShelfController {
   constructor(private readonly shelfService: ShelfService) {}
@@ -12923,106 +13007,6 @@ import { ShelfController } from './shelves.controller.js';
 
 })
 export class ShelfModule { }
-</file>
-
-<file path="backend/src/shelves/shelves.service.ts">
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
-import { CreateShelfDTO } from './dto/createShelf.dto.js';
-import { UpdateShelfDTO } from './dto/updateShelf.dto.js';
-import { PaginationDTO } from './dto/pagination.dto.js';
-import { SearchShelfDTO } from './dto/searchShelf.dto.js';
-
-@Injectable()
-export class ShelfService {
-  constructor(private readonly prisma: PrismaService) { }
-
-  async existShelf(shelfName: string): Promise<boolean> {
-    const shelf = await this.prisma.shelf.findFirst({
-      where: { shelfName },
-    });
-    return shelf !== null;
-  }
-
-  async createShelf(dto: CreateShelfDTO) {
-    const { shelfName } = dto;
-    const existingShelf = await this.existShelf(shelfName);
-    if (existingShelf) {
-      throw new BadRequestException('Shelf already exists');
-    }
-    return await this.prisma.shelf.create({
-      data: {
-        shelfName: dto.shelfName,
-      },
-    });
-  }
-
-  async getAllShelves(pagination: PaginationDTO) {
-    const { limit = 10, page = 1 } = pagination ?? {};
-    const skip = (page - 1) * limit;
-    return await this.prisma.shelf.findMany({
-      skip,
-      take: limit,
-      orderBy: { shelfName: 'asc' },
-    });
-  }
-
-  async getShelfById(pagination: PaginationDTO, id: string) {
-    const shelf = await this.prisma.shelf.findUnique({
-      where: { shelfId: id },
-    });
-    if (!shelf) {
-      throw new NotFoundException(`Shelf with ID '${id}' not found`);
-    }
-    return shelf;
-  }
-
-  async getShelfByName(pagination: PaginationDTO, shelfName: string) {
-    const { limit = 10, page = 1 } = pagination ?? {};
-    const skip = (page - 1) * limit;
-    return await this.prisma.shelf.findMany({
-      skip,
-      take: limit,
-      where: { shelfName },
-      orderBy: { shelfName: 'asc' },
-    });
-  }
-
-  async updateShelf(dto: UpdateShelfDTO, id: string) {
-    const existingShelf = await this.prisma.shelf.findUnique({
-      where: { shelfId: id },
-    });
-    if (!existingShelf) {
-      throw new NotFoundException(`Shelf with ID '${id}' not found`);
-    }
-
-    if (dto.shelfName && dto.shelfName !== existingShelf.shelfName) {
-      const nameTaken = await this.existShelf(dto.shelfName);
-      if (nameTaken) {
-        throw new BadRequestException('Shelf with this name already exists');
-      }
-    }
-
-    return await this.prisma.shelf.update({
-      where: { shelfId: id },
-      data: {
-        ...(dto.shelfName !== undefined && { shelfName: dto.shelfName }),
-      },
-    });
-  }
-
-  async deleteShelf(id: string) {
-    const existingShelf = await this.prisma.shelf.findUnique({
-      where: { shelfId: id },
-    });
-    if (!existingShelf) {
-      throw new NotFoundException(`Shelf with ID '${id}' not found`);
-    }
-    return await this.prisma.shelf.delete({
-      where: { shelfId: id },
-    });
-  }
-}
 </file>
 
 <file path="backend/src/app.controller.spec.ts">
@@ -13114,11 +13098,16 @@ describe('AppController (e2e)', () => {
 # ============================================================
 
 NODE_ENV=development
-
 PORT=3001
-
 FRONTEND_URL=http://localhost:3000
 
+# ============================================================
+# CLERK AUTHENTICATION
+# ============================================================
+
+CLERK_SECRET_KEY=sk_test_your_clerk_secret_key
+CLERK_JWT_KEY=your_clerk_jwt_public_key_or_pem
+CLERK_WEBHOOK_SECRET=whsec_your_clerk_webhook_signing_secret
 
 # ============================================================
 # SQL SERVER / PRISMA
@@ -13126,25 +13115,11 @@ FRONTEND_URL=http://localhost:3000
 
 DATABASE_URL="sqlserver://localhost:1433;database=YOUR_DATABASE_NAME;user=YOUR_USERNAME;password=YOUR_PASSWORD;encrypt=true;trustServerCertificate=true"
 
-
-# ============================================================
-# JWT
-# ============================================================
-
-JWT_ACCESS_SECRET=CHANGE_THIS_TO_A_LONG_RANDOM_SECRET
-JWT_ACCESS_EXPIRES_IN=15m
-
-JWT_REFRESH_SECRET=CHANGE_THIS_TO_ANOTHER_LONG_RANDOM_SECRET
-JWT_REFRESH_EXPIRES_IN=7d
-
-
-# ============================================================
-# SECURITY
-# ============================================================
-
-ARGON2_MEMORY_COST=65536
-ARGON2_TIME_COST=3
-ARGON2_PARALLELISM=4
+DB_HOST=localhost
+DB_PORT=1433
+DB_NAME=YOUR_DATABASE_NAME
+DB_USER=YOUR_USERNAME
+DB_PASSWORD=YOUR_PASSWORD
 </file>
 
 <file path="backend/.gitignore">
@@ -13412,13 +13387,16 @@ import { defineConfig } from 'vitest/config';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
-  // Resolves the path aliases declared in tsconfig.json, including the ones
-  // added by `nest g library`.
-  plugins: [tsconfigPaths()],
+  plugins: [
+    tsconfigPaths({
+      projects: ['./tsconfig.json'],
+      root: './',
+    }),
+  ],
   test: {
     globals: true,
     root: './',
-    include: ['**/*.spec.ts'],
+    include: ['src/auth/**/*.spec.ts'],
   },
 });
 </file>
@@ -13441,6 +13419,60 @@ export default defineConfig({
 
 <file path="frontend/public/window.svg">
 <svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.5 2.5h13v10a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM0 1h16v11.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 0 12.5zm3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5M7 4.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0m1.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5" fill="#666"/></svg>
+</file>
+
+<file path="frontend/src/app/sign-in/[[...sign-in]]/page.tsx">
+import { SignIn } from '@clerk/nextjs';
+import { notionClerkAppearance } from '@/lib/notion-theme';
+
+export default function SignInPage() {
+  return (
+    <main className="min-h-screen flex flex-col items-center justify-center bg-[#f6f5f4] p-4 text-[#37352f]">
+      {/* Notion-style minimal brand header */}
+      <div className="mb-6 flex flex-col items-center text-center">
+        <div className="w-11 h-11 rounded-lg bg-[#37352f] text-white font-bold text-xl flex items-center justify-center shadow-xs mb-3 border border-[#252420]">
+          S
+        </div>
+        <h1 className="text-base font-semibold tracking-tight text-[#1a1a1a]">
+          Somipharm Workspace
+        </h1>
+        <p className="text-xs text-[#787671] mt-0.5">
+          Système interne de maintenance & gestion de stock
+        </p>
+      </div>
+
+      {/* Notion styled SignIn card */}
+      <SignIn appearance={notionClerkAppearance} />
+    </main>
+  );
+}
+</file>
+
+<file path="frontend/src/app/sign-up/[[...sign-up]]/page.tsx">
+import { SignUp } from '@clerk/nextjs';
+import { notionClerkAppearance } from '@/lib/notion-theme';
+
+export default function SignUpPage() {
+  return (
+    <main className="min-h-screen flex flex-col items-center justify-center bg-[#f6f5f4] p-4 text-[#37352f]">
+      {/* Notion-style minimal brand header */}
+      <div className="mb-6 flex flex-col items-center text-center">
+        <div className="w-11 h-11 rounded-lg bg-[#37352f] text-white font-bold text-xl flex items-center justify-center shadow-xs mb-3 border border-[#252420]">
+          S
+        </div>
+        <h1 className="text-base font-semibold tracking-tight text-[#1a1a1a]">
+          Somipharm Workspace
+        </h1>
+        <p className="text-xs text-[#787671] mt-0.5">
+          Création de compte collaborateur
+        </p>
+      </div>
+
+      {/* Notion styled SignUp card */}
+      <SignUp appearance={notionClerkAppearance} />
+    </main>
+  );
+}
 </file>
 
 <file path="frontend/src/app/globals.css">
@@ -13573,97 +13605,6 @@ export default defineConfig({
   html {
     @apply font-sans;
   }
-}
-</file>
-
-<file path="frontend/src/app/layout.tsx">
-import { ClerkProvider } from '@clerk/nextjs';
-import { notionClerkAppearance } from '@/lib/notion-theme';
-import './globals.css';
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <ClerkProvider appearance={notionClerkAppearance}>
-      <html lang="fr" className="h-full">
-        <body className="h-full bg-[#f6f5f4] text-[#37352f] antialiased">
-          {children}
-        </body>
-      </html>
-    </ClerkProvider>
-  );
-}
-</file>
-
-<file path="frontend/src/app/page.tsx">
-import { auth } from '@clerk/nextjs/server';
-import { SignInButton, SignUpButton, UserButton } from '@clerk/nextjs';
-
-export default async function Home() {
-  const { userId } = await auth();
-
-  return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#f6f5f4] text-[#37352f]">
-      <div className="w-full max-w-md bg-white border border-[#e5e3df] rounded-xl p-8 shadow-xs text-center space-y-6">
-        {/* Notion Workspace Brand Mark */}
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-[#37352f] text-white font-bold text-2xl shadow-xs mx-auto">
-          S
-        </div>
-
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1a1a1a]">
-            Somipharm Workspace
-          </h1>
-          <p className="text-sm text-[#5d5b54]">
-            Plateforme interne de maintenance et traçabilité du stock
-          </p>
-        </div>
-
-        {!userId ? (
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <SignInButton mode="modal">
-              <button
-                type="button"
-                className="flex-1 px-4 py-2.5 bg-[#5645d4] hover:bg-[#4534b3] active:bg-[#3a2a99] text-white text-sm font-medium rounded-lg transition-colors cursor-pointer"
-              >
-                Se connecter
-              </button>
-            </SignInButton>
-
-            <SignUpButton mode="modal">
-              <button
-                type="button"
-                className="flex-1 px-4 py-2.5 bg-transparent hover:bg-[#f0eeec] text-[#1a1a1a] border border-[#c8c4be] text-sm font-medium rounded-lg transition-colors cursor-pointer"
-              >
-                Créer un compte
-              </button>
-            </SignUpButton>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-4 pt-2">
-            <div className="p-1 rounded-full border border-[#e5e3df]">
-              <UserButton />
-            </div>
-            <div className="space-y-1">
-              <h2 className="text-sm font-medium text-[#1a1a1a]">
-                Session active
-              </h2>
-              <p className="text-xs text-[#5d5b54]">
-                Vous êtes connecté au portail de maintenance
-              </p>
-            </div>
-          </div>
-        )}
-
-        <div className="pt-4 border-t border-[#ede9e4] text-[11px] text-[#a4a097]">
-          Somipharm S.A. • Workspace v1.0 • Design Notion
-        </div>
-      </div>
-    </main>
-  );
 }
 </file>
 
@@ -17423,6 +17364,161 @@ export function useIsMobile() {
 }
 </file>
 
+<file path="frontend/src/lib/notion-theme.ts">
+/**
+ * Notion Design System tokens & Clerk Appearance configuration
+ * Derived from Notion-design-analysis specification
+ */
+
+export const notionColors = {
+  primary: '#5645d4',
+  primaryPressed: '#4534b3',
+  primaryDeep: '#3a2a99',
+  onPrimary: '#ffffff',
+  brandNavy: '#0a1530',
+  brandNavyDeep: '#070f24',
+  brandNavyMid: '#1a2a52',
+  linkBlue: '#0075de',
+  linkBluePressed: '#005bab',
+  canvas: '#ffffff',
+  surface: '#f6f5f4',
+  surfaceSoft: '#fafaf9',
+  hairline: '#e5e3df',
+  hairlineSoft: '#ede9e4',
+  hairlineStrong: '#c8c4be',
+  ink: '#1a1a1a',
+  charcoal: '#37352f',
+  slate: '#5d5b54',
+  steel: '#787671',
+  stone: '#a4a097',
+  muted: '#bbb8b1',
+  onDark: '#ffffff',
+  semanticSuccess: '#1aae39',
+  semanticWarning: '#dd5b00',
+  semanticError: '#e03131',
+};
+
+export const notionClerkAppearance = {
+  variables: {
+    colorPrimary: notionColors.primary,
+    colorText: notionColors.charcoal,
+    colorTextSecondary: notionColors.slate,
+    colorBackground: notionColors.canvas,
+    colorInputBackground: notionColors.canvas,
+    colorInputText: notionColors.ink,
+    borderRadius: '8px',
+    fontFamily:
+      "var(--font-sans, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif)",
+    fontSize: '14px',
+  },
+  elements: {
+    // Hide social logins & divider per project requirements
+    socialButtons: '!hidden',
+    socialButtonsBlockButton: '!hidden',
+    socialButtonsProviderIcon: '!hidden',
+    dividerRow: '!hidden',
+    dividerText: '!hidden',
+    dividerLine: '!hidden',
+
+    // Notion Card Surface (12px rounded, 1px solid #e5e3df hairline, subtle elevation)
+    card: {
+      backgroundColor: notionColors.canvas,
+      borderRadius: '12px',
+      border: `1px solid ${notionColors.hairline}`,
+      boxShadow: 'rgba(15, 15, 15, 0.05) 0px 4px 16px 0px',
+      padding: '32px',
+      maxWidth: '440px',
+      width: '100%',
+    },
+    rootBox: {
+      width: '100%',
+      display: 'flex',
+      justifyContent: 'center',
+    },
+
+    // Notion Typography Header
+    headerTitle: {
+      color: notionColors.ink,
+      fontSize: '22px',
+      fontWeight: '600',
+      letterSpacing: '-0.4px',
+    },
+    headerSubtitle: {
+      color: notionColors.slate,
+      fontSize: '14px',
+      fontWeight: '400',
+      marginTop: '4px',
+      lineHeight: '1.5',
+    },
+
+    // Form inputs (Notion text-input: 8px radius, hairline border, focus primary purple)
+    formFieldLabel: {
+      color: notionColors.charcoal,
+      fontSize: '13px',
+      fontWeight: '500',
+      marginBottom: '4px',
+    },
+    formFieldInput: {
+      backgroundColor: notionColors.canvas,
+      color: notionColors.ink,
+      border: `1px solid ${notionColors.hairlineStrong}`,
+      borderRadius: '8px',
+      fontSize: '14px',
+      height: '42px',
+      padding: '8px 12px',
+      transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+      '&:focus': {
+        borderColor: notionColors.primary,
+        boxShadow: '0 0 0 2px rgba(86, 69, 212, 0.2)',
+      },
+    },
+
+    // Notion Signature Primary Button (button-primary: 8px radius, #5645d4 Notion purple)
+    formButtonPrimary: {
+      backgroundColor: notionColors.primary,
+      color: notionColors.onPrimary,
+      borderRadius: '8px',
+      fontSize: '14px',
+      fontWeight: '500',
+      height: '42px',
+      padding: '10px 18px',
+      boxShadow: 'none',
+      transition: 'background-color 0.15s ease',
+      '&:hover': {
+        backgroundColor: notionColors.primaryPressed,
+      },
+      '&:active': {
+        backgroundColor: notionColors.primaryDeep,
+      },
+    },
+
+    // Footer actions & inline links (link-blue: #0075de)
+    footerActionLink: {
+      color: notionColors.linkBlue,
+      fontSize: '13px',
+      fontWeight: '500',
+      '&:hover': {
+        color: notionColors.linkBluePressed,
+        textDecoration: 'underline',
+      },
+    },
+    footerActionText: {
+      color: notionColors.slate,
+      fontSize: '13px',
+    },
+
+    // Identity preview (e.g. during verification)
+    identityPreviewText: {
+      color: notionColors.ink,
+      fontWeight: '500',
+    },
+    identityPreviewEditButton: {
+      color: notionColors.linkBlue,
+    },
+  },
+};
+</file>
+
 <file path="frontend/src/lib/utils.ts">
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
@@ -17430,6 +17526,32 @@ import { twMerge } from "tailwind-merge"
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
+</file>
+
+<file path="frontend/src/middleware.ts">
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+
+const isPublicRoute = createRouteMatcher([
+  '/',
+  '/sign-in(.*)',
+  '/sign-up(.*)',
+  '/api/webhooks(.*)',
+]);
+
+export default clerkMiddleware(async (auth, request) => {
+  if (!isPublicRoute(request)) {
+    await auth.protect();
+  }
+});
+
+export const config = {
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
+};
 </file>
 
 <file path="frontend/.gitignore">
@@ -17541,71 +17663,6 @@ const eslintConfig = defineConfig([
 export default eslintConfig;
 </file>
 
-<file path="frontend/next.config.ts">
-import type { NextConfig } from "next";
-import path from "path";
-
-const nextConfig: NextConfig = {
-  turbopack: {
-    root: path.resolve(__dirname),
-  },
-};
-
-export default nextConfig;
-</file>
-
-<file path="frontend/package.json">
-{
-  "name": "frontend",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev --webpack",
-    "build": "next build --webpack",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "@base-ui/react": "^1.7.0",
-    "@clerk/nextjs": "^7.9.1",
-    "@hookform/resolvers": "^5.9.1",
-    "@tanstack/react-query": "^5.102.8",
-    "@tanstack/react-query-devtools": "^5.102.8",
-    "@tanstack/react-table": "^9.2.4",
-    "@zxing/browser": "^0.2.1",
-    "axios": "^1.20.0",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "cmdk": "^1.1.1",
-    "date-fns": "^4.4.0",
-    "lucide-react": "^1.40.0",
-    "next": "16.3.4",
-    "next-themes": "^0.4.6",
-    "react": "19.2.8",
-    "react-day-picker": "^10.0.1",
-    "react-dom": "19.2.8",
-    "react-hook-form": "^7.87.0",
-    "react-router-dom": "^7.18.3",
-    "recharts": "^3.10.1",
-    "shadcn": "^4.20.1",
-    "sonner": "^2.0.8",
-    "tailwind-merge": "^3.6.0",
-    "tw-animate-css": "^1.4.0",
-    "zod": "^3.25.76"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.4",
-    "tailwindcss": "^4",
-    "typescript": "^5"
-  }
-}
-</file>
-
 <file path="frontend/postcss.config.mjs">
 const config = {
   plugins: {
@@ -17706,7 +17763,608 @@ frontend/.env.local
 *.tsbuildinfo
 </file>
 
-<file path="backend/prisma/schema.prisma">
+<file path="backend/src/equipment/dto/createEquipment.dto.ts">
+import { z } from 'zod';
+
+export const createEquipmentSchema = z.object({
+  equipmentName: z
+    .string()
+    .trim()
+    .min(1, 'Equipment name is required'),
+
+  hasSerialNumber: z.boolean(),
+
+  equipmentQuantity: z
+    .number()
+    .int()
+    .nonnegative(),
+
+  minEquipmentQuantity: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional(),
+});
+
+export type CreateEquipmentDTO = z.infer<typeof createEquipmentSchema>;
+</file>
+
+<file path="backend/src/equipment/dto/searchEquipment.dto.ts">
+import { z } from 'zod';
+
+export const searchEquipmentSchema = z.object({
+  equipmentName: z.string().optional(),
+  hasSerialNumber: z.boolean().optional(),
+  equipmentQuantity: z.number().int().nonnegative().optional(),
+  minEquipmentQuantity: z.number().int().nonnegative().optional(),
+  equipmentShelfId: z.string().uuid().optional(),
+});
+
+export type SearchEquipmentDTO = z.infer<typeof searchEquipmentSchema>;
+</file>
+
+<file path="backend/src/equipment/dto/updateEquipment.dto.ts">
+import { z } from 'zod';
+
+export const updateEquipmentSchema = z.object({
+  equipmentName: z.string().min(1, 'Equipment name cannot be empty').optional(),
+  hasSerialNumber: z.boolean().optional(),
+  equipmentQuantity: z.number().int().nonnegative().optional(),
+  minEquipmentQuantity: z.number().int().nonnegative().optional(),
+});
+
+export type UpdateEquipmentDTO = z.infer<typeof updateEquipmentSchema>;
+</file>
+
+<file path="backend/src/movements/equipmentMovement.service.ts">
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service.js';
+import {
+  CreateEquipmentMovementDTO,
+  createEquipmentMovementSchema,
+  SearchEquipmentMovementDTO,
+  searchEquipmentMovementSchema,
+  PaginationDTO,
+} from './dto/index.js';
+
+@Injectable()
+export class EquipmentMovementService {
+  constructor(private readonly prisma: PrismaService) { }
+
+  /**
+   * Checks if an equipment with the given ID exists
+   */
+  async equipmentExists(equipmentId: string): Promise<boolean> {
+    if (!equipmentId || typeof equipmentId !== 'string' || equipmentId.trim() === '') {
+      return false;
+    }
+    const count = await this.prisma.equipment.count({
+      where: { equipmentId: equipmentId.trim() },
+    });
+    return count > 0;
+  }
+
+  /**
+   * Checks if a serial number with the given ID exists
+   */
+  async serialNumberExists(serialNumberId: string): Promise<boolean> {
+    if (!serialNumberId || typeof serialNumberId !== 'string' || serialNumberId.trim() === '') {
+      return false;
+    }
+    const count = await this.prisma.serialNumber.count({
+      where: { serialNumberId: serialNumberId.trim() },
+    });
+    return count > 0;
+  }
+
+  /**
+   * Checks if a shelf with the given ID exists
+   */
+  async shelfExists(shelfId: string): Promise<boolean> {
+    if (!shelfId || typeof shelfId !== 'string' || shelfId.trim() === '') {
+      return false;
+    }
+    const count = await this.prisma.shelf.count({
+      where: { shelfId: shelfId.trim() },
+    });
+    return count > 0;
+  }
+
+  /**
+   * Checks if an equipment movement with the given ID exists
+   */
+  async equipmentMovementExists(movementId: string): Promise<boolean> {
+    if (!movementId || typeof movementId !== 'string' || movementId.trim() === '') {
+      return false;
+    }
+    const count = await this.prisma.mouvement.count({
+      where: { mouvementId: movementId.trim() },
+    });
+    return count > 0;
+  }
+
+  /**
+   * Validates business rules of a movement
+   */
+  async validateMovement(dto: CreateEquipmentMovementDTO): Promise<void> {
+    if (dto.movementQuantity <= 0) {
+      throw new BadRequestException('Movement quantity must be greater than 0');
+    }
+
+    if (!dto.sourceShelfId && !dto.destinationShelfId) {
+      throw new BadRequestException('At least one of source shelf or destination shelf must be provided');
+    }
+
+    if (dto.sourceShelfId && dto.destinationShelfId && dto.sourceShelfId === dto.destinationShelfId) {
+      throw new BadRequestException('Source shelf and destination shelf cannot be the same');
+    }
+
+    // If serialized equipment
+    if (dto.serialNumberId) {
+      if (dto.movementQuantity !== 1) {
+        throw new BadRequestException('Movement quantity for serialized equipment must be 1');
+      }
+
+      if (dto.sourceShelfId) {
+        const serialNumber = await this.prisma.serialNumber.findUnique({
+          where: { serialNumberId: dto.serialNumberId },
+        });
+        if (serialNumber?.shelfId && serialNumber.shelfId !== dto.sourceShelfId) {
+          throw new BadRequestException('Serial number is not located on the specified source shelf');
+        }
+      }
+    }
+  }
+
+  /**
+   * Creates a new equipment movement tuple
+   */
+  async createEquipmentMovement(dto: CreateEquipmentMovementDTO) {
+    // 1. Validate inputs of creating a new equipment movement from CreateEquipmentMovementDTO
+    const validatedData = createEquipmentMovementSchema.parse(dto);
+
+    // 2. Check if the equipment exists using equipmentExists()
+    const equipmentExists = await this.equipmentExists(validatedData.equipmentId);
+    if (!equipmentExists) {
+      throw new NotFoundException(`Equipment with ID '${validatedData.equipmentId}' not found`);
+    }
+
+    // 3. If serialNumberId is provided: check if the serial number exists and belongs to equipment
+    if (validatedData.serialNumberId) {
+      const serialNumberExists = await this.serialNumberExists(validatedData.serialNumberId);
+      if (!serialNumberExists) {
+        throw new NotFoundException(`Serial number with ID '${validatedData.serialNumberId}' not found`);
+      }
+
+      const serialNumber = await this.prisma.serialNumber.findUnique({
+        where: { serialNumberId: validatedData.serialNumberId },
+      });
+
+      if (serialNumber?.equipmentId !== validatedData.equipmentId) {
+        throw new BadRequestException('Serial number does not belong to the specified equipment');
+      }
+    }
+
+    // 4. If sourceShelfId is provided: check if the source shelf exists using shelfExists()
+    if (validatedData.sourceShelfId) {
+      const sourceShelfExists = await this.shelfExists(validatedData.sourceShelfId);
+      if (!sourceShelfExists) {
+        throw new NotFoundException(`Source shelf with ID '${validatedData.sourceShelfId}' not found`);
+      }
+    }
+
+    // 5. If destinationShelfId is provided: check if the destination shelf exists using shelfExists()
+    if (validatedData.destinationShelfId) {
+      const destinationShelfExists = await this.shelfExists(validatedData.destinationShelfId);
+      if (!destinationShelfExists) {
+        throw new NotFoundException(`Destination shelf with ID '${validatedData.destinationShelfId}' not found`);
+      }
+    }
+
+    // 6. Validate movement business rules
+    await this.validateMovement(validatedData);
+
+    // 7. Execute movement, stock update, and serial number updates in a transaction
+    return await this.prisma.$transaction(async (tx) => {
+      // 7a. If source shelf is provided (Transfer or Exit):
+      if (validatedData.sourceShelfId) {
+        const sourceEquipmentShelf = await tx.equipmentShelfs.findUnique({
+          where: {
+            equipmentId_shelfId: {
+              equipmentId: validatedData.equipmentId,
+              shelfId: validatedData.sourceShelfId,
+            },
+          },
+        });
+
+        if (!sourceEquipmentShelf || sourceEquipmentShelf.equipmentQuantity < validatedData.movementQuantity) {
+          throw new BadRequestException(
+            `Insufficient equipment quantity on source shelf. Available: ${sourceEquipmentShelf?.equipmentQuantity ?? 0}, Requested: ${validatedData.movementQuantity}`,
+          );
+        }
+
+        await tx.equipmentShelfs.update({
+          where: {
+            equipmentId_shelfId: {
+              equipmentId: validatedData.equipmentId,
+              shelfId: validatedData.sourceShelfId,
+            },
+          },
+          data: {
+            equipmentQuantity: {
+              decrement: validatedData.movementQuantity,
+            },
+          },
+        });
+
+        // If pure exit (no destination shelf), decrement total equipment quantity
+        if (!validatedData.destinationShelfId) {
+          await tx.equipment.update({
+            where: { equipmentId: validatedData.equipmentId },
+            data: {
+              equipmentQuantity: {
+                decrement: validatedData.movementQuantity,
+              },
+            },
+          });
+        }
+      }
+
+      // 7b. If destination shelf is provided (Transfer or Entry):
+      if (validatedData.destinationShelfId) {
+        await tx.equipmentShelfs.upsert({
+          where: {
+            equipmentId_shelfId: {
+              equipmentId: validatedData.equipmentId,
+              shelfId: validatedData.destinationShelfId,
+            },
+          },
+          update: {
+            equipmentQuantity: {
+              increment: validatedData.movementQuantity,
+            },
+          },
+          create: {
+            equipmentId: validatedData.equipmentId,
+            shelfId: validatedData.destinationShelfId,
+            equipmentQuantity: validatedData.movementQuantity,
+          },
+        });
+
+        // If pure entry (no source shelf), increment total equipment quantity
+        if (!validatedData.sourceShelfId) {
+          await tx.equipment.update({
+            where: { equipmentId: validatedData.equipmentId },
+            data: {
+              equipmentQuantity: {
+                increment: validatedData.movementQuantity,
+              },
+            },
+          });
+        }
+      }
+
+      // 7c. Update serial number location if provided
+      if (validatedData.serialNumberId) {
+        await tx.serialNumber.update({
+          where: { serialNumberId: validatedData.serialNumberId },
+          data: {
+            shelfId: validatedData.destinationShelfId ?? null,
+          },
+        });
+      }
+
+      // 7d. Create movement audit record
+      const movement = await tx.mouvement.create({
+        data: {
+          equipmentId: validatedData.equipmentId,
+          serialNumberId: validatedData.serialNumberId,
+          sourceShelfId: validatedData.sourceShelfId,
+          destinationShelfId: validatedData.destinationShelfId,
+          mouvementQuantity: validatedData.movementQuantity,
+          mouvementStatus: validatedData.movementType,
+        },
+        include: {
+          equipment: true,
+          serialNumber: true,
+          sourceShelf: true,
+          destinationShelf: true,
+        },
+      });
+
+      return movement;
+    });
+  }
+
+  /**
+   * Finds and returns all tuples of EquipmentMovement schema with pagination
+   */
+  async getAllEquipmentMovements(pagination: PaginationDTO) {
+    const { limit = 10, page = 1 } = pagination;
+    const skip = (page - 1) * limit;
+
+    return await this.prisma.mouvement.findMany({
+      skip,
+      take: limit,
+      include: {
+        equipment: true,
+        serialNumber: true,
+        sourceShelf: true,
+        destinationShelf: true,
+      },
+      orderBy: {
+        mouvementId: 'desc',
+      },
+    });
+  }
+
+  /**
+   * Searches for equipment movement tuples that match the searching options with pagination
+   */
+  async searchEquipmentMovements(dto: SearchEquipmentMovementDTO, pagination: PaginationDTO) {
+    const validatedData = searchEquipmentMovementSchema.parse(dto);
+    const { limit = 10, page = 1 } = pagination;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (validatedData.equipmentId) where.equipmentId = validatedData.equipmentId;
+    if (validatedData.serialNumberId) where.serialNumberId = validatedData.serialNumberId;
+    if (validatedData.sourceShelfId) where.sourceShelfId = validatedData.sourceShelfId;
+    if (validatedData.destinationShelfId) where.destinationShelfId = validatedData.destinationShelfId;
+    if (validatedData.movementQuantity !== undefined) where.mouvementQuantity = validatedData.movementQuantity;
+    if (validatedData.movementType) where.mouvementStatus = validatedData.movementType;
+
+    return await this.prisma.mouvement.findMany({
+      where,
+      skip,
+      take: limit,
+      include: {
+        equipment: true,
+        serialNumber: true,
+        sourceShelf: true,
+        destinationShelf: true,
+      },
+    });
+  }
+
+  /**
+   * Validates movement ID input, checks existence, and returns the complete tuple
+   */
+  async getEquipmentMovementById(pagination: PaginationDTO, id: string) {
+    if (!id || typeof id !== 'string' || id.trim() === '') {
+      throw new BadRequestException('Movement ID is required');
+    }
+
+    const exists = await this.equipmentMovementExists(id.trim());
+    if (!exists) {
+      throw new NotFoundException(`Equipment movement with ID '${id}' not found`);
+    }
+
+    const { limit = 10, page = 1 } = pagination;
+    const skip = (page - 1) * limit;
+
+    return await this.prisma.mouvement.findMany({
+      where: { mouvementId: id.trim() },
+      skip,
+      take: limit,
+      include: {
+        equipment: true,
+        serialNumber: true,
+        sourceShelf: true,
+        destinationShelf: true,
+      },
+    });
+  }
+
+  /**
+   * Validates movement type input and returns all tuples that have the specified movement type with pagination
+   */
+  async getMovementsByType(pagination: PaginationDTO, type: string) {
+    if (!type || typeof type !== 'string' || type.trim() === '') {
+      throw new BadRequestException('Movement type is required');
+    }
+
+    const { limit = 10, page = 1 } = pagination;
+    const skip = (page - 1) * limit;
+
+    return await this.prisma.mouvement.findMany({
+      where: {
+        mouvementStatus: type.trim(),
+      },
+      skip,
+      take: limit,
+      include: {
+        equipment: true,
+        serialNumber: true,
+        sourceShelf: true,
+        destinationShelf: true,
+      },
+    });
+  }
+
+  /**
+   * Validates equipment ID input, checks existence, and returns all movements for that equipment with pagination
+   */
+  async getMovementsByEquipmentId(pagination: PaginationDTO, equipmentId: string) {
+    if (!equipmentId || typeof equipmentId !== 'string' || equipmentId.trim() === '') {
+      throw new BadRequestException('Equipment ID is required');
+    }
+
+    const exists = await this.equipmentExists(equipmentId.trim());
+    if (!exists) {
+      throw new NotFoundException(`Equipment with ID '${equipmentId}' not found`);
+    }
+
+    const { limit = 10, page = 1 } = pagination;
+    const skip = (page - 1) * limit;
+
+    return await this.prisma.mouvement.findMany({
+      where: {
+        equipmentId: equipmentId.trim(),
+      },
+      skip,
+      take: limit,
+      include: {
+        equipment: true,
+        serialNumber: true,
+        sourceShelf: true,
+        destinationShelf: true,
+      },
+    });
+  }
+
+  /**
+   * Validates serial number ID input, checks existence, and returns all movements for that serial number with pagination
+   */
+  async getMovementsBySerialNumberId(pagination: PaginationDTO, serialNumberId: string) {
+    if (!serialNumberId || typeof serialNumberId !== 'string' || serialNumberId.trim() === '') {
+      throw new BadRequestException('Serial number ID is required');
+    }
+
+    const exists = await this.serialNumberExists(serialNumberId.trim());
+    if (!exists) {
+      throw new NotFoundException(`Serial number with ID '${serialNumberId}' not found`);
+    }
+
+    const { limit = 10, page = 1 } = pagination;
+    const skip = (page - 1) * limit;
+
+    return await this.prisma.mouvement.findMany({
+      where: {
+        serialNumberId: serialNumberId.trim(),
+      },
+      skip,
+      take: limit,
+      include: {
+        equipment: true,
+        serialNumber: true,
+        sourceShelf: true,
+        destinationShelf: true,
+      },
+    });
+  }
+
+  /**
+   * Validates shelf ID input, checks existence, and returns all movements where this shelf is the source shelf with pagination
+   */
+  async getMovementsBySourceShelfId(pagination: PaginationDTO, shelfId: string) {
+    if (!shelfId || typeof shelfId !== 'string' || shelfId.trim() === '') {
+      throw new BadRequestException('Shelf ID is required');
+    }
+
+    const exists = await this.shelfExists(shelfId.trim());
+    if (!exists) {
+      throw new NotFoundException(`Shelf with ID '${shelfId}' not found`);
+    }
+
+    const { limit = 10, page = 1 } = pagination;
+    const skip = (page - 1) * limit;
+
+    return await this.prisma.mouvement.findMany({
+      where: {
+        sourceShelfId: shelfId.trim(),
+      },
+      skip,
+      take: limit,
+      include: {
+        equipment: true,
+        serialNumber: true,
+        sourceShelf: true,
+        destinationShelf: true,
+      },
+    });
+  }
+
+  /**
+   * Validates shelf ID input, checks existence, and returns all movements where this shelf is the destination shelf with pagination
+   */
+  async getMovementsByDestinationShelfId(pagination: PaginationDTO, shelfId: string) {
+    if (!shelfId || typeof shelfId !== 'string' || shelfId.trim() === '') {
+      throw new BadRequestException('Shelf ID is required');
+    }
+
+    const exists = await this.shelfExists(shelfId.trim());
+    if (!exists) {
+      throw new NotFoundException(`Shelf with ID '${shelfId}' not found`);
+    }
+
+    const { limit = 10, page = 1 } = pagination;
+    const skip = (page - 1) * limit;
+
+    return await this.prisma.mouvement.findMany({
+      where: {
+        destinationShelfId: shelfId.trim(),
+      },
+      skip,
+      take: limit,
+      include: {
+        equipment: true,
+        serialNumber: true,
+        sourceShelf: true,
+        destinationShelf: true,
+      },
+    });
+  }
+}
+</file>
+
+<file path="backend/src/prisma/prisma.module.ts">
+import { Global, Module } from '@nestjs/common';
+import { PrismaService } from './prisma.service.js';
+
+@Global()
+@Module({
+  providers: [PrismaService],
+  exports: [PrismaService],
+})
+export class PrismaModule {}
+</file>
+
+<file path="backend/src/prisma/prisma.service.ts">
+import 'dotenv/config';
+
+import {
+  Injectable,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
+
+import { PrismaMssql } from '@prisma/adapter-mssql';
+import { PrismaClient } from '../generated/prisma/client.js';
+
+const adapter = new PrismaMssql({
+  server: process.env.DB_HOST!,
+  port: Number(process.env.DB_PORT ?? 1433),
+  database: process.env.DB_NAME!,
+  user: process.env.DB_USER!,
+  password: process.env.DB_PASSWORD!,
+
+  options: {
+    encrypt: true,
+    trustServerCertificate: true,
+  },
+});
+
+@Injectable()
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
+  constructor() {
+    super({ adapter });
+  }
+
+  async onModuleInit() {
+    await this.$connect();
+  }
+
+  async onModuleDestroy() {
+    await this.$disconnect();
+  }
+}
+</file>
+
+<file path="backend/src/prisma/schema.prisma">
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -17750,17 +18408,25 @@ model Permission {
 // ============================================================
 
 model User {
-  userId       String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  userId       String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+
+  // Clerk identity
+  clerkUserId  String? @unique(map: "UX_User_ClerkUserId") @db.VarChar(255)
+
   userName     String? @db.VarChar(100)
   userEmail    String? @db.VarChar(150)
+
+  // OLD AUTH — stop using this with Clerk
   hashPassword String? @db.VarChar(255)
 
-  roleId     String? @db.UniqueIdentifier
-  userStatus String? @db.VarChar(50)
+  roleId       String? @db.UniqueIdentifier
+  userStatus   String? @db.VarChar(50)
 
-  role     Role?     @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction)
+  role         Role? @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction)
+
   sessions Session[]
 
+  @@index([clerkUserId])
   @@index([roleId])
   @@index([userEmail])
   @@index([userName])
@@ -17914,198 +18580,171 @@ model EquipmentMouvement {
 }
 </file>
 
-<file path="backend/src/equipment/dto/createEquipment.dto.ts">
-import { z } from 'zod';
-
-export const createEquipmentSchema = z.object({
-  equipmentName: z
-    .string()
-    .trim()
-    .min(1, 'Equipment name is required'),
-
-  hasSerialNumber: z.boolean(),
-
-  equipmentQuantity: z
-    .number()
-    .int()
-    .nonnegative(),
-
-  minEquipmentQuantity: z
-    .number()
-    .int()
-    .nonnegative()
-    .optional(),
-});
-
-export type CreateEquipmentDTO = z.infer<typeof createEquipmentSchema>;
-</file>
-
-<file path="backend/src/equipment/dto/searchEquipment.dto.ts">
-import { z } from 'zod';
-
-export const searchEquipmentSchema = z.object({
-  equipmentName: z.string().optional(),
-  hasSerialNumber: z.boolean().optional(),
-  equipmentQuantity: z.number().int().nonnegative().optional(),
-  minEquipmentQuantity: z.number().int().nonnegative().optional(),
-  equipmentShelfId: z.string().uuid().optional(),
-});
-
-export type SearchEquipmentDTO = z.infer<typeof searchEquipmentSchema>;
-</file>
-
-<file path="backend/src/equipment/dto/updateEquipment.dto.ts">
-import { z } from 'zod';
-
-export const updateEquipmentSchema = z.object({
-  equipmentName: z.string().min(1, 'Equipment name cannot be empty').optional(),
-  hasSerialNumber: z.boolean().optional(),
-  equipmentQuantity: z.number().int().nonnegative().optional(),
-  minEquipmentQuantity: z.number().int().nonnegative().optional(),
-});
-
-export type UpdateEquipmentDTO = z.infer<typeof updateEquipmentSchema>;
-</file>
-
-<file path="backend/src/prisma/prisma.module.ts">
-import { Global, Module } from '@nestjs/common';
-import { PrismaService } from './prisma.service.js';
-
-@Global()
-@Module({
-  providers: [PrismaService],
-  exports: [PrismaService],
-})
-export class PrismaModule {}
-</file>
-
-<file path="backend/src/prisma/prisma.service.ts">
-import 'dotenv/config';
-
-import {
-  Injectable,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
-
-import { PrismaMssql } from '@prisma/adapter-mssql';
-import { PrismaClient } from '../generated/prisma/client.js';
-
-const adapter = new PrismaMssql({
-  server: process.env.DB_HOST!,
-  port: Number(process.env.DB_PORT ?? 1433),
-  database: process.env.DB_NAME!,
-  user: process.env.DB_USER!,
-  password: process.env.DB_PASSWORD!,
-
-  options: {
-    encrypt: true,
-    trustServerCertificate: true,
-  },
-});
+<file path="backend/src/shelves/shelves.service.ts">
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service.js';
+import { CreateShelfDTO } from './dto/createShelf.dto.js';
+import { UpdateShelfDTO } from './dto/updateShelf.dto.js';
+import { PaginationDTO } from './dto/pagination.dto.js';
+import { SearchShelfDTO } from './dto/searchShelf.dto.js';
 
 @Injectable()
-export class PrismaService
-  extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
-{
-  constructor() {
-    super({ adapter });
+export class ShelfService {
+  constructor(private readonly prisma: PrismaService) { }
+
+  async existShelf(shelfName: string): Promise<boolean> {
+    const shelf = await this.prisma.shelf.findFirst({
+      where: { shelfName },
+    });
+    return shelf !== null;
   }
 
-  async onModuleInit() {
-    await this.$connect();
+  async createShelf(dto: CreateShelfDTO) {
+    const { shelfName } = dto;
+    const existingShelf = await this.existShelf(shelfName);
+    if (existingShelf) {
+      throw new BadRequestException('Shelf already exists');
+    }
+    return await this.prisma.shelf.create({
+      data: {
+        shelfName: dto.shelfName,
+      },
+    });
   }
 
-  async onModuleDestroy() {
-    await this.$disconnect();
+  async getAllShelves(pagination: PaginationDTO) {
+    const { limit = 10, page = 1 } = pagination ?? {};
+    const skip = (page - 1) * limit;
+    return await this.prisma.shelf.findMany({
+      skip,
+      take: limit,
+      orderBy: { shelfName: 'asc' },
+    });
+  }
+
+  async getShelfById(pagination: PaginationDTO, id: string) {
+    const shelf = await this.prisma.shelf.findUnique({
+      where: { shelfId: id },
+    });
+    if (!shelf) {
+      throw new NotFoundException(`Shelf with ID '${id}' not found`);
+    }
+    return shelf;
+  }
+
+  async getShelfByName(pagination: PaginationDTO, shelfName: string) {
+    const { limit = 10, page = 1 } = pagination ?? {};
+    const skip = (page - 1) * limit;
+    return await this.prisma.shelf.findMany({
+      skip,
+      take: limit,
+      where: { shelfName },
+      orderBy: { shelfName: 'asc' },
+    });
+  }
+
+  async searchShelves(searchShelfDTO: SearchShelfDTO, pagination: PaginationDTO) {
+    const { limit = 10, page = 1 } = pagination ?? {};
+    const skip = (page - 1) * limit;
+    const where: any = {};
+    if (searchShelfDTO?.shelfName) {
+      where.shelfName = {
+        contains: searchShelfDTO.shelfName,
+      };
+    }
+    return await this.prisma.shelf.findMany({
+      skip,
+      take: limit,
+      where,
+      orderBy: { shelfName: 'asc' },
+    });
+  }
+
+  async updateShelf(dto: UpdateShelfDTO, id: string) {
+    const existingShelf = await this.prisma.shelf.findUnique({
+      where: { shelfId: id },
+    });
+    if (!existingShelf) {
+      throw new NotFoundException(`Shelf with ID '${id}' not found`);
+    }
+
+    if (dto.shelfName && dto.shelfName !== existingShelf.shelfName) {
+      const nameTaken = await this.existShelf(dto.shelfName);
+      if (nameTaken) {
+        throw new BadRequestException('Shelf with this name already exists');
+      }
+    }
+
+    return await this.prisma.shelf.update({
+      where: { shelfId: id },
+      data: {
+        ...(dto.shelfName !== undefined && { shelfName: dto.shelfName }),
+      },
+    });
+  }
+
+  async deleteShelf(id: string) {
+    const existingShelf = await this.prisma.shelf.findUnique({
+      where: { shelfId: id },
+    });
+    if (!existingShelf) {
+      throw new NotFoundException(`Shelf with ID '${id}' not found`);
+    }
+    return await this.prisma.shelf.delete({
+      where: { shelfId: id },
+    });
   }
 }
 </file>
 
-<file path="backend/src/app.module.ts">
-import { Module } from '@nestjs/common';
+<file path="backend/src/main.ts">
+import 'dotenv/config';
+import { Logger } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module.js';
 
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
+function validateEnvironment() {
+  const logger = new Logger('EnvironmentValidator');
+  const requiredEnvVars = [
+    'CLERK_SECRET_KEY',
+    'CLERK_JWT_KEY',
+    'FRONTEND_URL',
+  ];
 
-import { EquipmentModule } from './equipment/equipment.module.js';
-import { SerialNumberModule } from './serial-numbers/serialNumber.module.js';
-import { EquipmentMovementModule } from './movements/equipmentMovement.module.js';
-import { ShelfModule } from './shelves/shelves.module.js';
+  const missing = requiredEnvVars.filter((key) => !process.env[key]);
 
-@Module({
-  imports: [
-    EquipmentModule,
-    SerialNumberModule,
-    EquipmentMovementModule,
-    ShelfModule,
-  ],
-
-  controllers: [
-    AppController,
-  ],
-
-  providers: [
-    AppService,
-  ],
-})
-export class AppModule {}
-</file>
-
-<file path="backend/package.json">
-{
-  "name": "backend",
-  "version": "0.0.1",
-  "description": "",
-  "author": "",
-  "private": true,
-  "license": "UNLICENSED",
-  "type": "module",
-  "scripts": {
-    "build": "nest build",
-    "deploy": "nest deploy",
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "start": "nest start",
-    "start:dev": "nest start --watch",
-    "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
-    "lint": "oxlint src/ test/",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:cov": "vitest run --coverage",
-    "test:debug": "vitest --inspect-brk --no-file-parallelism",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
-  },
-  "dependencies": {
-    "@nestjs/common": "^12.0.1",
-    "@nestjs/core": "^12.0.1",
-    "@nestjs/observe": "^0.1.8",
-    "@nestjs/platform-express": "^12.0.1",
-    "@prisma/adapter-mssql": "^7.10.0",
-    "dotenv": "^17.4.2",
-    "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
-  },
-  "devDependencies": {
-    "@nestjs/cli": "^12.0.0",
-    "@nestjs/mau": "^0.2.6",
-    "@nestjs/schematics": "^12.0.0",
-    "@nestjs/testing": "^12.0.1",
-    "@types/express": "^5.0.0",
-    "@types/mssql": "^12.3.0",
-    "@types/node": "^24.0.0",
-    "@types/supertest": "^7.0.0",
-    "@vitest/coverage-v8": "^4.1.2",
-    "oxlint": "^1.58.0",
-    "prettier": "^3.4.2",
-    "source-map-support": "^0.5.21",
-    "supertest": "^7.0.0",
-    "typescript": "^6.0.2",
-    "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^4.1.2"
+  if (missing.length > 0) {
+    logger.error(
+      `FATAL: Missing required environment variable(s): ${missing.join(', ')}. ` +
+      `Please check your .env file or deployment configuration before starting the application.`,
+    );
+    process.exit(1);
   }
 }
+
+async function bootstrap() {
+  validateEnvironment();
+
+  const logger = new Logger('Bootstrap');
+  const app = await NestFactory.create(AppModule);
+
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  app.enableCors({
+    origin: frontendUrl,
+    credentials: true,
+  });
+
+  const port = Number(process.env.PORT ?? 3001);
+  await app.listen(port, '0.0.0.0');
+
+  logger.log(`NestJS application successfully running on http://localhost:${port}`);
+  logger.log(`CORS enabled for: ${frontendUrl}`);
+}
+
+bootstrap().catch((err) => {
+  new Logger('Bootstrap').error('Failed to start application', err);
+  process.exit(1);
+});
 </file>
 
 <file path="backend/tsconfig.json">
@@ -18129,6 +18768,166 @@ export class AppModule {}
     "strict": true,
     "strictPropertyInitialization": false,
     "types": ["node"]
+  }
+}
+</file>
+
+<file path="frontend/src/app/layout.tsx">
+import { ClerkProvider } from '@clerk/nextjs';
+import { notionClerkAppearance } from '@/lib/notion-theme';
+import './globals.css';
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <ClerkProvider appearance={notionClerkAppearance}>
+      <html lang="fr" className="h-full">
+        <body className="h-full bg-[#f6f5f4] text-[#37352f] antialiased">
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
+  );
+}
+</file>
+
+<file path="frontend/src/app/page.tsx">
+import { auth } from '@clerk/nextjs/server';
+import { SignInButton, SignUpButton, UserButton } from '@clerk/nextjs';
+import { AuthStatusCard } from '@/components/auth/AuthStatusCard';
+
+export default async function Home() {
+  const { userId } = await auth();
+
+  return (
+    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[#f6f5f4] text-[#37352f]">
+      <div className="w-full max-w-md bg-white border border-[#e5e3df] rounded-xl p-8 shadow-xs text-center space-y-6">
+        {/* Notion Workspace Brand Mark */}
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-[#37352f] text-white font-bold text-2xl shadow-xs mx-auto">
+          Y
+        </div>
+
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1a1a1a]">
+            Yacine Workspace
+          </h1>
+          <p className="text-sm text-[#5d5b54]">
+            Plateforme interne de maintenance et traçabilité du stock
+          </p>
+        </div>
+
+        {!userId ? (
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <SignInButton mode="modal">
+              <button
+                type="button"
+                className="flex-1 px-4 py-2.5 bg-[#5645d4] hover:bg-[#4534b3] active:bg-[#3a2a99] text-white text-sm font-medium rounded-lg transition-colors cursor-pointer"
+              >
+                Se connecter
+              </button>
+            </SignInButton>
+
+            <SignUpButton mode="modal">
+              <button
+                type="button"
+                className="flex-1 px-4 py-2.5 bg-transparent hover:bg-[#f0eeec] text-[#1a1a1a] border border-[#c8c4be] text-sm font-medium rounded-lg transition-colors cursor-pointer"
+              >
+                Créer un compte
+              </button>
+            </SignUpButton>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-4 pt-2">
+            <div className="p-1 rounded-full border border-[#e5e3df]">
+              <UserButton />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-sm font-medium text-[#1a1a1a]">
+                Session active
+              </h2>
+              <p className="text-xs text-[#5d5b54]">
+                Vous êtes connecté au portail de maintenance
+              </p>
+            </div>
+
+            {/* Test & Live verification of Clerk -> NestJS -> SQL Server */}
+            <AuthStatusCard />
+          </div>
+        )}
+
+        <div className="pt-4 border-t border-[#ede9e4] text-[11px] text-[#a4a097]">
+          Somépharm  • Workspace • Abderrahmane Kassoul
+        </div>
+      </div>
+    </main>
+  );
+}
+</file>
+
+<file path="frontend/next.config.ts">
+import type { NextConfig } from "next";
+import path from "path";
+
+const nextConfig: NextConfig = {
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
+};
+
+export default nextConfig;
+</file>
+
+<file path="frontend/package.json">
+{
+  "name": "frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.7.0",
+    "@clerk/nextjs": "^7.9.1",
+    "@hookform/resolvers": "^5.9.1",
+    "@tanstack/react-query": "^5.102.8",
+    "@tanstack/react-query-devtools": "^5.102.8",
+    "@tanstack/react-table": "^9.2.4",
+    "@zxing/browser": "^0.2.1",
+    "axios": "^1.20.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.40.0",
+    "next": "16.3.4",
+    "next-themes": "^0.4.6",
+    "react": "19.2.8",
+    "react-day-picker": "^10.0.1",
+    "react-dom": "19.2.8",
+    "react-hook-form": "^7.87.0",
+    "react-router-dom": "^7.18.3",
+    "recharts": "^3.10.1",
+    "shadcn": "^4.20.1",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.6.0",
+    "tw-animate-css": "^1.4.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.4",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }
 </file>
@@ -18412,6 +19211,311 @@ GET    /equipment-movement/type/:type
        getMovementsByType()                 first validate movement type input then return all equipment movement tuples that have the specified movement type
 </file>
 
+<file path="backend/prisma/schema.prisma">
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlserver"
+}
+
+// ============================================================
+// AUTHORIZATION
+// ============================================================
+
+model Role {
+  roleId   String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  roleName String? @db.VarChar(100)
+
+  users       User[]
+  permissions Permission[]
+
+  @@map("Role")
+}
+
+// ============================================================
+// PERMISSION
+// ============================================================
+
+model Permission {
+  permissionId   String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  permissionName String? @db.VarChar(100)
+
+  roleId String? @db.UniqueIdentifier
+  role   Role?   @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([roleId])
+  @@map("Permission")
+}
+
+// ============================================================
+// USER
+// ============================================================
+
+model User {
+  userId       String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+
+  // Clerk identity
+  clerkUserId  String? @unique(map: "UX_User_ClerkUserId") @db.VarChar(255)
+
+  userName     String? @db.VarChar(100)
+  userEmail    String? @db.VarChar(150)
+
+  // OLD AUTH — stop using this with Clerk
+  hashPassword String? @db.VarChar(255)
+
+  roleId       String? @db.UniqueIdentifier
+  userStatus   String? @db.VarChar(50)
+
+  role         Role? @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction)
+
+  sessions Session[]
+
+  @@index([clerkUserId])
+  @@index([roleId])
+  @@index([userEmail])
+  @@index([userName])
+  @@map("User")
+}
+
+// ============================================================
+// SESSION
+// ============================================================
+
+model Session {
+  sessionId String    @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  createdAt DateTime? @default(now()) @db.DateTime2
+  expiresAt DateTime? @db.DateTime2
+
+  userId String? @db.UniqueIdentifier
+  user   User?   @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("Session")
+}
+
+// ============================================================
+// EQUIPMENT
+// ============================================================
+
+model Equipment {
+  equipmentId          String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  equipmentName        String? @db.VarChar(100)
+  hasSerialNumber      Boolean @default(false)
+  equipmentQuantity    Int     @default(0)
+  minequipmentQuantity Int     @default(0)
+
+  serialNumbers       SerialNumber[]
+  mouvements          Mouvement[]
+  equipmentMouvements EquipmentMouvement[]
+  equipmentShelfs     EquipmentShelfs[]
+
+  @@index([equipmentName])
+  @@index([hasSerialNumber])
+  @@map("Equipment")
+}
+
+// ============================================================
+// SERIAL NUMBER
+// ============================================================
+
+model SerialNumber {
+  serialNumberId     String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  serialNumberCode   String? @db.VarChar(150)
+  serialNumberStatus String? @db.VarChar(50)
+
+  equipmentId String? @db.UniqueIdentifier
+  shelfId     String? @db.UniqueIdentifier
+
+  equipment  Equipment?  @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction)
+  shelf      Shelf?      @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
+  mouvements Mouvement[]
+
+  @@index([equipmentId])
+  @@index([shelfId])
+  @@index([serialNumberCode])
+  @@index([serialNumberStatus])
+  @@map("SerialNumber")
+}
+
+// ============================================================
+// SHELF
+// ============================================================
+
+model Shelf {
+  shelfId       String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  shelfName     String? @db.VarChar(100)
+  shelfQuantity Int     @default(0)
+
+  serialNumbers         SerialNumber[]
+  sourceMouvements      Mouvement[]          @relation("SourceShelf")
+  destinationMouvements Mouvement[]          @relation("DestinationShelf")
+  equipmentMouvements   EquipmentMouvement[]
+  equipmentShelfs       EquipmentShelfs[]
+
+  @@index([shelfName])
+  @@map("Shelf")
+}
+
+// ============================================================
+// MOUVEMENT
+// ============================================================
+
+model Mouvement {
+  mouvementId       String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  mouvementStatus   String? @db.VarChar(50)
+  mouvementQuantity Int?
+
+  equipmentId        String? @db.UniqueIdentifier
+  serialNumberId     String? @db.UniqueIdentifier
+  sourceShelfId      String? @db.UniqueIdentifier
+  destinationShelfId String? @db.UniqueIdentifier
+
+  equipment        Equipment?    @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction)
+  serialNumber     SerialNumber? @relation(fields: [serialNumberId], references: [serialNumberId], onDelete: NoAction, onUpdate: NoAction)
+  sourceShelf      Shelf?        @relation("SourceShelf", fields: [sourceShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
+  destinationShelf Shelf?        @relation("DestinationShelf", fields: [destinationShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([equipmentId])
+  @@index([serialNumberId])
+  @@index([sourceShelfId])
+  @@index([destinationShelfId])
+  @@index([mouvementStatus])
+  @@map("Mouvement")
+}
+
+// ============================================================
+// EQUIPMENT SHELFS
+// ============================================================
+
+model EquipmentShelfs {
+  equipmentShelfId  String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  equipmentId       String @db.UniqueIdentifier
+  shelfId           String @db.UniqueIdentifier
+  equipmentQuantity Int    @default(0)
+
+  equipment Equipment @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction)
+  shelf     Shelf     @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([equipmentId, shelfId])
+  @@index([equipmentId])
+  @@index([shelfId])
+  @@index([equipmentQuantity])
+  @@map("EquipmentShelfs")
+}
+
+// ============================================================
+// EQUIPMENT MOUVEMENTS
+// ============================================================
+
+model EquipmentMouvement {
+  equipmentMouvementsId String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  equipmentQuantity     Int    @default(0)
+
+  equipmentId String? @db.UniqueIdentifier
+  shelfId     String? @db.UniqueIdentifier
+
+  equipment Equipment? @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction)
+  shelf     Shelf?     @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([equipmentId])
+  @@index([shelfId])
+  @@map("EqipmentMouvements")
+}
+</file>
+
+<file path="backend/src/app.module.ts">
+import { Module } from '@nestjs/common';
+
+import { AppController } from './app.controller.js';
+import { AppService } from './app.service.js';
+
+import { EquipmentModule } from './equipment/equipment.module.js';
+import { SerialNumberModule } from './serial-numbers/serialNumber.module.js';
+import { EquipmentMovementModule } from './movements/equipmentMovement.module.js';
+import { ShelfModule } from './shelves/shelves.module.js';
+import { AuthModule } from './auth/auth.module.js';
+
+@Module({
+  imports: [
+    AuthModule,
+    EquipmentModule,
+    SerialNumberModule,
+    EquipmentMovementModule,
+    ShelfModule,
+  ],
+
+  controllers: [
+    AppController,
+  ],
+
+  providers: [
+    AppService,
+  ],
+})
+export class AppModule { }
+</file>
+
+<file path="backend/package.json">
+{
+  "name": "backend",
+  "version": "0.0.1",
+  "description": "",
+  "author": "",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "nest build",
+    "deploy": "nest deploy",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node dist/main",
+    "lint": "oxlint src/ test/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage",
+    "test:debug": "vitest --inspect-brk --no-file-parallelism",
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+  },
+  "dependencies": {
+    "@clerk/backend": "^3.17.1",
+    "@nestjs/common": "^12.0.1",
+    "@nestjs/core": "^12.0.1",
+    "@nestjs/observe": "^0.1.8",
+    "@nestjs/platform-express": "^12.0.1",
+    "@prisma/adapter-mssql": "^7.10.0",
+    "dotenv": "^17.4.2",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "svix": "^2.3.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^12.0.0",
+    "@nestjs/mau": "^0.2.6",
+    "@nestjs/schematics": "^12.0.0",
+    "@nestjs/testing": "^12.0.1",
+    "@types/express": "^5.0.0",
+    "@types/mssql": "^12.3.0",
+    "@types/node": "^24.0.0",
+    "@types/supertest": "^7.0.0",
+    "@vitest/coverage-v8": "^4.1.2",
+    "oxlint": "^1.58.0",
+    "prettier": "^3.4.2",
+    "source-map-support": "^0.5.21",
+    "supertest": "^7.0.0",
+    "typescript": "^6.0.2",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^4.1.2"
+  }
+}
+</file>
+
 <file path="backend/src/equipment/equipment.controller.ts">
 import { Controller, Post, Body, Get, Query, Param, ParseUUIDPipe, Patch, Delete } from '@nestjs/common';
 import { EquipmentService } from './equipment.service.js';
@@ -18419,7 +19523,10 @@ import type { CreateEquipmentDTO } from './dto/createEquipment.dto.js';
 import type { UpdateEquipmentDTO } from './dto/updateEquipment.dto.js';
 import type { PaginationDTO } from './dto/pagination.dto.js';
 import * as searchEquipmentDto from './dto/searchEquipment.dto.js';
+import { ClerkAuthGuard } from '../auth/clerk-auth.guard.js';
+import { UseGuards } from '@nestjs/common';
 
+@UseGuards(ClerkAuthGuard)
 @Controller('equipment')
 export class EquipmentController {
   constructor(private readonly equipmentService: EquipmentService) { }

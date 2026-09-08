@@ -44,12 +44,12 @@ model User {
   userId       String @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
 
   // Clerk identity
-  clerkUserId  String? @db.VarChar(255)
+  clerkUserId  String? @unique(map: "UX_User_ClerkUserId") @db.VarChar(255)
 
   userName     String? @db.VarChar(100)
   userEmail    String? @db.VarChar(150)
 
-  // OLD AUTH — stop using this with Clerk
+  // @deprecated: Legacy auth password field. Do not write to this field. Retained temporarily for backward compatibility.
   hashPassword String? @db.VarChar(255)
 
   roleId       String? @db.UniqueIdentifier
@@ -57,6 +57,7 @@ model User {
 
   role         Role? @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction)
 
+  // @deprecated: Legacy custom session relation. Clerk manages all active sessions.
   sessions Session[]
 
   @@index([clerkUserId])
@@ -67,7 +68,7 @@ model User {
 }
 
 // ============================================================
-// SESSION
+// SESSION (@deprecated: Legacy session storage; Clerk manages sessions)
 // ============================================================
 
 model Session {
@@ -153,7 +154,7 @@ model Shelf {
 model Mouvement {
   mouvementId       String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
   mouvementStatus   String? @db.VarChar(50)
-  mouvementQuantity Int?
+  mouvementQuantity Int?    @map("movementQuantity")
 
   equipmentId        String? @db.UniqueIdentifier
   serialNumberId     String? @db.UniqueIdentifier
