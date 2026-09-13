@@ -31,15 +31,26 @@ export interface Equipment {
   equipmentShelfs?: EquipmentShelfAllocation[];
 }
 
-export interface CreateEntryWithEquipmentInput {
+export interface EquipmentWithShelvesResponse extends Equipment {
+  totalAllocated?: number;
+  unallocatedQuantity?: number;
+  shelvesCount?: number;
+}
+
+export interface CreateEquipmentDirectInput {
   equipmentName: string;
   hasSerialNumber: boolean;
   equipmentQuantity: number;
   minEquipmentQuantity?: number;
-  destinationShelfId?: string | null;
   serialNumbers?: string[];
-  movementStatus?: string;
 }
+
+export interface CreateBatchSerialNumberInput {
+  equipmentId: string;
+  serialNumberCodes: string[];
+  serialNumberStatus?: string;
+}
+
 
 export interface PaginatedEquipmentsResponse {
   equipments: Equipment[];

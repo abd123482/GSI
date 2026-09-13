@@ -1,8 +1,46 @@
+import type { Metadata } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
-import { notionClerkAppearance } from '@/lib/notion-theme';
+import { Inter, DM_Mono, Instrument_Serif } from 'next/font/google';
+import { warpClerkAppearance } from '@/lib/warp-theme';
 import { QueryProvider } from '@/providers/query-provider';
 import { Toaster } from 'sonner';
+import { NavbarVisibility } from '@/components/navigation/NavbarVisibility';
 import './globals.css';
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
+
+const dmMono = DM_Mono({
+  weight: ['400', '500'],
+  subsets: ['latin'],
+  variable: '--font-dm-mono',
+  display: 'swap',
+});
+
+const instrumentSerif = Instrument_Serif({
+  weight: '400',
+  style: ['normal', 'italic'],
+  subsets: ['latin'],
+  variable: '--font-instrument-serif',
+  display: 'swap',
+});
+
+export const metadata: Metadata = {
+  title: 'SomePharm Maintenance — Agentic Platform',
+  description: 'Plateforme de maintenance, traçabilité des stocks, étagères et équipements SomePharm',
+  icons: {
+    icon: [
+      { url: '/icon.png', type: 'image/png' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
+    shortcut: '/icon.png',
+    apple: '/apple-icon.png',
+  },
+};
 
 export default function RootLayout({
   children,
@@ -10,12 +48,30 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider appearance={notionClerkAppearance}>
-      <html lang="fr" className="h-full">
-        <body className="h-full bg-[#f6f5f4] text-[#37352f] antialiased">
+    <ClerkProvider appearance={warpClerkAppearance}>
+      <html lang="fr" className="h-full dark">
+        <body
+          className={`${inter.variable} ${dmMono.variable} ${instrumentSerif.variable} font-sans h-full bg-[#2b2622] text-[#f7f5f0] antialiased flex flex-col`}
+        >
           <QueryProvider>
-            {children}
-            <Toaster position="top-right" richColors />
+            <NavbarVisibility />
+            <div className="flex-1">
+              {children}
+            </div>
+            <Toaster
+              position="top-right"
+              theme="dark"
+              toastOptions={{
+                style: {
+                  background: '#383330',
+                  border: '1px solid #3f3a36',
+                  color: '#f7f5f0',
+                  borderRadius: '4px',
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '13px',
+                },
+              }}
+            />
           </QueryProvider>
         </body>
       </html>

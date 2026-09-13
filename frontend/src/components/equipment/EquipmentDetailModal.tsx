@@ -1,7 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { Equipment, SerialNumber } from '@/types/equipment';
+import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Equipment } from '@/types/equipment';
+import { Movement } from '@/types/movement';
+import { MovementService } from '@/services/movement.service';
+import { useApi } from '@/hooks/use-api';
+import { usePermissions } from '@/hooks/use-permissions';
 import { getEquipmentVisualTheme } from './equipment-icons';
 import {
   X,
@@ -10,15 +15,15 @@ import {
   Database,
   Hash,
   Layers,
-  Calendar,
-  ShieldCheck,
   Code,
-  Sparkles,
-  ExternalLink,
-  MapPin,
   Barcode,
-  Sliders,
   AlertTriangle,
+  ArrowRightLeft,
+  ArrowDownRight,
+  ArrowUpRight,
+  Package,
+  Plus,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -27,6 +32,7 @@ interface EquipmentDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRefresh?: () => void;
+  onOpenMovement?: (equipment: Equipment) => void;
   isLoading?: boolean;
 }
 
@@ -34,13 +40,35 @@ export function EquipmentDetailModal({
   equipment,
   isOpen,
   onClose,
-  onRefresh,
-  isLoading = false,
+  onOpenMovement,
 }: EquipmentDetailModalProps) {
+  const api = useApi();
+  const { permissions } = usePermissions();
+
   const [copiedId, setCopiedId] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
   const [copiedSn, setCopiedSn] = useState<string | null>(null);
   const [showRawJson, setShowRawJson] = useState(false);
+
+  // Movements query with TanStack Query (caching, auto state management, eliminates render loops)
+  const { data: movements = [], isLoading: isLoadingMovements } = useQuery<Movement[]>({
+    queryKey: ['equipment-movements', equipment?.equipmentId],
+    queryFn: () =>
+      MovementService.getMovementsByEquipmentId(
+        api,
+        equipment!.equipmentId,
+        { page: 1, limit: 100 },
+        permissions,
+      ),
+    enabled: isOpen && !!equipment?.equipmentId,
+    staleTime: 10 * 1000,
+  });
+
+  // Dynamic audit calculation: Initial Quantity + Total IN - Total OUT = Current Quantity
+  const auditSummary = useMemo(() => {
+    if (!equipment) return null;
+    return MovementService.calculateMovementAudit(movements, equipment.equipmentQuantity);
+  }, [movements, equipment]);
 
   if (!isOpen || !equipment) return null;
 
@@ -72,17 +100,17 @@ export function EquipmentDetailModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150">
       <div
-        className="w-full max-w-3xl bg-white border border-[#e5e3df] rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 my-8 text-left"
+        className="w-full max-w-3xl bg-[#6b7b97] border border-[#8191ad] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 my-8 text-left"
         role="dialog"
         aria-modal="true"
         aria-labelledby="equipment-detail-title"
       >
-        {/* Cover Banner (Notion Pastel Header) */}
-        <div className={`h-24 w-full ${visualTheme.bg} border-b ${visualTheme.border} relative`}>
+        {/* Cover Banner */}
+        <div className="h-24 w-full bg-[#53627c] border-b border-[#455268] relative">
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-3 right-3 text-[#37352f]/70 hover:text-[#1a1a1a] p-1.5 rounded-md hover:bg-white/50 transition-colors cursor-pointer"
+            className="absolute top-3 right-3 text-white/80 hover:text-white p-1.5 rounded-md hover:bg-white/20 transition-colors cursor-pointer"
             aria-label="Fermer"
           >
             <X className="w-4 h-4" />
@@ -94,23 +122,23 @@ export function EquipmentDetailModal({
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div className="flex items-end gap-4">
               <div
-                className={`w-20 h-20 rounded-2xl ${visualTheme.bg} border-2 border-white shadow-md flex items-center justify-center ${visualTheme.text}`}
+                className="w-20 h-20 rounded-2xl bg-[#1e2b48] border-2 border-white shadow-md flex items-center justify-center text-[#38bdf8]"
               >
                 <IconComp className="w-10 h-10" />
               </div>
 
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-[#f0eeec] text-[#5d5b54]">
+                  <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-[#1e2b48] text-white border border-[#3e4f73]">
                     dbo.Equipment
                   </span>
-                  <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-[#d9f3e1] text-[#1aae39] border border-[#a3e5b3]">
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-emerald-950/40 text-emerald-200 border border-emerald-400/40">
                     SQL Server Actif
                   </span>
                 </div>
                 <h1
                   id="equipment-detail-title"
-                  className="text-xl md:text-2xl font-bold tracking-tight text-[#1a1a1a]"
+                  className="text-xl md:text-2xl font-bold tracking-tight text-white"
                 >
                   {equipment.equipmentName ?? 'Équipement sans nom'}
                 </h1>
@@ -118,24 +146,24 @@ export function EquipmentDetailModal({
             </div>
           </div>
 
-          {/* Properties Table (Notion Database Page Style) */}
-          <div className="bg-[#fafaf9] border border-[#e5e3df] rounded-xl divide-y divide-[#ede9e4] text-xs">
+          {/* Properties Table (#6b7b97 Theme) */}
+          <div className="bg-[#586680]/60 border border-[#8191ad] rounded-xl divide-y divide-[#455268] text-xs text-white">
             {/* Property: GUID */}
             <div className="p-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-[#787671] w-40 shrink-0">
-                <Database className="w-3.5 h-3.5 text-[#5645d4]" />
+              <div className="flex items-center gap-2 text-white/85 w-40 shrink-0">
+                <Database className="w-3.5 h-3.5 text-white" />
                 <span className="font-medium">Identifiant GUID</span>
               </div>
-              <div className="flex items-center gap-2 font-mono text-[11px] text-[#1a1a1a] min-w-0">
+              <div className="flex items-center gap-2 font-mono text-[11px] text-white min-w-0">
                 <span className="truncate max-w-sm sm:max-w-md">{equipment.equipmentId}</span>
                 <button
                   type="button"
                   onClick={handleCopyId}
-                  className="p-1 text-[#787671] hover:text-[#1a1a1a] rounded hover:bg-[#ede9e4] transition-colors cursor-pointer"
+                  className="p-1 text-white/80 hover:text-white rounded hover:bg-white/20 transition-colors cursor-pointer"
                   title="Copier le GUID"
                 >
                   {copiedId ? (
-                    <Check className="w-3.5 h-3.5 text-[#1aae39]" />
+                    <Check className="w-3.5 h-3.5 text-emerald-300" />
                   ) : (
                     <Copy className="w-3.5 h-3.5" />
                   )}
@@ -145,25 +173,25 @@ export function EquipmentDetailModal({
 
             {/* Property: Quantity & Stock Level */}
             <div className="p-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-[#787671] w-40 shrink-0">
-                <Hash className="w-3.5 h-3.5 text-[#dd5b00]" />
+              <div className="flex items-center gap-2 text-white/85 w-40 shrink-0">
+                <Hash className="w-3.5 h-3.5 text-white" />
                 <span className="font-medium">Quantité en stock</span>
               </div>
               <div className="flex items-center gap-2">
                 <span
                   className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
                     equipment.equipmentQuantity > 0
-                      ? 'bg-[#d9f3e1] text-[#1aae39] border border-[#a3e5b3]'
-                      : 'bg-[#ffe8d4] text-[#dd5b00] border border-[#fed2b2]'
+                      ? 'bg-emerald-950/40 text-emerald-200 border border-emerald-400/40'
+                      : 'bg-amber-950/40 text-amber-200 border border-amber-400/40'
                   }`}
                 >
                   <Hash className="w-3 h-3" />
                   {equipment.equipmentQuantity} unités
                 </span>
                 {equipment.equipmentQuantity <= equipment.minequipmentQuantity && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#ffe8d4] text-[#dd5b00] border border-[#fed2b2] text-[10px] font-bold">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950/50 text-amber-200 border border-amber-400/50 text-[10px] font-bold">
                     <AlertTriangle className="w-3 h-3" />
-                    Seuil d'alerte atteint ({equipment.minequipmentQuantity})
+                    Seuil d&apos;alerte atteint ({equipment.minequipmentQuantity})
                   </span>
                 )}
               </div>
@@ -171,26 +199,26 @@ export function EquipmentDetailModal({
 
             {/* Property: Traçabilité / Mode */}
             <div className="p-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-[#787671] w-40 shrink-0">
-                <Barcode className="w-3.5 h-3.5 text-[#7b3ff2]" />
+              <div className="flex items-center gap-2 text-white/85 w-40 shrink-0">
+                <Barcode className="w-3.5 h-3.5 text-white" />
                 <span className="font-medium">Mode de traçabilité</span>
               </div>
               <div>
                 {equipment.hasSerialNumber ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-[#e6e0f5] text-[#7b3ff2] font-semibold text-xs border border-[#d6b6f6]">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-[#1e2b48] text-white font-semibold text-xs border border-[#3e4f73]">
                     <Barcode className="w-3 h-3" />
                     Sérialisé ({serials.length} numéros de série)
                   </span>
                 ) : (
-                  <span className="text-[#5d5b54]">Stock quantitatif simple (non sérialisé)</span>
+                  <span className="text-white/80">Stock quantitatif simple (non sérialisé)</span>
                 )}
               </div>
             </div>
 
             {/* Property: Shelf Locations */}
             <div className="p-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-[#787671] w-40 shrink-0">
-                <Layers className="w-3.5 h-3.5 text-[#0075de]" />
+              <div className="flex items-center gap-2 text-white/85 w-40 shrink-0">
+                <Layers className="w-3.5 h-3.5 text-white" />
                 <span className="font-medium">Emplacements / Étagères</span>
               </div>
               <div className="flex flex-wrap gap-1.5 justify-end">
@@ -198,17 +226,17 @@ export function EquipmentDetailModal({
                   equipment.equipmentShelfs.map((es) => (
                     <span
                       key={es.equipmentShelfId}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-[#e5e3df] text-xs font-medium text-[#1a1a1a]"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#1e2b48] border border-[#3e4f73] text-xs font-medium text-white"
                     >
-                      <Layers className="w-3.5 h-3.5 text-[#5645d4]" />
+                      <Layers className="w-3.5 h-3.5 text-white" />
                       <span>{es.shelf?.shelfName ?? 'Étagère'}</span>
-                      <span className="font-mono text-[10px] font-bold text-[#5645d4]">
+                      <span className="font-mono text-[10px] font-bold text-white/90">
                         ({es.equipmentQuantity} u.)
                       </span>
                     </span>
                   ))
                 ) : (
-                  <span className="text-[#787671] italic">Non assigné à une étagère</span>
+                  <span className="text-white/70 italic">Non assigné à une étagère</span>
                 )}
               </div>
             </div>
@@ -219,24 +247,24 @@ export function EquipmentDetailModal({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Barcode className="w-4 h-4 text-[#5645d4]" />
-                  <h3 className="text-sm font-semibold text-[#1a1a1a]">
+                  <Barcode className="w-4 h-4 text-white" />
+                  <h3 className="text-sm font-semibold text-white">
                     Numéros de série enfants ({serials.length})
                   </h3>
                 </div>
-                <span className="text-[11px] text-[#787671]">
+                <span className="text-[11px] text-white/70">
                   Chaque numéro est unique et stocké dans dbo.SerialNumber
                 </span>
               </div>
 
               {serials.length === 0 ? (
-                <div className="p-4 bg-[#fafaf9] border border-[#e5e3df] rounded-lg text-center text-xs text-[#787671] italic">
+                <div className="p-4 bg-[#586680]/30 border border-[#8191ad] rounded-lg text-center text-xs text-white/80 italic">
                   Aucun numéro de série enregistré pour cet équipement.
                 </div>
               ) : (
-                <div className="border border-[#e5e3df] rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+                <div className="border border-[#8191ad] rounded-lg overflow-hidden max-h-60 overflow-y-auto bg-[#586680]/60">
                   <table className="w-full text-xs text-left">
-                    <thead className="bg-[#fafaf9] text-[#787671] font-semibold border-b border-[#e5e3df] sticky top-0">
+                    <thead className="bg-[#53627c] text-white font-semibold border-b border-[#8191ad] sticky top-0">
                       <tr>
                         <th className="py-2 px-3 w-12 text-center">#</th>
                         <th className="py-2 px-3">CODE DE SÉRIE</th>
@@ -245,34 +273,34 @@ export function EquipmentDetailModal({
                         <th className="py-2 px-3 text-right">ACTION</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#e5e3df]">
+                    <tbody className="divide-y divide-[#455268]">
                       {serials.map((sn, sIdx) => (
-                        <tr key={sn.serialNumberId} className="hover:bg-[#fafaf9]">
-                          <td className="py-2 px-3 text-center font-mono text-[#a4a097]">
+                        <tr key={sn.serialNumberId} className="hover:bg-white/10 transition-colors">
+                          <td className="py-2 px-3 text-center font-mono text-white/70">
                             #{String(sIdx + 1).padStart(2, '0')}
                           </td>
-                          <td className="py-2 px-3 font-mono font-semibold text-[#1a1a1a]">
+                          <td className="py-2 px-3 font-mono font-semibold text-white">
                             {sn.serialNumberCode ?? 'S/N inconnu'}
                           </td>
                           <td className="py-2 px-3 text-center">
                             <span
                               className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
                                 sn.serialNumberStatus === 'AVAILABLE'
-                                  ? 'bg-[#d9f3e1] text-[#1aae39]'
-                                  : 'bg-[#ffe8d4] text-[#dd5b00]'
+                                  ? 'bg-emerald-950/40 text-emerald-200 border border-emerald-400/40'
+                                  : 'bg-amber-950/40 text-amber-200 border border-amber-400/40'
                               }`}
                             >
                               {sn.serialNumberStatus ?? 'DISPO'}
                             </span>
                           </td>
-                          <td className="py-2 px-3 text-[#5d5b54]">
+                          <td className="py-2 px-3 text-white/90">
                             {sn.shelf?.shelfName ? (
-                              <span className="inline-flex items-center gap-1 font-medium">
-                                <Layers className="w-3 h-3 text-[#5645d4]" />
+                              <span className="inline-flex items-center gap-1 font-medium text-white">
+                                <Layers className="w-3 h-3 text-white" />
                                 <span>{sn.shelf.shelfName}</span>
                               </span>
                             ) : (
-                              <span className="text-[#a4a097] italic">Non assigné</span>
+                              <span className="text-white/60 italic">Non assigné</span>
                             )}
                           </td>
                           <td className="py-2 px-3 text-right">
@@ -280,10 +308,10 @@ export function EquipmentDetailModal({
                               <button
                                 type="button"
                                 onClick={() => handleCopySerial(sn.serialNumberCode!)}
-                                className="p-1 hover:text-[#1a1a1a] rounded transition-colors cursor-pointer inline-flex items-center gap-1 text-[11px] text-[#5645d4]"
+                                className="p-1 hover:text-white rounded transition-colors cursor-pointer inline-flex items-center gap-1 text-[11px] text-white/90"
                               >
                                 {copiedSn === sn.serialNumberCode ? (
-                                  <Check className="w-3 h-3 text-[#1aae39]" />
+                                  <Check className="w-3 h-3 text-emerald-300" />
                                 ) : (
                                   <Copy className="w-3 h-3" />
                                 )}
@@ -300,19 +328,231 @@ export function EquipmentDetailModal({
             </div>
           )}
 
+          {/* Movement Audit & Quantity Calculation Ledger */}
+          <div className="space-y-3.5 pt-2 border-t border-[#8191ad]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <ArrowRightLeft className="w-4 h-4 text-white" />
+                <div>
+                  <h3 className="text-sm font-semibold text-white">
+                    Audit & Calcul de Quantité par Mouvement
+                  </h3>
+                  <p className="text-[11px] text-white/70">
+                    Formule dynamique : Stock actuel = Stock Initial + Entrées (IN) - Sorties (OUT)
+                  </p>
+                </div>
+              </div>
+
+              {onOpenMovement && (
+                <button
+                  type="button"
+                  onClick={() => onOpenMovement(equipment)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1e2b48] hover:bg-[#152037] text-white text-xs font-medium rounded-lg border border-[#2e3e63] shadow-xs transition-colors cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Nouveau mouvement</span>
+                </button>
+              )}
+            </div>
+
+            {/* Dynamic Calculation 4-Tiles Cards */}
+            {auditSummary && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {/* Initial Stock */}
+                <div className="p-3 bg-[#586680]/60 border border-[#8191ad] rounded-xl text-left space-y-1 text-white">
+                  <div className="flex items-center justify-between text-white/80">
+                    <span className="text-[10px] font-medium uppercase tracking-wider">Stock Initial</span>
+                    <Package className="w-3.5 h-3.5 text-white" />
+                  </div>
+                  <div className="font-mono text-base font-bold text-white">
+                    {auditSummary.initialQuantity}
+                  </div>
+                  <div className="text-[10px] text-white/70">Origine / Base</div>
+                </div>
+
+                {/* Total IN */}
+                <div className="p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-xl text-left space-y-1 text-emerald-200">
+                  <div className="flex items-center justify-between text-emerald-300">
+                    <span className="text-[10px] font-medium uppercase tracking-wider">Entrées (+ IN)</span>
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="font-mono text-base font-bold text-emerald-300">
+                    +{auditSummary.totalIn}
+                  </div>
+                  <div className="text-[10px] text-emerald-200/80">Total arrivages</div>
+                </div>
+
+                {/* Total OUT */}
+                <div className="p-3 bg-amber-950/40 border border-amber-500/40 rounded-xl text-left space-y-1 text-amber-200">
+                  <div className="flex items-center justify-between text-amber-300">
+                    <span className="text-[10px] font-medium uppercase tracking-wider">Sorties (- OUT)</span>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="font-mono text-base font-bold text-amber-300">
+                    -{auditSummary.totalOut}
+                  </div>
+                  <div className="text-[10px] text-amber-200/80">Consommé / Sorties</div>
+                </div>
+
+                {/* Current Total */}
+                <div className="p-3 bg-[#1e2b48] border border-[#3e4f73] rounded-xl text-left space-y-1 text-white">
+                  <div className="flex items-center justify-between text-white/80">
+                    <span className="text-[10px] font-medium uppercase tracking-wider">Stock Actuel</span>
+                    <Hash className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="font-mono text-base font-bold text-white">
+                    {auditSummary.currentQuantity}
+                  </div>
+                  <div className="text-[10px] text-white/70">En temps réel</div>
+                </div>
+              </div>
+            )}
+
+            {/* Chronological Movements Ledger */}
+            {isLoadingMovements ? (
+              <div className="p-6 bg-[#586680]/30 border border-[#8191ad] rounded-lg text-center text-xs text-white/80 flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <span>Chargement de l&apos;historique des mouvements...</span>
+              </div>
+            ) : movements.length === 0 ? (
+              <div className="p-4 bg-[#586680]/30 border border-[#8191ad] rounded-lg text-center text-xs text-white/80 space-y-1">
+                <p className="italic">Aucun mouvement individuel enregistré pour cet équipement.</p>
+                {onOpenMovement && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenMovement(equipment)}
+                    className="text-white hover:underline font-medium inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Créer le premier mouvement</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="border border-[#8191ad] rounded-lg overflow-hidden max-h-64 overflow-y-auto bg-[#586680]/60">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-[#53627c] text-white font-semibold border-b border-[#8191ad] sticky top-0">
+                    <tr>
+                      <th className="py-2 px-3 w-10 text-center">#</th>
+                      <th className="py-2 px-3 text-center">STATUT</th>
+                      <th className="py-2 px-3">SOURCE</th>
+                      <th className="py-2 px-3">DESTINATION</th>
+                      <th className="py-2 px-3">NUMÉRO DE SÉRIE</th>
+                      <th className="py-2 px-3 text-center">QUANTITÉ</th>
+                      <th className="py-2 px-3 text-right">SOLDE CUMULÉ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#455268]">
+                    {auditSummary?.ledger.map((entry, idx) => {
+                      const m = entry.movement;
+                      const isEntry = entry.type === 'IN';
+                      const isExit = entry.type === 'OUT';
+
+                      return (
+                        <tr key={m.mouvementId} className="hover:bg-white/10 transition-colors">
+                          <td className="py-2 px-3 text-center font-mono text-white/70">
+                            #{String(idx + 1).padStart(2, '0')}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
+                                isEntry
+                                  ? 'bg-emerald-950/40 text-emerald-200 border border-emerald-400/40'
+                                  : isExit
+                                  ? 'bg-amber-950/40 text-amber-200 border border-amber-400/40'
+                                  : 'bg-[#1e2b48] text-white border border-[#3e4f73]'
+                              }`}
+                            >
+                              {isEntry ? (
+                                <>
+                                  <ArrowDownRight className="w-2.5 h-2.5" />
+                                  <span>+ IN</span>
+                                </>
+                              ) : isExit ? (
+                                <>
+                                  <ArrowUpRight className="w-2.5 h-2.5" />
+                                  <span>- OUT</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ArrowRightLeft className="w-2.5 h-2.5" />
+                                  <span>TRANSFER</span>
+                                </>
+                              )}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-white/90">
+                            {m.sourceShelf?.shelfName ? (
+                              <span className="inline-flex items-center gap-1 font-medium text-white">
+                                <Layers className="w-3 h-3 text-white" />
+                                <span>{m.sourceShelf.shelfName}</span>
+                              </span>
+                            ) : (
+                              <span className="font-mono text-[10px] text-white/80 bg-[#1e2b48] border border-[#3e4f73] px-1.5 py-0.5 rounded">
+                                NULL (Création)
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-white/90">
+                            {m.destinationShelf?.shelfName ? (
+                              <span className="inline-flex items-center gap-1 font-medium text-white">
+                                <Layers className="w-3 h-3 text-white" />
+                                <span>{m.destinationShelf.shelfName}</span>
+                              </span>
+                            ) : (
+                              <span className="font-mono text-[10px] text-amber-200 bg-amber-950/40 border border-amber-400/40 px-1.5 py-0.5 rounded">
+                                NULL (Décharge)
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 font-mono text-[11px] text-white/90">
+                            {m.serialNumber?.serialNumberCode ? (
+                              <span className="inline-flex items-center gap-1 text-white font-semibold">
+                                <Barcode className="w-3 h-3" />
+                                <span>{m.serialNumber.serialNumberCode}</span>
+                              </span>
+                            ) : (
+                              <span className="text-white/50 italic">—</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-center font-mono font-bold">
+                            <span
+                              className={
+                                isEntry
+                                  ? 'text-emerald-300'
+                                  : isExit
+                                  ? 'text-amber-300'
+                                  : 'text-white'
+                              }
+                            >
+                              {entry.delta > 0 ? `+${entry.delta}` : entry.delta < 0 ? `${entry.delta}` : `${m.mouvementQuantity ?? 1}`}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono font-bold text-white">
+                            {entry.runningBalance} u.
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
           {/* Raw JSON Tuple Toggle */}
           <div className="space-y-2">
             <button
               type="button"
               onClick={() => setShowRawJson(!showRawJson)}
-              className="text-xs text-[#5645d4] hover:underline flex items-center gap-1 font-medium cursor-pointer"
+              className="text-xs text-white hover:underline flex items-center gap-1 font-medium cursor-pointer"
             >
               <Code className="w-3.5 h-3.5" />
               <span>{showRawJson ? 'Masquer le JSON brut' : 'Afficher le tuple SQL Server en JSON'}</span>
             </button>
 
             {showRawJson && (
-              <div className="relative bg-[#1a1a1a] text-[#f6f5f4] rounded-lg p-3 font-mono text-[11px] overflow-x-auto shadow-inner">
+              <div className="relative bg-[#1e2b48] border border-[#3e4f73] text-[#f6f5f4] rounded-lg p-3 font-mono text-[11px] overflow-x-auto shadow-inner">
                 <pre>{JSON.stringify(equipment, null, 2)}</pre>
                 <button
                   type="button"
@@ -320,7 +560,7 @@ export function EquipmentDetailModal({
                   className="absolute top-2 right-2 px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   {copiedJson ? (
-                    <Check className="w-3 h-3 text-[#1aae39]" />
+                    <Check className="w-3 h-3 text-emerald-300" />
                   ) : (
                     <Copy className="w-3 h-3" />
                   )}
@@ -331,20 +571,20 @@ export function EquipmentDetailModal({
           </div>
 
           {/* Modal Footer */}
-          <div className="pt-3 border-t border-[#ede9e4] flex items-center justify-between">
+          <div className="pt-3 border-t border-[#8191ad] flex items-center justify-between">
             <button
               type="button"
               onClick={handleCopyId}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-transparent hover:bg-[#f0eeec] text-[#1a1a1a] border border-[#c8c4be] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 text-white border border-white/30 text-xs font-medium rounded-lg transition-colors cursor-pointer"
             >
-              <Copy className="w-3.5 h-3.5 text-[#5645d4]" />
+              <Copy className="w-3.5 h-3.5 text-white" />
               <span>Copier GUID</span>
             </button>
 
             <button
               type="button"
               onClick={onClose}
-              className="px-4.5 py-2 bg-[#5645d4] hover:bg-[#4534b3] text-white text-xs font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
+              className="px-4.5 py-2 bg-[#1e2b48] hover:bg-[#152037] text-white border border-[#2e3e63] text-xs font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
             >
               Fermer la fiche
             </button>

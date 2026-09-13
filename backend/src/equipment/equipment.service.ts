@@ -1,9 +1,13 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { CreateEquipmentDTO, createEquipmentSchema } from './dto/createEquipment.dto.js';
+import {
+  CreateEquipmentDTO,
+  createEquipmentSchema,
+} from './dto/createEquipment.dto.js';
 import { SearchEquipmentDTO, searchEquipmentSchema } from './dto/searchEquipment.dto.js';
 import { UpdateEquipmentDTO, updateEquipmentSchema } from './dto/updateEquipment.dto.js';
 import { PaginationDTO, paginationSchema } from './dto/pagination.dto.js';
+
 @Injectable()
 export class EquipmentService {
   constructor(private readonly prisma: PrismaService) { }
@@ -16,35 +20,22 @@ export class EquipmentService {
   }
 
   async createEquipment(data: CreateEquipmentDTO) {
-
     // Validate data
     const validatedData = createEquipmentSchema.parse(data);
 
     // Check if equipment name already exists
-    const exists = await this.equipmentExists(
-      validatedData.equipmentName,
-    );
-
+    const exists = await this.equipmentExists(validatedData.equipmentName);
     if (exists) {
-      throw new BadRequestException(
-        'Equipment with this name already exists',
-      );
+      throw new BadRequestException('Equipment with this name already exists');
     }
 
-    // Create equipment
+    // Create equipment directly (shelf assignments are managed exclusively via movements)
     return await this.prisma.equipment.create({
       data: {
         equipmentName: validatedData.equipmentName,
         hasSerialNumber: validatedData.hasSerialNumber,
         equipmentQuantity: validatedData.equipmentQuantity,
         minequipmentQuantity: validatedData.minEquipmentQuantity ?? 0,
-      },
-      include: {
-        equipmentShelfs: {
-          include: {
-            shelf: true,
-          },
-        },
       },
     });
   }
@@ -53,8 +44,7 @@ export class EquipmentService {
     const { page, limit } = paginationSchema.parse(query);
     const skip = (page - 1) * limit;
     const take = limit;
-
-    const equipments = await this.prisma.equipment.findMany({
+    const [equipments, totalEquipments] = await Promise.all([this.prisma.equipment.findMany({
       skip,
       take,
       orderBy: { equipmentName: 'asc' },
@@ -81,9 +71,10 @@ export class EquipmentService {
           },
         },
       },
-    });
+    }),
 
-    const totalEquipments = await this.prisma.equipment.count();
+    this.prisma.equipment.count()
+    ]);
 
     return {
       equipments,
@@ -98,7 +89,6 @@ export class EquipmentService {
     query: SearchEquipmentDTO,
     paginationDTO: PaginationDTO = { page: 1, limit: 10 },
   ) {
-    // First validate inputs of searching equipment from SearchEquipmentDTO
     const validatedData = searchEquipmentSchema.parse(query);
 
     const limit = paginationDTO?.limit || 10;
@@ -118,39 +108,41 @@ export class EquipmentService {
     if (validatedData.equipmentShelfId !== undefined)
       where.equipmentShelfId = validatedData.equipmentShelfId;
 
-    const equipments = await this.prisma.equipment.findMany({
-      where,
-      skip,
-      take,
-      orderBy: { equipmentName: 'asc' },
-      include: {
-        serialNumbers: {
-          orderBy: { serialNumberCode: 'asc' },
-          include: {
-            shelf: {
-              select: {
-                shelfId: true,
-                shelfName: true,
+    const [equipments, totalEquipments] = await Promise.all([
+      this.prisma.equipment.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { equipmentName: 'asc' },
+        include: {
+          serialNumbers: {
+            orderBy: { serialNumberCode: 'asc' },
+            include: {
+              shelf: {
+                select: {
+                  shelfId: true,
+                  shelfName: true,
+                },
+              },
+            },
+          },
+          equipmentShelfs: {
+            include: {
+              shelf: {
+                select: {
+                  shelfId: true,
+                  shelfName: true,
+                },
               },
             },
           },
         },
-        equipmentShelfs: {
-          include: {
-            shelf: {
-              select: {
-                shelfId: true,
-                shelfName: true,
-              },
-            },
-          },
-        },
-      },
-    });
+      }),
+      this.prisma.equipment.count({
+        where,
+      })
+    ])
 
-    const totalEquipments = await this.prisma.equipment.count({
-      where,
-    });
 
     return {
       equipments,
@@ -161,7 +153,7 @@ export class EquipmentService {
     };
   }
 
-  async getEquipmentById(id: string, paginationDTO?: PaginationDTO) {
+  async getEquipmentById(id: string) {
     if (!id || id.trim() === '') {
       throw new BadRequestException('Equipment ID is required');
     }
@@ -342,4 +334,37 @@ export class EquipmentService {
   }
 
 
+
+  async getEquipmentShelves(equipmentId: string) {
+    const equipment = await this.prisma.equipment.findUnique({
+      where: { equipmentId },
+      include: {
+        equipmentShelfs: {
+          include: { shelf: true },
+          orderBy: { equipmentQuantity: 'desc' },
+        },
+        serialNumbers: {
+          include: { shelf: true },
+          orderBy: { serialNumberCode: 'asc' },
+        },
+      },
+    });
+
+    if (!equipment) {
+      throw new NotFoundException(`Equipment with ID '${equipmentId}' not found`);
+    }
+
+    const totalAllocated = equipment.hasSerialNumber
+      ? equipment.serialNumbers.filter((s) => s.shelfId !== null).length
+      : equipment.equipmentShelfs.reduce((sum, es) => sum + (es.equipmentQuantity ?? 0), 0);
+
+    const unallocatedQuantity = Math.max(0, equipment.equipmentQuantity - totalAllocated);
+
+    return {
+      ...equipment,
+      totalAllocated,
+      unallocatedQuantity,
+      shelvesCount: equipment.equipmentShelfs.length,
+    };
+  }
 }

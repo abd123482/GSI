@@ -1,7 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAuth, useUser } from '@clerk/nextjs';
+import { getErrorMessage } from '@/lib/error-message';
+
+import { useState } from 'react';
+import { useAuth } from '@clerk/nextjs';
+import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/hooks/use-api';
 import { CheckCircle2, ShieldCheck, Database, RefreshCw, AlertCircle, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,39 +21,19 @@ interface AuthMeResponse {
 }
 
 export function AuthStatusCard() {
-  const { isSignedIn, getToken } = useAuth();
-  const { user: clerkUser } = useUser();
+  const { isSignedIn, userId, getToken } = useAuth();
   const api = useApi();
 
-  const [data, setData] = useState<AuthMeResponse | null>(null);
-  const [loading, setLoading] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchAuthMe = async () => {
-    if (!isSignedIn) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await api.get<AuthMeResponse>('/auth/me');
-      setData(response.data);
-    } catch (err: any) {
-      console.error('Failed to fetch /auth/me:', err);
-      const msg =
-        err.response?.data?.message ||
-        err.message ||
-        'Impossible de joindre le serveur NestJS';
-      setError(Array.isArray(msg) ? msg.join(', ') : msg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isSignedIn) {
-      fetchAuthMe();
-    }
-  }, [isSignedIn]);
+  const { data, isFetching: loading, error: queryError, refetch } = useQuery({
+    queryKey: ['auth', 'me', userId],
+    queryFn: async () => (await api.get<AuthMeResponse>('/auth/me')).data,
+    enabled: !!isSignedIn,
+    retry: false,
+  });
+  const error = queryError
+    ? getErrorMessage(queryError, 'Impossible de joindre le serveur NestJS')
+    : null;
 
   const handleCopyToken = async () => {
     try {
@@ -63,7 +46,7 @@ export function AuthStatusCard() {
       } else {
         toast.error('Aucun token de session actif trouvé.');
       }
-    } catch (err) {
+    } catch {
       toast.error('Impossible de récupérer le token Clerk.');
     }
   };
@@ -104,7 +87,7 @@ export function AuthStatusCard() {
 
           <button
             type="button"
-            onClick={fetchAuthMe}
+            onClick={() => void refetch()}
             disabled={loading}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md bg-white hover:bg-[#f0eeec] border border-[#d3d0ca] text-[#37352f] transition-colors cursor-pointer disabled:opacity-50"
           >
@@ -125,7 +108,7 @@ export function AuthStatusCard() {
         <div className="p-3 bg-[#fdf3f2] border border-[#f5c6cb] rounded-lg text-xs text-[#b82a2a] flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
           <div>
-            <span className="font-medium">Erreur d'authentification API:</span> {error}
+            <span className="font-medium">Erreur d&apos;authentification API:</span> {error}
           </div>
         </div>
       )}

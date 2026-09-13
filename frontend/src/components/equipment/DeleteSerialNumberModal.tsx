@@ -20,7 +20,7 @@ export function DeleteSerialNumberModal({
   onDelete,
   isDeleting,
 }: DeleteSerialNumberModalProps) {
-  const { canDeleteSerialNumber, roleName } = usePermissions();
+  const { canDeleteSerialNumber } = usePermissions();
 
   if (!isOpen || !serialNumber) return null;
 
@@ -34,26 +34,26 @@ export function DeleteSerialNumberModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
       <div
-        className="w-full max-w-sm bg-white border border-[#e5e3df] rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
+        className="w-full max-w-sm bg-[#6b7b97] border border-[#8191ad] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
         role="dialog"
         aria-modal="true"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#e5e3df] bg-[#fafaf9]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#455268] bg-[#53627c]">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-[#ffe8d4] border border-[#dd5b00]/30 flex items-center justify-center text-[#dd5b00]">
+            <div className="w-7 h-7 rounded-lg bg-rose-500/20 border border-rose-400/40 flex items-center justify-center text-rose-200">
               <Trash2 className="w-3.5 h-3.5" />
             </div>
-            <h3 className="text-xs font-semibold text-[#1a1a1a]">
+            <h3 className="text-xs font-semibold text-white">
               Supprimer le numéro de série
             </h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-md text-[#787671] hover:text-[#1a1a1a] hover:bg-[#f0eeec] transition-colors"
+            className="p-1 rounded-md text-white/80 hover:text-white hover:bg-white/10 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -62,46 +62,46 @@ export function DeleteSerialNumberModal({
         {/* Body */}
         <div className="p-4 space-y-3">
           {!canDeleteSerialNumber && (
-            <div className="p-2.5 bg-[#fde0ec] border border-[#ff64c8]/40 rounded-lg flex items-start gap-2 text-xs text-[#a02e6d]">
-              <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>Permission manquante : 'serial-number.delete' requise.</span>
+            <div className="p-2.5 bg-rose-950/50 border border-rose-500/50 rounded-lg flex items-start gap-2 text-xs text-rose-200">
+              <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0 text-rose-300" />
+              <span>Permission manquante : &apos;serial-number.delete&apos; requise.</span>
             </div>
           )}
 
-          <div className="p-3 bg-[#fef7d6] border border-[#f5d75e] rounded-lg flex items-start gap-2.5 text-xs text-[#523410]">
-            <AlertTriangle className="w-4 h-4 text-[#dd5b00] shrink-0 mt-0.5" />
+          <div className="p-3 bg-rose-950/40 border border-rose-500/40 rounded-lg flex items-start gap-2.5 text-xs text-rose-100">
+            <AlertTriangle className="w-4 h-4 text-rose-300 shrink-0 mt-0.5" />
             <div className="space-y-1">
               <p className="font-semibold">Ajustement automatique du stock</p>
-              <p className="text-[11px] leading-relaxed text-[#523410]/90">
+              <p className="text-[11px] leading-relaxed text-rose-200/90">
                 La suppression de ce numéro de série décrémentera automatiquement de 1 la quantité en stock de cet équipement.
               </p>
             </div>
           </div>
 
-          <div className="p-3 bg-[#f6f5f4] rounded-lg border border-[#e5e3df] text-xs space-y-1.5">
+          <div className="p-3 bg-[#586680]/60 rounded-lg border border-[#8191ad] text-xs space-y-1.5 text-white">
             <div className="flex items-center justify-between">
-              <span className="text-[#787671] flex items-center gap-1">
-                <Barcode className="w-3.5 h-3.5 text-[#5645d4]" />
+              <span className="text-white/80 flex items-center gap-1">
+                <Barcode className="w-3.5 h-3.5 text-emerald-300" />
                 Code :
               </span>
-              <code className="font-mono font-bold text-[#1a1a1a] bg-white px-2 py-0.5 rounded border border-[#e5e3df]">
+              <code className="font-mono font-bold text-white bg-black/30 px-2 py-0.5 rounded border border-white/20">
                 {serialNumber.serialNumberCode}
               </code>
             </div>
-            <div className="flex items-center justify-between text-[#787671] text-[11px]">
+            <div className="flex items-center justify-between text-white/70 text-[11px]">
               <span>Statut :</span>
-              <span className="font-medium text-[#1a1a1a]">{serialNumber.serialNumberStatus || 'AVAILABLE'}</span>
+              <span className="font-medium text-white">{serialNumber.serialNumberStatus || 'AVAILABLE'}</span>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-4 py-3 bg-[#fafaf9] border-t border-[#e5e3df]">
+        <div className="flex items-center justify-end gap-2 px-4 py-3 bg-[#53627c] border-t border-[#455268]">
           <button
             type="button"
             onClick={onClose}
             disabled={isDeleting}
-            className="px-3 py-1.5 text-xs font-medium text-[#5d5b54] bg-white border border-[#c8c4be] rounded-lg hover:bg-[#f6f5f4] transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-colors cursor-pointer"
           >
             Annuler
           </button>
@@ -109,7 +109,7 @@ export function DeleteSerialNumberModal({
             type="button"
             onClick={handleDelete}
             disabled={isDeleting || !canDeleteSerialNumber}
-            className="px-3.5 py-1.5 text-xs font-medium text-white bg-[#e03131] hover:bg-[#c92a2a] active:bg-[#b02525] rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3.5 py-1.5 text-xs font-medium text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
           >
             {isDeleting ? (
               <>

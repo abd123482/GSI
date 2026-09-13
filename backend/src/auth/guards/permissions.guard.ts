@@ -29,6 +29,12 @@ export class PermissionsGuard implements CanActivate {
       throw new ForbiddenException('Access denied: Unauthenticated user');
     }
 
+    // Universal Admin Superuser Bypass:
+    // Any user with role 'ADMIN' or with isAdmin flag has unrestricted access to all permissions
+    if (user.roleName?.trim().toUpperCase() === 'ADMIN' || user.isAdmin === true) {
+      return true;
+    }
+
     const userPermissions = user.permissions || [];
     const hasAllPermissions = requiredPermissions.every((permission) =>
       userPermissions.includes(permission),

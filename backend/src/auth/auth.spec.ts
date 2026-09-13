@@ -146,12 +146,12 @@ describe('Complete 25-Point Authentication, Authorization & Webhook Test Suite',
       mockPrisma.user.findFirst.mockResolvedValue({
         userId: 'uuid-active-1',
         clerkUserId: 'user_clerk_active',
-        userName: 'Admin User',
-        userEmail: 'admin@somipharm.com',
+        userName: 'Tech User',
+        userEmail: 'tech@somipharm.com',
         userStatus: 'ACTIVE',
-        roleId: 'role-admin-id',
+        roleId: 'role-tech-id',
         role: {
-          roleName: 'ADMIN',
+          roleName: 'TECHNICIAN',
           permissions: [{ permissionName: 'equipment.read' }],
         },
       });
@@ -163,13 +163,50 @@ describe('Complete 25-Point Authentication, Authorization & Webhook Test Suite',
       expect(req.authUser).toEqual({
         userId: 'uuid-active-1',
         clerkUserId: 'user_clerk_active',
-        userName: 'Admin User',
-        userEmail: 'admin@somipharm.com',
-        roleId: 'role-admin-id',
-        roleName: 'ADMIN',
+        userName: 'Tech User',
+        userEmail: 'tech@somipharm.com',
+        roleId: 'role-tech-id',
+        roleName: 'TECHNICIAN',
         permissions: ['equipment.read'],
         status: 'ACTIVE',
+        isAdmin: false,
       });
+    });
+
+    it('4b. should attach all system permissions and isAdmin flag for ACTIVE ADMIN user', async () => {
+      const context = createMockContext({ authorization: 'Bearer valid_tok' });
+      vi.mocked(clerkBackend.verifyToken).mockResolvedValue({
+        sub: 'user_clerk_admin',
+      } as any);
+
+      mockPrisma.user.findFirst.mockResolvedValue({
+        userId: 'uuid-admin-1',
+        clerkUserId: 'user_clerk_admin',
+        userName: 'Admin User',
+        userEmail: 'admin@somipharm.com',
+        userStatus: 'ACTIVE',
+        roleId: 'role-admin-id',
+        role: {
+          roleName: 'ADMIN',
+          permissions: [{ permissionName: 'role.manage' }],
+        },
+      });
+
+      const allowed = await clerkAuthGuard.canActivate(context);
+      expect(allowed).toBe(true);
+
+      const req = context.switchToHttp().getRequest<any>();
+      expect(req.authUser.isAdmin).toBe(true);
+      expect(req.authUser.roleName).toBe('ADMIN');
+      expect(req.authUser.permissions).toEqual(
+        expect.arrayContaining([
+          'stock.create',
+          'shelf.create',
+          'equipment.create',
+          'user.manage',
+          'role.manage',
+        ]),
+      );
     });
 
     it('5. should throw 403 Forbidden when userStatus is PENDING', async () => {
@@ -360,6 +397,15 @@ describe('Complete 25-Point Authentication, Authorization & Webhook Test Suite',
     it('16. should handle concurrent race condition (P2002) and return winning user', async () => {
       mockPrisma.user.findFirst.mockResolvedValueOnce(null);
 
+      (authService as any).clerk = {
+        users: {
+          getUser: vi.fn().mockResolvedValue({
+            primaryEmailAddressId: 'e-1',
+            emailAddresses: [{ id: 'e-1', emailAddress: 'concurrent@somipharm.com' }],
+          }),
+        },
+      };
+
       const p2002Err: any = new Error('Unique constraint UX_User_ClerkUserId');
       p2002Err.code = 'P2002';
       mockPrisma.user.create.mockRejectedValueOnce(p2002Err);
@@ -372,6 +418,32 @@ describe('Complete 25-Point Authentication, Authorization & Webhook Test Suite',
 
       const user = await authService.getOrCreateLocalUser('user_concurrent');
       expect(user.userId).toBe('uuid-concurrent-winner');
+    });
+
+    it('does not create a local user without a Clerk email', async () => {
+      mockPrisma.user.findFirst.mockResolvedValueOnce(null);
+      (authService as any).clerk = {
+        users: { getUser: vi.fn().mockResolvedValue({ emailAddresses: [] }) },
+      };
+
+      await expect(authService.getOrCreateLocalUser('user_without_email')).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it('leaves existing required profile fields unchanged when a webhook omits them', async () => {
+      mockPrisma.user.findFirst.mockResolvedValueOnce({ userId: 'uuid-existing' });
+
+      await authService.syncUserFromClerk('user_existing', {
+        userName: null,
+        userEmail: null,
+      });
+
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { userId: 'uuid-existing' },
+        data: {},
+      });
     });
   });
 
@@ -586,6 +658,18 @@ describe('Complete 25-Point Authentication, Authorization & Webhook Test Suite',
         }),
       );
       expect(result.roleId).toBe('role-tech-id');
+    });
+
+    it('26. should allow ADMIN user with zero permissions to access any protected permission route', () => {
+      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['stock.delete', 'equipment.delete']);
+      const adminContext = createMockContext({}, { roleName: 'ADMIN', permissions: [] });
+      expect(permissionsGuard.canActivate(adminContext)).toBe(true);
+    });
+
+    it('27. should allow ADMIN user to access route requiring a different specific role', () => {
+      vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['TECHNICIAN']);
+      const adminContext = createMockContext({}, { roleName: 'ADMIN', permissions: [] });
+      expect(rolesGuard.canActivate(adminContext)).toBe(true);
     });
   });
 });

@@ -124,8 +124,90 @@ export class UsersAdminService {
             permissionName: true,
           },
         },
+        _count: {
+          select: {
+            users: true,
+          },
+        },
       },
       orderBy: { roleName: 'asc' },
     });
   }
+
+  async createRole(roleName: string, permissions: string[]) {
+    const trimmedRoleName = roleName.trim();
+    const existingRole = await this.prisma.role.findFirst({
+      where: { roleName: trimmedRoleName },
+    });
+
+    if (existingRole) {
+      throw new BadRequestException(
+        `Le rôle avec le nom '${trimmedRoleName}' existe déjà.`,
+      );
+    }
+
+    return await this.prisma.role.create({
+      data: {
+        roleName: trimmedRoleName,
+        permissions: {
+          create: permissions.map((permissionName) => ({
+            permissionName,
+          })),
+        },
+      },
+      include: {
+        permissions: {
+          select: {
+            permissionId: true,
+            permissionName: true,
+          },
+        },
+        _count: {
+          select: {
+            users: true,
+          },
+        },
+      },
+    });
+  }
+
+  async getAvailablePermissions(): Promise<string[]> {
+    const SYSTEM_PERMISSIONS = [
+      'equipment.read',
+      'equipment.create',
+      'equipment.update',
+      'equipment.delete',
+      'serial-number.read',
+      'serial-number.create',
+      'serial-number.update',
+      'serial-number.delete',
+      'movement.read',
+      'movement.create',
+      'shelf.read',
+      'shelf.create',
+      'shelf.update',
+      'shelf.delete',
+      'stock.read',
+      'stock.create',
+      'stock.update',
+      'stock.delete',
+      'user.manage',
+      'role.manage',
+    ];
+
+    const dbPermissions = await this.prisma.permission.findMany({
+      select: { permissionName: true },
+      distinct: ['permissionName'],
+    });
+
+    const set = new Set<string>(SYSTEM_PERMISSIONS);
+    for (const p of dbPermissions) {
+      if (p.permissionName) {
+        set.add(p.permissionName);
+      }
+    }
+
+    return Array.from(set).sort();
+  }
 }
+

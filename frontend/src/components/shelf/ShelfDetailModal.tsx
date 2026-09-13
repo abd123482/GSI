@@ -10,11 +10,8 @@ import {
   Database,
   Hash,
   Layers,
-  Calendar,
   ShieldCheck,
   Code,
-  Sparkles,
-  ExternalLink,
   MapPin,
   RefreshCw,
   Edit3,
@@ -70,15 +67,15 @@ export function ShelfDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-      {/* Notion Document Card (12px rounded, hairline border, shadow elevation) */}
+      {/* Document Card (#6b7b97 Slate Blue Theme) */}
       <div
-        className="w-full max-w-xl bg-white border border-[#e5e3df] rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
+        className="w-full max-w-xl bg-[#6b7b97] border border-[#8191ad] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
         role="dialog"
         aria-modal="true"
         aria-labelledby="shelf-detail-title"
       >
-        {/* Notion Cover Banner (Pastel Tint Header) */}
-        <div className={`h-24 ${visualTheme.bg} border-b ${visualTheme.border} relative flex items-end px-6 pb-0`}>
+        {/* Cover Banner */}
+        <div className="h-24 bg-[#53627c] border-b border-[#455268] relative flex items-end px-6 pb-0">
           {/* Top Bar Actions */}
           <div className="absolute top-3 right-3 flex items-center gap-1.5">
             {onRefresh && (
@@ -86,7 +83,7 @@ export function ShelfDetailModal({
                 type="button"
                 onClick={onRefresh}
                 disabled={isLoading}
-                className="p-1.5 rounded-md bg-white/80 hover:bg-white text-[#37352f] transition-colors cursor-pointer border border-[#e5e3df]"
+                className="p-1.5 rounded-md bg-white/20 hover:bg-white/30 text-white transition-colors cursor-pointer border border-white/30"
                 title="Rafraîchir"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -96,16 +93,16 @@ export function ShelfDetailModal({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-md bg-white/80 hover:bg-white text-[#37352f] transition-colors cursor-pointer border border-[#e5e3df]"
+              className="p-1.5 rounded-md bg-white/20 hover:bg-white/30 text-white transition-colors cursor-pointer border border-white/30"
               aria-label="Fermer"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Overlapping Notion Icon Tile */}
+          {/* Overlapping Icon Tile */}
           <div
-            className={`w-14 h-14 rounded-xl ${visualTheme.bg} border-2 border-white shadow-md flex items-center justify-center ${visualTheme.text} translate-y-5`}
+            className="w-14 h-14 rounded-xl bg-[#1e2b48] border-2 border-white/80 shadow-md flex items-center justify-center text-[#38bdf8] translate-y-5"
           >
             <IconComp className="w-7 h-7" />
           </div>
@@ -118,40 +115,40 @@ export function ShelfDetailModal({
             <div className="flex items-center gap-2 flex-wrap">
               <h2
                 id="shelf-detail-title"
-                className="text-2xl font-semibold text-[#1a1a1a] tracking-tight"
+                className="text-2xl font-semibold text-white tracking-tight"
               >
                 {shelf.shelfName ?? 'Étagère sans nom'}
               </h2>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#d9f3e1] text-[#1aae39] border border-[#a3e5b3]">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/40 text-emerald-200 border border-emerald-400/40">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Tuple Actif
               </span>
             </div>
-            <p className="text-xs text-[#5d5b54] flex items-center gap-2">
+            <p className="text-xs text-white/80 flex items-center gap-2">
               <span>{visualTheme.label}</span>
               <span>•</span>
-              <span className="font-mono text-[#5645d4]">dbo.Shelf</span>
+              <span className="font-mono text-white font-semibold">dbo.Shelf</span>
             </p>
           </div>
 
-          {/* Notion Page Property Table */}
-          <div className="border border-[#e5e3df] rounded-lg divide-y divide-[#ede9e4] text-xs bg-[#fafaf9]">
+          {/* Property Table */}
+          <div className="border border-[#8191ad] rounded-lg divide-y divide-[#5a6f98] text-xs bg-[#586680]/70">
             {/* Property: UUID */}
             <div className="p-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-[#787671] w-36 shrink-0">
-                <Database className="w-3.5 h-3.5 text-[#5645d4]" />
+              <div className="flex items-center gap-2 text-white/85 w-36 shrink-0">
+                <Database className="w-3.5 h-3.5 text-white" />
                 <span className="font-medium">shelfId (GUID)</span>
               </div>
-              <div className="flex items-center gap-2 font-mono text-[11px] text-[#1a1a1a] min-w-0">
+              <div className="flex items-center gap-2 font-mono text-[11px] text-white min-w-0">
                 <span className="truncate">{shelf.shelfId}</span>
                 <button
                   type="button"
                   onClick={handleCopyId}
-                  className="p-1 hover:bg-[#ede9e4] text-[#787671] hover:text-[#1a1a1a] rounded transition-colors cursor-pointer shrink-0"
+                  className="p-1 hover:bg-white/20 text-white/80 hover:text-white rounded transition-colors cursor-pointer shrink-0"
                   title="Copier l'UUID"
                 >
                   {copiedId ? (
-                    <Check className="w-3.5 h-3.5 text-[#1aae39]" />
+                    <Check className="w-3.5 h-3.5 text-emerald-300" />
                   ) : (
                     <Copy className="w-3.5 h-3.5" />
                   )}
@@ -161,27 +158,27 @@ export function ShelfDetailModal({
 
             {/* Property: shelfName */}
             <div className="p-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-[#787671] w-36 shrink-0">
-                <Layers className="w-3.5 h-3.5 text-[#7b3ff2]" />
-                <span className="font-medium">Nom de l'étagère</span>
+              <div className="flex items-center gap-2 text-white/85 w-36 shrink-0">
+                <Layers className="w-3.5 h-3.5 text-white" />
+                <span className="font-medium">Nom de l&apos;étagère</span>
               </div>
-              <div className="text-sm font-semibold text-[#1a1a1a] text-right">
+              <div className="text-sm font-semibold text-white text-right">
                 {shelf.shelfName ?? 'Non défini'}
               </div>
             </div>
 
             {/* Property: shelfQuantity */}
             <div className="p-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-[#787671] w-36 shrink-0">
-                <Hash className="w-3.5 h-3.5 text-[#dd5b00]" />
+              <div className="flex items-center gap-2 text-white/85 w-36 shrink-0">
+                <Hash className="w-3.5 h-3.5 text-white" />
                 <span className="font-medium">Capacité / Stock</span>
               </div>
               <div>
                 <span
                   className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
                     shelf.shelfQuantity > 0
-                      ? 'bg-[#d9f3e1] text-[#1aae39] border border-[#a3e5b3]'
-                      : 'bg-[#ffe8d4] text-[#dd5b00] border border-[#fed2b2]'
+                      ? 'bg-emerald-950/40 text-emerald-200 border border-emerald-400/40'
+                      : 'bg-amber-950/40 text-amber-200 border border-amber-400/40'
                   }`}
                 >
                   <Hash className="w-3 h-3" />
@@ -192,29 +189,29 @@ export function ShelfDetailModal({
 
             {/* Property: Physical Location */}
             <div className="p-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-[#787671] w-36 shrink-0">
-                <MapPin className="w-3.5 h-3.5 text-[#0075de]" />
+              <div className="flex items-center gap-2 text-white/85 w-36 shrink-0">
+                <MapPin className="w-3.5 h-3.5 text-white" />
                 <span className="font-medium">Emplacement dépôt</span>
               </div>
-              <div className="text-xs text-[#1a1a1a] font-medium">
+              <div className="text-xs text-white font-medium">
                 Zone Principale • Somépharm Workspace
               </div>
             </div>
           </div>
 
-          {/* Raw JSON Tuple Toggle (Notion Code Block) */}
+          {/* Raw JSON Tuple Toggle */}
           <div className="space-y-2">
             <button
               type="button"
               onClick={() => setShowRawJson(!showRawJson)}
-              className="text-xs text-[#5645d4] hover:underline flex items-center gap-1 font-medium cursor-pointer"
+              className="text-xs text-white hover:text-white/80 flex items-center gap-1 font-medium cursor-pointer"
             >
               <Code className="w-3.5 h-3.5" />
               <span>{showRawJson ? 'Masquer le JSON brut' : 'Afficher le tuple SQL Server en JSON'}</span>
             </button>
 
             {showRawJson && (
-              <div className="relative bg-[#1a1a1a] text-[#f6f5f4] rounded-lg p-3 font-mono text-[11px] overflow-x-auto shadow-inner">
+              <div className="relative bg-[#1e2b48] border border-[#3e4f73] text-[#f6f5f4] rounded-lg p-3 font-mono text-[11px] overflow-x-auto shadow-inner">
                 <pre>{JSON.stringify(shelf, null, 2)}</pre>
                 <button
                   type="button"
@@ -222,7 +219,7 @@ export function ShelfDetailModal({
                   className="absolute top-2 right-2 px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   {copiedJson ? (
-                    <Check className="w-3 h-3 text-[#1aae39]" />
+                    <Check className="w-3 h-3 text-emerald-300" />
                   ) : (
                     <Copy className="w-3 h-3" />
                   )}
@@ -232,40 +229,40 @@ export function ShelfDetailModal({
             )}
           </div>
 
-          {/* Modal Footer (Notion button styles) */}
-          <div className="pt-3 border-t border-[#ede9e4] flex flex-wrap items-center justify-between gap-2.5">
+          {/* Modal Footer */}
+          <div className="pt-3 border-t border-[#8191ad] flex flex-wrap items-center justify-between gap-2.5">
             <button
               type="button"
               onClick={handleCopyId}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-transparent hover:bg-[#f0eeec] text-[#1a1a1a] border border-[#c8c4be] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 text-white border border-white/30 text-xs font-medium rounded-lg transition-colors cursor-pointer"
             >
-              <Copy className="w-3.5 h-3.5 text-[#5645d4]" />
+              <Copy className="w-3.5 h-3.5 text-white" />
               <span>Copier GUID</span>
             </button>
 
             <div className="flex items-center gap-2">
-              {/* Update Button (PATCH /shelves/:id) */}
+              {/* Update Button */}
               <button
                 type="button"
                 onClick={() => {
                   if (onOpenUpdate) onOpenUpdate(shelf);
                 }}
                 disabled={!canUpdateShelf}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#eef5fc] text-[#0075de] border border-[#b2d7f7] text-xs font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 text-white border border-white/30 text-xs font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 title={canUpdateShelf ? "Modifier cette étagère (shelf.update)" : "Permission 'shelf.update' manquante"}
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Modifier</span>
               </button>
 
-              {/* Delete Button (DELETE /shelves/:id) */}
+              {/* Delete Button */}
               <button
                 type="button"
                 onClick={() => {
                   if (onOpenDelete) onOpenDelete(shelf);
                 }}
                 disabled={!canDeleteShelf}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#fde0ec] text-[#e03131] border border-[#f5b8d0] text-xs font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-600/90 hover:bg-red-600 text-white border border-red-400/40 text-xs font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 title={canDeleteShelf ? "Supprimer cette étagère (shelf.delete)" : "Permission 'shelf.delete' manquante"}
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -275,7 +272,7 @@ export function ShelfDetailModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4.5 py-2 bg-[#5645d4] hover:bg-[#4534b3] text-white text-xs font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
+                className="px-4.5 py-2 bg-[#1e2b48] hover:bg-[#152037] text-white text-xs font-medium rounded-lg border border-[#2e3e63] shadow-xs transition-colors cursor-pointer"
               >
                 Fermer
               </button>

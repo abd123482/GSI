@@ -20,9 +20,9 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard.js';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator.js';
 
 @UseGuards(ClerkAuthGuard, PermissionsGuard)
-@Controller('equipment')
+@Controller(['equipment', 'equipments'])
 export class EquipmentController {
-  constructor(private readonly equipmentService: EquipmentService) {}
+  constructor(private readonly equipmentService: EquipmentService) { }
 
   @RequirePermissions('equipment.read')
   @Get('search')
@@ -34,12 +34,17 @@ export class EquipmentController {
   }
 
   @RequirePermissions('equipment.read')
+  @Get(':id/shelves')
+  async getEquipmentShelves(@Param('id', ParseUUIDPipe) id: string) {
+    return this.equipmentService.getEquipmentShelves(id);
+  }
+
+  @RequirePermissions('equipment.read')
   @Get(':id')
   async getEquipmentById(
     @Param('id', ParseUUIDPipe) id: string,
-    @Query() dto: PaginationDTO,
   ) {
-    return this.equipmentService.getEquipmentById(id, dto);
+    return this.equipmentService.getEquipmentById(id);
   }
 
   @RequirePermissions('equipment.read')
@@ -69,3 +74,4 @@ export class EquipmentController {
     return this.equipmentService.deleteEquipment(id);
   }
 }
+

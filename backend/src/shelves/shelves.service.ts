@@ -25,7 +25,7 @@ export class ShelfService {
     return await this.prisma.shelf.create({
       data: {
         shelfName: dto.shelfName,
-        shelfQuantity: dto.shelfQuantity !== undefined ? Number(dto.shelfQuantity) : 0,
+        shelfQuantity: 0,
       },
     });
   }
@@ -123,7 +123,6 @@ export class ShelfService {
       where: { shelfId: id },
       data: {
         ...(dto.shelfName !== undefined && { shelfName: dto.shelfName }),
-        ...(dto.shelfQuantity !== undefined && { shelfQuantity: Number(dto.shelfQuantity) }),
       },
     });
   }

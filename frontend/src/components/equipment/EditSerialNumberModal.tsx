@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { X, Barcode, Sparkles, AlertCircle, ShieldAlert } from 'lucide-react';
+import { X, Barcode, Sparkles, ShieldAlert } from 'lucide-react';
 import { SerialNumber } from '@/types/equipment';
 import {
   updateSerialNumberSchema,
@@ -76,25 +76,25 @@ export function EditSerialNumberModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div
-        className="relative w-full max-w-md overflow-hidden rounded-xl border border-[#e5e3df] bg-white shadow-2xl transition-all"
+        className="relative w-full max-w-md overflow-hidden rounded-xl border border-[#8191ad] bg-[#6b7b97] text-white shadow-2xl transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="h-12 bg-gradient-to-r from-[#e6e0f5] to-[#dcecfa] px-4 flex items-center justify-between border-b border-[#e5e3df]">
+        <div className="h-12 bg-[#53627c] px-4 flex items-center justify-between border-b border-[#455268]">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-white/90 shadow-sm border border-[#e5e3df] flex items-center justify-center text-[#5645d4]">
+            <div className="w-7 h-7 rounded-md bg-[#1e2b48] shadow-sm border border-white/20 flex items-center justify-center text-[#38bdf8]">
               <Barcode className="w-4 h-4" />
             </div>
-            <span className="text-xs font-semibold uppercase tracking-wider text-[#37352f]/80">
+            <span className="text-xs font-semibold uppercase tracking-wider text-white">
               Modifier le numéro de série
             </span>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-md text-[#787671] hover:bg-white/60 hover:text-[#1a1a1a] transition-colors"
+            className="p-1 rounded-md text-white/80 hover:bg-white/10 hover:text-white transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -103,9 +103,9 @@ export function EditSerialNumberModal({
         {/* Content */}
         <div className="p-5">
           {!canUpdateSerialNumber && (
-            <div className="mb-4 rounded-lg bg-[#ffe8d4]/60 border border-[#dd5b00]/30 p-2.5 flex items-start gap-2 text-[#793400] text-xs">
-              <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>Permission manquante : 'serial-number.update' requise.</span>
+            <div className="mb-4 rounded-lg bg-amber-500/20 border border-amber-400/40 p-2.5 flex items-start gap-2 text-amber-200 text-xs">
+              <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0 text-amber-300" />
+              <span>Permission manquante : &apos;serial-number.update&apos; requise.</span>
             </div>
           )}
 
@@ -113,15 +113,15 @@ export function EditSerialNumberModal({
             {/* Serial Number Code with Auto-Gen button */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-[#37352f]">
-                  Code du numéro de série <span className="text-[#e03131]">*</span>
+                <label className="text-xs font-medium text-white">
+                  Code du numéro de série <span className="text-rose-300">*</span>
                 </label>
                 <button
                   type="button"
                   onClick={generate32BitCode}
-                  className="text-[11px] font-medium text-[#5645d4] hover:text-[#4534b3] flex items-center gap-1 transition-colors"
+                  className="text-[11px] font-medium text-white bg-[#1e2b48] hover:bg-[#152037] px-2 py-0.5 rounded border border-white/20 flex items-center gap-1 transition-colors cursor-pointer"
                 >
-                  <Sparkles className="w-3 h-3" />
+                  <Sparkles className="w-3 h-3 text-amber-300" />
                   Générer 32-bit
                 </button>
               </div>
@@ -129,46 +129,46 @@ export function EditSerialNumberModal({
                 type="text"
                 {...register('serialNumberCode')}
                 placeholder="Ex: SN-A1B2C3D4"
-                className="w-full h-10 px-3 rounded-md border border-[#c8c4be] bg-white text-sm font-mono text-[#1a1a1a] focus:outline-none focus:border-2 focus:border-[#5645d4] transition-all"
+                className="w-full h-10 px-3 rounded-lg border border-[#8191ad] bg-[#4f5d75] text-white placeholder-white/50 text-sm font-mono focus:outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
               />
               {errors.serialNumberCode && (
-                <p className="mt-1 text-xs text-[#e03131]">{errors.serialNumberCode.message}</p>
+                <p className="mt-1 text-xs text-rose-300">{errors.serialNumberCode.message}</p>
               )}
             </div>
 
             {/* Status */}
             <div>
-              <label className="block text-xs font-medium text-[#37352f] mb-1">
-                Statut du numéro de série <span className="text-[#e03131]">*</span>
+              <label className="block text-xs font-medium text-white mb-1">
+                Statut du numéro de série <span className="text-rose-300">*</span>
               </label>
               <select
                 {...register('serialNumberStatus')}
-                className="w-full h-10 px-3 rounded-md border border-[#c8c4be] bg-white text-sm text-[#1a1a1a] focus:outline-none focus:border-2 focus:border-[#5645d4] transition-all"
+                className="w-full h-10 px-3 rounded-lg border border-[#8191ad] bg-[#4f5d75] text-white text-sm focus:outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
               >
-                <option value="AVAILABLE">DISPONIBLE (AVAILABLE)</option>
-                <option value="IN_USE">EN UTILISATION (IN_USE)</option>
-                <option value="MAINTENANCE">EN MAINTENANCE (MAINTENANCE)</option>
-                <option value="DEFECTIVE">DÉFECTUEUX (DEFECTIVE)</option>
+                <option value="AVAILABLE" className="bg-[#4f5d75] text-white">DISPONIBLE (AVAILABLE)</option>
+                <option value="IN_USE" className="bg-[#4f5d75] text-white">EN UTILISATION (IN_USE)</option>
+                <option value="MAINTENANCE" className="bg-[#4f5d75] text-white">EN MAINTENANCE (MAINTENANCE)</option>
+                <option value="DEFECTIVE" className="bg-[#4f5d75] text-white">DÉFECTUEUX (DEFECTIVE)</option>
               </select>
               {errors.serialNumberStatus && (
-                <p className="mt-1 text-xs text-[#e03131]">{errors.serialNumberStatus.message}</p>
+                <p className="mt-1 text-xs text-rose-300">{errors.serialNumberStatus.message}</p>
               )}
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#e5e3df]">
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#8191ad]/50">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isUpdating}
-                className="px-3.5 py-1.5 text-xs font-medium text-[#37352f] bg-transparent border border-[#c8c4be] rounded-lg hover:bg-[#f6f5f4] transition-colors"
+                className="px-3.5 py-1.5 text-xs font-medium text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-colors cursor-pointer"
               >
                 Annuler
               </button>
               <button
                 type="submit"
                 disabled={isUpdating || !canUpdateSerialNumber}
-                className="px-4 py-1.5 text-xs font-medium text-white bg-[#5645d4] rounded-lg hover:bg-[#4534b3] active:bg-[#3a2a99] disabled:opacity-50 transition-colors flex items-center gap-1.5 shadow-sm"
+                className="px-4 py-1.5 text-xs font-medium text-white bg-[#1e2b48] border border-[#2e3e63] rounded-lg hover:bg-[#152037] active:scale-[0.98] disabled:opacity-50 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
               >
                 {isUpdating && <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
                 Actualiser

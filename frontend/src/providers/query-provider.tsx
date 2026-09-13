@@ -1,6 +1,7 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import { useState, type ReactNode } from 'react';
 
 /**
@@ -16,9 +17,9 @@ export function QueryProvider({ children }: { children: ReactNode }) {
             staleTime: 60 * 1000, // 1 minute fresh time for fast local responses
             gcTime: 5 * 60 * 1000, // 5 minutes cache retention
             refetchOnWindowFocus: false,
-            retry: (failureCount, error: any) => {
+            retry: (failureCount, error) => {
               // Never retry on 401 or 403 authorization failures
-              if (error?.response?.status === 401 || error?.response?.status === 403) {
+              if (isAxiosError(error) && (error.response?.status === 401 || error.response?.status === 403)) {
                 return false;
               }
               return failureCount < 2;

@@ -11,13 +11,11 @@ export interface Shelf {
 
 export interface CreateShelfInput {
   shelfName: string;
-  shelfQuantity?: number;
   shelfCode?: string;
 }
 
 export interface UpdateShelfInput {
   shelfName?: string;
-  shelfQuantity?: number;
   shelfCode?: string;
 }
 

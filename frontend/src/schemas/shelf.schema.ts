@@ -10,13 +10,6 @@ export const createShelfSchema = z.object({
     .trim()
     .min(1, 'Le nom de l’étagère est obligatoire')
     .max(100, 'Le nom ne peut pas dépasser 100 caractères'),
-  shelfQuantity: z.coerce
-    .number({
-      required_error: 'La quantité est requise',
-      invalid_type_error: 'La quantité doit être un nombre valide',
-    })
-    .int('La quantité doit être un nombre entier')
-    .min(0, 'La quantité ne peut pas être négative'),
   shelfCode: z.string().trim().optional(),
 });
 
@@ -24,6 +17,7 @@ export type CreateShelfFormValues = z.infer<typeof createShelfSchema>;
 
 /**
  * Zod schema for updating an existing shelf.
+ * Only shelf metadata (e.g. name) can be modified. Quantities are managed exclusively via movements.
  */
 export const updateShelfSchema = z.object({
   shelfName: z
@@ -31,13 +25,6 @@ export const updateShelfSchema = z.object({
     .trim()
     .min(1, 'Le nom ne peut pas être vide')
     .max(100, 'Le nom ne peut pas dépasser 100 caractères')
-    .optional(),
-  shelfQuantity: z.coerce
-    .number({
-      invalid_type_error: 'La quantité doit être un nombre valide',
-    })
-    .int('La quantité doit être un nombre entier')
-    .min(0, 'La quantité ne peut pas être négative')
     .optional(),
   shelfCode: z.string().trim().optional(),
 });

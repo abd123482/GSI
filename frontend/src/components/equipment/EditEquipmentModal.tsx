@@ -1,15 +1,30 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { getErrorMessage } from '@/lib/error-message';
+
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { X, Pencil, AlertCircle, Cpu, Layers, Sparkles, Hash } from 'lucide-react';
+import {
+  X,
+  Pencil,
+  AlertCircle,
+  AlertTriangle,
+  Sparkles,
+  Hash,
+  Barcode,
+  RefreshCw,
+  Copy,
+  Check,
+} from 'lucide-react';
 import { Equipment } from '@/types/equipment';
 import {
   updateEquipmentSchema,
   UpdateEquipmentFormValues,
 } from '@/schemas/equipment.schema';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useApi } from '@/hooks/use-api';
+import { toast } from 'sonner';
 
 interface EditEquipmentModalProps {
   isOpen: boolean;
@@ -24,240 +39,465 @@ interface EditEquipmentModalProps {
   isUpdating: boolean;
 }
 
-export function EditEquipmentModal({
+/**
+ * Generates a random 32-bit hexadecimal string (8 hex chars).
+ */
+function generate32BitRandomCode(): string {
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+    const uint32 = new Uint32Array(1);
+    window.crypto.getRandomValues(uint32);
+    return uint32[0].toString(16).toUpperCase().padStart(8, '0');
+  }
+  return Math.floor(Math.random() * 0xffffffff)
+    .toString(16)
+    .toUpperCase()
+    .padStart(8, '0');
+}
+
+function generateSerialCodes(count: number): string[] {
+  const codes = new Set<string>();
+  while (codes.size < count) {
+    codes.add(`SN-${generate32BitRandomCode()}`);
+  }
+  return Array.from(codes);
+}
+
+export function EditEquipmentModal(props: EditEquipmentModalProps) {
+  if (!props.isOpen || !props.equipment) return null;
+
+  const equipment = props.equipment;
+  return (
+    <EditEquipmentModalContent
+      key={`${equipment.equipmentId}:${equipment.equipmentName}:${equipment.equipmentQuantity}:${equipment.minequipmentQuantity}:${equipment.hasSerialNumber}`}
+      {...props}
+    />
+  );
+}
+
+function EditEquipmentModalContent({
   isOpen,
   onClose,
   equipment,
   onUpdate,
   isUpdating,
 }: EditEquipmentModalProps) {
+  const api = useApi();
   const { canUpdateEquipment } = usePermissions();
-  const [convertToStandard, setConvertToStandard] = useState(false);
+
+  // Mode state: whether the equipment will have a serial number
+  const initialCount = equipment?.equipmentQuantity && equipment.equipmentQuantity > 0
+    ? equipment.equipmentQuantity
+    : 1;
+  const [hasSerialNumber, setHasSerialNumber] = useState(equipment?.hasSerialNumber ?? false);
+  const [serialCount, setSerialCount] = useState(initialCount);
+  const [serialList, setSerialList] = useState<string[]>([]);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [isSubmittingInternal, setIsSubmittingInternal] = useState(false);
 
   const {
     register,
     handleSubmit,
-    reset,
     setValue,
-    watch,
     formState: { errors },
   } = useForm<UpdateEquipmentFormValues>({
     resolver: zodResolver(updateEquipmentSchema),
     defaultValues: {
-      equipmentName: '',
-      equipmentQuantity: 0,
-      minEquipmentQuantity: 0,
-      hasSerialNumber: false,
+      equipmentName: equipment?.equipmentName ?? '',
+      equipmentQuantity: equipment?.equipmentQuantity ?? 0,
+      minEquipmentQuantity: equipment?.minequipmentQuantity ?? 0,
+      hasSerialNumber: equipment?.hasSerialNumber ?? false,
     },
   });
 
-  useEffect(() => {
-    if (equipment && isOpen) {
-      reset({
-        equipmentName: equipment.equipmentName ?? '',
-        equipmentQuantity: equipment.equipmentQuantity,
-        minEquipmentQuantity: equipment.minequipmentQuantity ?? 0,
-        hasSerialNumber: equipment.hasSerialNumber,
-      });
-      setConvertToStandard(false);
-    }
-  }, [equipment, isOpen, reset]);
-
   if (!isOpen || !equipment) return null;
 
-  const isSerialized = equipment.hasSerialNumber && !convertToStandard;
+  const originalHasSerialNumber = equipment.hasSerialNumber;
+  const isConvertingToSerialized = !originalHasSerialNumber && hasSerialNumber;
+  const isConvertingToStandard = originalHasSerialNumber && !hasSerialNumber;
 
-  const onSubmit = async (data: UpdateEquipmentFormValues) => {
-    try {
-      await onUpdate(equipment.equipmentId, {
-        equipmentName: data.equipmentName,
-        minEquipmentQuantity: data.minEquipmentQuantity,
-        equipmentQuantity: isSerialized ? equipment.equipmentQuantity : data.equipmentQuantity,
-        hasSerialNumber: convertToStandard ? false : equipment.hasSerialNumber,
-      });
-      onClose();
-    } catch {
-      // Error handled by react-query mutation toast
+  // Handler when user clicks toggle
+  const handleToggleHasSerialNumber = (checked: boolean) => {
+    setHasSerialNumber(checked);
+    setValue('hasSerialNumber', checked);
+
+    if (checked && !originalHasSerialNumber) {
+      // Transitioning standard -> serialized
+      const count = Math.max(1, Number(serialCount) || 1);
+      setSerialList(generateSerialCodes(count));
     }
   };
 
+  // Regenerate serial codes
+  const handleRegenerateCodes = () => {
+    const codes = generateSerialCodes(serialList.length);
+    setSerialList(codes);
+    toast.success(`${codes.length} code(s) 32-bit régénéré(s) !`);
+  };
+
+  // Adjust count of serials to generate
+  const handleSerialCountChange = (newCount: number) => {
+    const validCount = Math.max(1, Math.min(500, newCount));
+    setSerialCount(validCount);
+    setSerialList(generateSerialCodes(validCount));
+  };
+
+  const handleCopySerial = (code: string, index: number) => {
+    navigator.clipboard.writeText(code);
+    setCopiedIndex(index);
+    toast.success('Code copié !');
+    setTimeout(() => setCopiedIndex(null), 1500);
+  };
+
+  const onSubmit = async (data: UpdateEquipmentFormValues) => {
+    setIsSubmittingInternal(true);
+    try {
+      if (isConvertingToSerialized) {
+        // Validate serials
+        const trimmed = serialList.map((s) => s.trim().toUpperCase());
+        const hasEmpty = trimmed.some((s) => s.length === 0);
+        if (hasEmpty) {
+          toast.error('Erreur', { description: 'Tous les numéros de série doivent être renseignés.' });
+          setIsSubmittingInternal(false);
+          return;
+        }
+        const uniqueSet = new Set(trimmed);
+        if (uniqueSet.size !== trimmed.length) {
+          toast.error('Erreur', { description: 'Certains numéros de série sont en double.' });
+          setIsSubmittingInternal(false);
+          return;
+        }
+
+        // 1. Update equipment scalar fields and toggle hasSerialNumber = true (quantity reset to 0 so batch adds exact count)
+        await onUpdate(equipment.equipmentId, {
+          equipmentName: data.equipmentName?.trim(),
+          minEquipmentQuantity: data.minEquipmentQuantity,
+          equipmentQuantity: 0,
+          hasSerialNumber: true,
+        });
+
+        // 2. Create the child serial numbers via batch endpoint
+        await api.post('/serial-number/batch', {
+          equipmentId: equipment.equipmentId,
+          serialNumberCodes: trimmed,
+          serialNumberStatus: 'AVAILABLE',
+        });
+
+        toast.success('Conversion réussie', {
+          description: `Équipement converti en sérialisé avec ${trimmed.length} numéro(s) de série.`,
+        });
+      } else if (isConvertingToStandard) {
+        // Converting serialized -> standard: deletes serial numbers and sets scalar quantity
+        await onUpdate(equipment.equipmentId, {
+          equipmentName: data.equipmentName?.trim(),
+          minEquipmentQuantity: data.minEquipmentQuantity,
+          equipmentQuantity: Number(data.equipmentQuantity ?? equipment.equipmentQuantity),
+          hasSerialNumber: false,
+        });
+
+        toast.success('Conversion réussie', {
+          description: 'Équipement converti en mode standard (sans numéros de série).',
+        });
+      } else {
+        // Preserving same mode
+        await onUpdate(equipment.equipmentId, {
+          equipmentName: data.equipmentName?.trim(),
+          minEquipmentQuantity: data.minEquipmentQuantity,
+          ...(hasSerialNumber
+            ? {}
+            : { equipmentQuantity: Number(data.equipmentQuantity) }),
+          hasSerialNumber,
+        });
+      }
+
+      onClose();
+    } catch (err: unknown) {
+      toast.error('Échec de la modification', {
+        description: getErrorMessage(err, 'Une erreur est survenue.'),
+      });
+    } finally {
+      setIsSubmittingInternal(false);
+    }
+  };
+
+  const isBusy = isUpdating || isSubmittingInternal;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div
-        className="relative w-full max-w-lg overflow-hidden rounded-xl border border-[#e5e3df] bg-white shadow-2xl transition-all"
+        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-[#8191ad] bg-[#6b7b97] text-white shadow-2xl transition-all"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Notion Pastel Cover Header */}
-        <div className="h-14 bg-gradient-to-r from-[#ffe8d4] via-[#e6e0f5] to-[#d9f3e1] p-4 flex items-center justify-between border-b border-[#e5e3df]">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-white/90 shadow-sm border border-[#e5e3df] flex items-center justify-center text-[#5645d4]">
+        {/* Header */}
+        <div className="sticky top-0 z-10 h-14 bg-[#53627c] px-5 py-4 flex items-center justify-between border-b border-[#455268]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#1e2b48] shadow-sm border border-white/20 flex items-center justify-center text-[#38bdf8]">
               <Pencil className="w-4 h-4" />
             </div>
-            <span className="text-xs font-semibold uppercase tracking-wider text-[#37352f]/70">
-              Modifier l’équipement
-            </span>
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-white">
+                Modifier l’équipement
+              </span>
+              <p className="text-[11px] text-white/70">{equipment.equipmentName}</p>
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-md text-[#787671] hover:bg-white/60 hover:text-[#1a1a1a] transition-colors"
+            className="p-1.5 rounded-md text-white/80 hover:bg-white/10 hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-6">
+        <div className="p-6 space-y-5">
           {/* Permission Warning */}
           {!canUpdateEquipment && (
-            <div className="mb-4 rounded-lg bg-[#ffe8d4]/60 border border-[#dd5b00]/30 p-3 flex items-start gap-2 text-[#793400] text-sm">
+            <div className="rounded-lg bg-amber-500/20 border border-amber-400/40 p-3 flex items-start gap-2 text-amber-100 text-sm">
               <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <div>
                 <span className="font-semibold">Permission manquante :</span> Vous ne détenez pas le droit{' '}
-                <code className="bg-white/60 px-1 py-0.5 rounded text-xs">equipment.update</code> pour modifier cet équipement.
+                <code className="bg-black/30 px-1 py-0.5 rounded text-xs">equipment.update</code> pour modifier cet équipement.
               </div>
             </div>
           )}
 
-          {/* Type Badge */}
-          <div className="flex items-center gap-2 mb-4 p-2.5 rounded-lg bg-[#f6f5f4] border border-[#e5e3df]">
-            <Cpu className="w-4 h-4 text-[#5645d4]" />
-            <div className="text-xs text-[#5d5b54]">
-              <span className="font-medium text-[#1a1a1a]">
-                {equipment.hasSerialNumber ? 'Équipement sérialisé' : 'Équipement standard'}
-              </span>
-              {' • '}
-              {equipment.serialNumbers?.length ?? 0} numéro(s) de série enregistré(s)
+          {/* Interactive Serialized Toggle Card */}
+          <div className="p-4 rounded-xl border border-[#8191ad] bg-[#586680]/60 transition-all">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+                    hasSerialNumber
+                      ? 'bg-[#1e2b48] text-[#38bdf8] border border-white/20'
+                      : 'bg-black/20 text-white/60 border border-white/15'
+                  }`}
+                >
+                  <Barcode className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-white flex items-center gap-2">
+                    <span>Gestion par numéros de série</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium tracking-wide ${
+                        hasSerialNumber
+                          ? 'bg-[#1e2b48] text-emerald-300 border border-emerald-400/30'
+                          : 'bg-black/30 text-white/70 border border-white/20'
+                      }`}
+                    >
+                      {hasSerialNumber ? 'Sérialisé' : 'Standard'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-white/70 mt-0.5">
+                    {hasSerialNumber
+                      ? 'Chaque unité possède son propre numéro de série unique.'
+                      : 'Suivi par quantité globale sans numéros de série individuels.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Toggle Switch */}
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={hasSerialNumber}
+                  onChange={(e) => handleToggleHasSerialNumber(e.target.checked)}
+                  disabled={!canUpdateEquipment || isBusy}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-black/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1e2b48]" />
+              </label>
             </div>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {/* Equipment Name */}
             <div>
-              <label className="block text-xs font-medium text-[#37352f] mb-1">
-                Nom de l’équipement <span className="text-[#e03131]">*</span>
+              <label className="block text-xs font-medium text-white mb-1">
+                Nom de l’équipement <span className="text-rose-300">*</span>
               </label>
               <input
                 type="text"
                 {...register('equipmentName')}
-                placeholder="Ex: Oscilloscope Rohde & Schwarz"
-                className="w-full h-10 px-3 rounded-md border border-[#c8c4be] bg-white text-sm text-[#1a1a1a] placeholder:text-[#bbb8b1] focus:outline-none focus:border-2 focus:border-[#5645d4] transition-all"
+                placeholder="Ex: Barcode Scanner Epson M0289"
+                disabled={!canUpdateEquipment || isBusy}
+                className="w-full h-10 px-3 rounded-lg border border-[#8191ad] bg-[#4f5d75] text-white placeholder-white/50 text-sm focus:outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
               />
               {errors.equipmentName && (
-                <p className="mt-1 text-xs text-[#e03131]">{errors.equipmentName.message}</p>
+                <p className="mt-1 text-xs text-rose-300">{errors.equipmentName.message}</p>
               )}
             </div>
 
-            {/* Quantity fields */}
-            {isSerialized ? (
-              <div className="rounded-lg border border-[#e5e3df] bg-[#fafaf9] p-3 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-[#37352f]">Quantité actuelle (liée aux N° de série)</span>
-                  <span className="font-semibold px-2 py-0.5 rounded bg-[#e6e0f5] text-[#5645d4]">
-                    {equipment.equipmentQuantity} unité(s)
+            {/* Mode 1: Converting Standard -> Serialized */}
+            {isConvertingToSerialized && (
+              <div className="rounded-xl border border-[#8191ad] bg-[#586680]/70 p-4 space-y-3 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    Conversion en équipement sérialisé
+                  </span>
+                  <span className="text-[11px] text-[#38bdf8] bg-[#1e2b48] px-2 py-0.5 rounded font-medium border border-[#38bdf8]/30">
+                    {serialList.length} code(s) requis
                   </span>
                 </div>
-                <p className="text-[11px] text-[#787671]">
-                  Pour cet équipement sérialisé, la quantité totale est automatiquement égale au nombre de numéros de série valides.
+
+                <p className="text-xs text-white/80">
+                  Des numéros de série 32-bit uniques vont être générés et enregistrés pour chaque exemplaire.
                 </p>
 
-                {/* Option to convert to non-serialized */}
-                <div className="pt-2 border-t border-[#e5e3df]">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-white font-medium shrink-0">
+                    Quantité à sérialiser :
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="200"
+                    value={serialCount}
+                    onChange={(e) => handleSerialCountChange(parseInt(e.target.value, 10) || 1)}
+                    className="w-20 h-8 px-2 rounded-lg border border-[#8191ad] bg-[#4f5d75] text-white text-xs font-mono font-medium text-center focus:outline-none focus:border-white"
+                  />
                   <button
                     type="button"
-                    onClick={() => setConvertToStandard(true)}
-                    className="text-xs text-[#dd5b00] hover:text-[#793400] font-medium flex items-center gap-1.5 transition-colors"
+                    onClick={handleRegenerateCodes}
+                    className="ml-auto px-2.5 py-1 text-xs font-medium text-white bg-[#1e2b48] border border-white/20 rounded-md hover:bg-[#152037] transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Convertir en équipement standard (sans numéros de série)
+                    <RefreshCw className="w-3 h-3" />
+                    Régénérer les codes
                   </button>
                 </div>
+
+                {/* Preview list */}
+                <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1 border border-[#8191ad]/60 rounded-lg p-2 bg-[#4f5d75]/50">
+                  {serialList.map((code, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between px-2.5 py-1 bg-[#4f5d75] border border-[#8191ad] rounded text-xs font-mono text-white"
+                    >
+                      <span className="text-[11px] text-white/60">#{idx + 1}</span>
+                      <span className="font-semibold text-emerald-300">{code}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopySerial(code, idx)}
+                        className="text-white/70 hover:text-white p-0.5 rounded cursor-pointer"
+                        title="Copier le code"
+                      >
+                        {copiedIndex === idx ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ) : (
+            )}
+
+            {/* Mode 2: Converting Serialized -> Standard */}
+            {isConvertingToStandard && (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-950/40 p-4 space-y-3 animate-in fade-in">
+                <div className="flex items-center gap-2 text-xs font-semibold text-amber-200">
+                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  <span>Confirmation : Conversion en équipement standard</span>
+                </div>
+                <p className="text-xs text-amber-100/90 leading-relaxed">
+                  Attention : les <strong>{equipment.serialNumbers?.length ?? equipment.equipmentQuantity}</strong> numéros de série existants seront <strong>définitivement supprimés</strong> de la base de données.
+                </p>
+                <div>
+                  <label className="block text-xs font-medium text-amber-200 mb-1">
+                    Quantité globale en stock conservée <span className="text-rose-300">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      {...register('equipmentQuantity', { valueAsNumber: true })}
+                      className="w-full h-10 px-3 pl-8 rounded-lg border border-amber-400/40 bg-[#4f5d75] text-white text-sm focus:outline-none focus:border-white"
+                    />
+                    <Hash className="w-4 h-4 text-white/60 absolute left-2.5 top-3" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Mode 3: Already Serialized & Staying Serialized */}
+            {!isConvertingToSerialized && !isConvertingToStandard && hasSerialNumber && (
+              <div className="rounded-xl border border-[#8191ad] bg-[#586680]/60 p-3.5 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-white">Quantité en stock</span>
+                  <span className="font-semibold px-2 py-0.5 rounded bg-[#1e2b48] text-emerald-300 border border-emerald-400/30">
+                    {equipment.equipmentQuantity} exemplaire(s)
+                  </span>
+                </div>
+                <p className="text-[11px] text-white/70 leading-relaxed">
+                  La quantité d’un équipement sérialisé correspond au nombre de numéros de série actifs enregistrés ({equipment.serialNumbers?.length ?? 0}). Les unités individuelles peuvent être gérées depuis la fiche détaillée de l&apos;équipement.
+                </p>
+              </div>
+            )}
+
+            {/* Mode 4: Already Standard & Staying Standard */}
+            {!isConvertingToSerialized && !isConvertingToStandard && !hasSerialNumber && (
               <div>
-                <label className="block text-xs font-medium text-[#37352f] mb-1">
-                  Quantité en stock <span className="text-[#e03131]">*</span>
+                <label className="block text-xs font-medium text-white mb-1">
+                  Quantité en stock <span className="text-rose-300">*</span>
                 </label>
                 <div className="relative">
                   <input
                     type="number"
                     min="0"
-                    {...register('equipmentQuantity')}
-                    className="w-full h-10 px-3 pl-8 rounded-md border border-[#c8c4be] bg-white text-sm text-[#1a1a1a] focus:outline-none focus:border-2 focus:border-[#5645d4] transition-all"
+                    {...register('equipmentQuantity', { valueAsNumber: true })}
+                    disabled={!canUpdateEquipment || isBusy}
+                    className="w-full h-10 px-3 pl-8 rounded-lg border border-[#8191ad] bg-[#4f5d75] text-white placeholder-white/50 text-sm focus:outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
                   />
-                  <Hash className="w-4 h-4 text-[#787671] absolute left-2.5 top-3" />
+                  <Hash className="w-4 h-4 text-white/60 absolute left-2.5 top-3" />
                 </div>
                 {errors.equipmentQuantity && (
-                  <p className="mt-1 text-xs text-[#e03131]">{errors.equipmentQuantity.message}</p>
+                  <p className="mt-1 text-xs text-rose-300">{errors.equipmentQuantity.message}</p>
                 )}
-              </div>
-            )}
-
-            {/* Convert to standard warning & manual quantity input */}
-            {convertToStandard && (
-              <div className="rounded-lg border border-[#dd5b00]/40 bg-[#ffe8d4]/40 p-3 space-y-2 animate-in fade-in">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[#793400]">
-                    Conversion en mode standard
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setConvertToStandard(false)}
-                    className="text-[11px] text-[#787671] underline"
-                  >
-                    Annuler
-                  </button>
-                </div>
-                <p className="text-xs text-[#793400]/80">
-                  Tous les numéros de série existants ({equipment.serialNumbers?.length ?? 0}) seront supprimés de la base de données SQL. Définissez la quantité manuelle :
-                </p>
-                <div>
-                  <label className="block text-[11px] font-medium text-[#793400] mb-1">
-                    Nouvelle quantité en stock
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    {...register('equipmentQuantity')}
-                    className="w-full h-9 px-3 rounded-md border border-[#dd5b00]/50 bg-white text-sm text-[#1a1a1a] focus:outline-none focus:border-2 focus:border-[#dd5b00]"
-                  />
-                </div>
               </div>
             )}
 
             {/* Min Quantity Alert */}
             <div>
-              <label className="block text-xs font-medium text-[#37352f] mb-1">
+              <label className="block text-xs font-medium text-white mb-1">
                 Seuil d’alerte (Quantité minimale)
               </label>
               <input
                 type="number"
                 min="0"
-                {...register('minEquipmentQuantity')}
-                className="w-full h-10 px-3 rounded-md border border-[#c8c4be] bg-white text-sm text-[#1a1a1a] focus:outline-none focus:border-2 focus:border-[#5645d4] transition-all"
+                {...register('minEquipmentQuantity', { valueAsNumber: true })}
+                disabled={!canUpdateEquipment || isBusy}
+                className="w-full h-10 px-3 rounded-lg border border-[#8191ad] bg-[#4f5d75] text-white placeholder-white/50 text-sm focus:outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
               />
               {errors.minEquipmentQuantity && (
-                <p className="mt-1 text-xs text-[#e03131]">{errors.minEquipmentQuantity.message}</p>
+                <p className="mt-1 text-xs text-rose-300">{errors.minEquipmentQuantity.message}</p>
               )}
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#e5e3df]">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#8191ad]/50">
               <button
                 type="button"
                 onClick={onClose}
-                disabled={isUpdating}
-                className="px-4 py-2 text-sm font-medium text-[#37352f] bg-transparent border border-[#c8c4be] rounded-lg hover:bg-[#f6f5f4] transition-colors"
+                disabled={isBusy}
+                className="px-4 py-2 text-xs font-medium text-white bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 transition-colors cursor-pointer"
               >
                 Annuler
               </button>
               <button
                 type="submit"
-                disabled={isUpdating || !canUpdateEquipment}
-                className="px-5 py-2 text-sm font-medium text-white bg-[#5645d4] rounded-lg hover:bg-[#4534b3] active:bg-[#3a2a99] disabled:opacity-50 transition-colors flex items-center gap-2 shadow-sm"
+                disabled={isBusy || !canUpdateEquipment}
+                className="px-5 py-2 text-xs font-medium text-white bg-[#1e2b48] border border-[#2e3e63] rounded-lg hover:bg-[#152037] active:scale-[0.98] disabled:opacity-50 transition-all flex items-center gap-2 shadow-sm cursor-pointer"
               >
-                {isUpdating && <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
-                {convertToStandard ? 'Convertir & Enregistrer' : 'Enregistrer les modifications'}
+                {isBusy && (
+                  <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                )}
+                {isConvertingToSerialized
+                  ? 'Convertir en sérialisé & Enregistrer'
+                  : isConvertingToStandard
+                  ? 'Convertir en standard & Enregistrer'
+                  : 'Enregistrer les modifications'}
               </button>
             </div>
           </form>

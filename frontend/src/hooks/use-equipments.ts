@@ -6,14 +6,18 @@ import { useApi } from './use-api';
 import { usePermissions } from './use-permissions';
 import {
   EquipmentService,
-  REQUIRED_MOVEMENT_CREATE_PERMISSION,
   REQUIRED_EQUIPMENT_READ_PERMISSION,
 } from '@/services/equipment.service';
 import {
   Equipment,
-  CreateEntryWithEquipmentInput,
+  EquipmentWithShelvesResponse,
   EquipmentPaginationQuery,
 } from '@/types/equipment';
+import {
+  MovementService,
+  REQUIRED_MOVEMENT_CREATE_PERMISSION,
+} from '@/services/movement.service';
+import { CreateEquipmentMovementInput, Movement } from '@/types/movement';
 import { toast } from 'sonner';
 
 interface UseEquipmentsOptions extends EquipmentPaginationQuery {
@@ -50,26 +54,12 @@ export function useEquipments(options?: UseEquipmentsOptions) {
     return EquipmentService.getEquipmentById(api, id);
   };
 
-  // Mutation: Create equipment in entry movement
-  const createEntryMutation = useMutation({
-    mutationFn: async (input: CreateEntryWithEquipmentInput) => {
-      return EquipmentService.createEntryMovementWithEquipment(api, input, permissions);
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['equipments'] });
-      queryClient.invalidateQueries({ queryKey: ['shelves'] });
-      queryClient.invalidateQueries({ queryKey: ['movements'] });
-      toast.success('Mouvement d’entrée enregistré !', {
-        description: `L'équipement "${data.equipment.equipmentName}" a été ajouté au stock avec succès.`,
-      });
-    },
-    onError: (error: any) => {
-      const msg = error?.message || 'Impossible d’enregistrer le mouvement.';
-      toast.error('Erreur lors de la création', {
-        description: msg,
-      });
-    },
-  });
+  // Query helper to get all shelves of an equipment
+  const fetchEquipmentShelves = async (id: string): Promise<EquipmentWithShelvesResponse> => {
+    return EquipmentService.getEquipmentShelves(api, id, permissions);
+  };
+
+
 
   // Mutation: Update equipment
   const updateEquipmentMutation = useMutation({
@@ -94,7 +84,7 @@ export function useEquipments(options?: UseEquipmentsOptions) {
         description: `L'équipement "${data.equipmentName}" a été actualisé.`,
       });
     },
-    onError: (error: any) => {
+    onError: (error) => {
       toast.error('Erreur de mise à jour', {
         description: error?.message || 'Impossible de modifier cet équipement.',
       });
@@ -113,7 +103,7 @@ export function useEquipments(options?: UseEquipmentsOptions) {
         description: 'L’équipement et ses éléments associés ont été supprimés.',
       });
     },
-    onError: (error: any) => {
+    onError: (error) => {
       toast.error('Erreur de suppression', {
         description: error?.message || 'Impossible de supprimer cet équipement.',
       });
@@ -130,7 +120,6 @@ export function useEquipments(options?: UseEquipmentsOptions) {
       input: {
         serialNumberCode?: string;
         serialNumberStatus?: string;
-        shelfId?: string | null;
       };
     }) => {
       return EquipmentService.updateSerialNumber(api, id, input, permissions);
@@ -139,7 +128,7 @@ export function useEquipments(options?: UseEquipmentsOptions) {
       queryClient.invalidateQueries({ queryKey: ['equipments'] });
       toast.success('Numéro de série mis à jour');
     },
-    onError: (error: any) => {
+    onError: (error) => {
       toast.error('Erreur de mise à jour', {
         description: error?.message || 'Impossible de modifier le numéro de série.',
       });
@@ -157,9 +146,56 @@ export function useEquipments(options?: UseEquipmentsOptions) {
         description: 'Le numéro de série a été retiré et la quantité ajustée.',
       });
     },
-    onError: (error: any) => {
+    onError: (error) => {
       toast.error('Erreur de suppression', {
         description: error?.message || 'Impossible de supprimer le numéro de série.',
+      });
+    },
+  });
+
+  // Mutation: Create equipment directly via Equipment & SerialNumber controllers
+  const createEquipmentMutation = useMutation({
+    mutationFn: async (input: import('@/types/equipment').CreateEquipmentDirectInput) => {
+      return EquipmentService.createEquipmentDirect(api, input, permissions);
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['equipments'] });
+      queryClient.invalidateQueries({ queryKey: ['shelves'] });
+      toast.success('Équipement créé avec succès !', {
+        description: `L'équipement "${data.equipmentName}" a été ajouté au stock.`,
+      });
+    },
+    onError: (error) => {
+      toast.error('Erreur lors de la création', {
+        description: error?.message || 'Impossible de créer l’équipement.',
+      });
+    },
+  });
+
+
+
+  // Query helper for equipment movements
+  const fetchEquipmentMovements = async (equipmentId: string): Promise<Movement[]> => {
+    return MovementService.getMovementsByEquipmentId(api, equipmentId, { page: 1, limit: 100 }, permissions);
+  };
+
+  // Mutation: Create movement (IN, OUT, TRANSFER)
+  const createMovementMutation = useMutation({
+    mutationFn: async (input: CreateEquipmentMovementInput) => {
+      return MovementService.createMovement(api, input, permissions);
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['equipments'] });
+      queryClient.invalidateQueries({ queryKey: ['shelves'] });
+      queryClient.invalidateQueries({ queryKey: ['movements'] });
+      queryClient.invalidateQueries({ queryKey: ['equipment-movements'] });
+      toast.success('Mouvement enregistré avec succès !', {
+        description: `Mouvement de statut ${data.mouvementStatus} (${data.mouvementQuantity ?? 1} unité(s)) validé.`,
+      });
+    },
+    onError: (error) => {
+      toast.error('Erreur lors de l’enregistrement du mouvement', {
+        description: error?.message || 'Impossible d’enregistrer le mouvement.',
       });
     },
   });
@@ -185,16 +221,20 @@ export function useEquipments(options?: UseEquipmentsOptions) {
     error: equipmentsQuery.error,
     refetch: equipmentsQuery.refetch,
     getEquipmentById: fetchEquipmentById,
+    getEquipmentShelves: fetchEquipmentShelves,
     canCreateMovement,
     canReadEquipment,
-    createEntryMovement: createEntryMutation.mutateAsync,
-    isCreating: createEntryMutation.isPending,
+    createEquipment: createEquipmentMutation.mutateAsync,
+    isCreatingEquipment: createEquipmentMutation.isPending,
     updateEquipment: updateEquipmentMutation.mutateAsync,
     isUpdating: updateEquipmentMutation.isPending,
     deleteEquipment: deleteEquipmentMutation.mutateAsync,
     isDeleting: deleteEquipmentMutation.isPending,
     updateSerialNumber: updateSerialNumberMutation.mutateAsync,
     isUpdatingSerialNumber: updateSerialNumberMutation.isPending,
+    createMovement: createMovementMutation.mutateAsync,
+    isCreatingMovement: createMovementMutation.isPending,
+    getEquipmentMovements: fetchEquipmentMovements,
     deleteSerialNumber: deleteSerialNumberMutation.mutateAsync,
     isDeletingSerialNumber: deleteSerialNumberMutation.isPending,
   };

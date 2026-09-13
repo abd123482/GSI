@@ -60,7 +60,7 @@ export function useShelves(options?: UseShelvesOptions) {
         description: `L'étagère "${newShelf.shelfName}" a été enregistrée dans la base de données SQL Server.`,
       });
     },
-    onError: (error: any) => {
+    onError: (error) => {
       const msg = error?.message || 'Impossible de créer l’étagère.';
       toast.error('Erreur lors de la création', {
         description: msg,
@@ -80,7 +80,7 @@ export function useShelves(options?: UseShelvesOptions) {
         description: `L'étagère "${updatedShelf.shelfName}" a été mise à jour dans SQL Server.`,
       });
     },
-    onError: (error: any) => {
+    onError: (error) => {
       const msg = error?.message || 'Impossible de mettre à jour l’étagère.';
       toast.error('Erreur lors de la modification', {
         description: msg,
@@ -99,7 +99,7 @@ export function useShelves(options?: UseShelvesOptions) {
         description: 'Le tuple a été supprimé de la table dbo.Shelf.',
       });
     },
-    onError: (error: any) => {
+    onError: (error) => {
       const msg = error?.message || 'Impossible de supprimer cette étagère.';
       toast.error('Erreur lors de la suppression', {
         description: msg,

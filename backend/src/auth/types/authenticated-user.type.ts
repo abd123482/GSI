@@ -7,4 +7,5 @@ export interface AuthenticatedUser {
   roleName: string | null;
   permissions: string[];
   status: string | null;
+  isAdmin?: boolean;
 }

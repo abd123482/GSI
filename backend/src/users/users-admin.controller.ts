@@ -1,16 +1,20 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard.js';
 import { PermissionsGuard } from '../auth/guards/permissions.guard.js';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import type { AuthenticatedUser } from '../auth/types/authenticated-user.type.js';
 import { UsersAdminService } from './users-admin.service.js';
 import {
   type UpdateUserStatusDTO,
@@ -24,6 +28,10 @@ import {
   type GetUsersQueryDTO,
   getUsersQuerySchema,
 } from './dto/get-users-query.dto.js';
+import {
+  type CreateRoleDTO,
+  createRoleSchema,
+} from './dto/create-role.dto.js';
 
 @UseGuards(ClerkAuthGuard, PermissionsGuard)
 @Controller('admin')
@@ -50,8 +58,16 @@ export class UsersAdminController {
   async updateUserStatus(
     @Param('userId', new ParseUUIDPipe({ version: '4' })) userId: string,
     @Body() body: UpdateUserStatusDTO,
+    @CurrentUser() currentUser: AuthenticatedUser,
   ) {
     const validated = updateUserStatusSchema.parse(body);
+
+    if (userId === currentUser.userId && validated.status === 'DISABLED') {
+      throw new BadRequestException(
+        'Action interdite : Vous ne pouvez pas désactiver votre propre compte administrateur.',
+      );
+    }
+
     return this.usersAdminService.updateUserStatus(userId, validated.status);
   }
 
@@ -69,5 +85,21 @@ export class UsersAdminController {
   @Get('roles')
   async getRoles() {
     return this.usersAdminService.getRoles();
+  }
+
+  @RequirePermissions('role.manage')
+  @Post('roles')
+  async createRole(@Body() body: CreateRoleDTO) {
+    const validated = createRoleSchema.parse(body);
+    return this.usersAdminService.createRole(
+      validated.roleName,
+      validated.permissions,
+    );
+  }
+
+  @RequirePermissions('role.manage')
+  @Get('permissions')
+  async getPermissions() {
+    return this.usersAdminService.getAvailablePermissions();
   }
 }

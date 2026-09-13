@@ -11,6 +11,7 @@ import { verifyToken } from '@clerk/backend';
 import type { Request } from 'express';
 import { AuthService } from './auth.service.js';
 import type { AuthenticatedUser } from './types/authenticated-user.type.js';
+import { ALL_SYSTEM_PERMISSIONS } from './constants/permissions.constant.js';
 
 export type AuthenticatedRequest = Request & {
   authUser?: AuthenticatedUser;
@@ -20,7 +21,7 @@ export type AuthenticatedRequest = Request & {
 export class ClerkAuthGuard implements CanActivate {
   private readonly logger = new Logger(ClerkAuthGuard.name);
 
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
@@ -30,7 +31,7 @@ export class ClerkAuthGuard implements CanActivate {
       throw new UnauthorizedException('Authentication required');
     }
 
-    const token = authorization.substring(7).trim();
+    const [, token] = authorization.split(' ');
     if (!token) {
       throw new UnauthorizedException('Authentication required: Bearer token is empty');
     }
@@ -57,6 +58,9 @@ export class ClerkAuthGuard implements CanActivate {
     try {
       dbUser = await this.authService.getOrCreateLocalUser(clerkUserId);
     } catch (dbErr: any) {
+      if (dbErr instanceof ForbiddenException) {
+        throw dbErr;
+      }
       this.logger.error(`Database error resolving user for Clerk ID ${clerkUserId}:`, dbErr);
       throw new InternalServerErrorException('Failed to resolve local user account');
     }
@@ -65,19 +69,28 @@ export class ClerkAuthGuard implements CanActivate {
       throw new ForbiddenException('User account could not be found or created');
     }
 
-    // Task 9: User Status Enforcement
+    const permissions: string[] = (dbUser.role?.permissions ?? [])
+      .map((p: any) => p.permissionName)
+      .filter(Boolean);
+
+    const isAdmin =
+      dbUser.role?.roleName?.trim().toUpperCase() === 'ADMIN' ||
+      permissions.includes('user.manage') ||
+      permissions.includes('role.manage');
+
+    // User Status Enforcement:
     // ACTIVE -> allowed
-    // DISABLED / BLOCKED / INACTIVE -> 403 Forbidden
+    // DISABLED / BLOCKED / INACTIVE -> 403 Forbidden (Admins exempt to prevent lockouts)
     const status = (dbUser.userStatus || '').toUpperCase();
-    if (status !== 'ACTIVE') {
+    if (status !== 'ACTIVE' && !isAdmin) {
       throw new ForbiddenException(
         `User account is not active (status: ${dbUser.userStatus ?? 'UNKNOWN'}). Access is forbidden.`,
       );
     }
 
-    const permissions: string[] = (dbUser.role?.permissions ?? [])
-      .map((p: any) => p.permissionName)
-      .filter(Boolean);
+    const effectivePermissions = isAdmin
+      ? Array.from(new Set([...permissions, ...ALL_SYSTEM_PERMISSIONS]))
+      : permissions;
 
     request.authUser = {
       userId: dbUser.userId,
@@ -86,8 +99,9 @@ export class ClerkAuthGuard implements CanActivate {
       userEmail: dbUser.userEmail ?? null,
       roleId: dbUser.roleId ?? null,
       roleName: dbUser.role?.roleName ?? null,
-      permissions,
+      permissions: effectivePermissions,
       status: dbUser.userStatus ?? null,
+      isAdmin,
     };
 
     return true;

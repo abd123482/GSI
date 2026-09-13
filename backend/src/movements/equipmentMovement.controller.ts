@@ -14,7 +14,6 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator.js'
 import { EquipmentMovementService } from './equipmentMovement.service.js';
 import type {
   CreateEquipmentMovementDTO,
-  CreateEntryMovementWithEquipmentDTO,
   SearchEquipmentMovementDTO,
   PaginationDTO,
 } from './dto/index.js';
@@ -24,15 +23,7 @@ import type {
 export class EquipmentMovementController {
   constructor(
     private readonly equipmentMovementService: EquipmentMovementService,
-  ) {}
-
-  @RequirePermissions('movement.create')
-  @Post('entry-with-equipment')
-  async createEntryMovementWithEquipment(
-    @Body() dto: CreateEntryMovementWithEquipmentDTO,
-  ) {
-    return this.equipmentMovementService.createEntryMovementWithEquipment(dto);
-  }
+  ) { }
 
   @RequirePermissions('movement.create')
   @Post()

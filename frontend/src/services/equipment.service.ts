@@ -1,14 +1,17 @@
 import { AxiosInstance, isAxiosError } from 'axios';
 import {
   Equipment,
-  CreateEntryWithEquipmentInput,
+  EquipmentWithShelvesResponse,
+  CreateEquipmentDirectInput,
   PaginatedEquipmentsResponse,
   EquipmentPaginationQuery,
+  SerialNumber,
 } from '@/types/equipment';
-import { createEntryMovementWithEquipmentSchema } from '@/schemas/equipment.schema';
+import {
+  createDirectEquipmentSchema,
+} from '@/schemas/equipment.schema';
 import { InsufficientPermissionException } from './shelf.errors';
 
-export const REQUIRED_MOVEMENT_CREATE_PERMISSION = 'movement.create';
 export const REQUIRED_EQUIPMENT_READ_PERMISSION = 'equipment.read';
 export const REQUIRED_EQUIPMENT_CREATE_PERMISSION = 'equipment.create';
 
@@ -34,90 +37,6 @@ export class EquipmentValidationException extends EquipmentServiceException {
 }
 
 export class EquipmentService {
-  /**
-   * Create an equipment and optional serial numbers directly in an ENTRY movement.
-   * Proactively checks for 'movement.create' permission.
-   * Sets movement source to null, and destination shelf can be null or a specific shelf.
-   */
-  static async createEntryMovementWithEquipment(
-    client: AxiosInstance,
-    input: CreateEntryWithEquipmentInput,
-    userPermissions?: string[],
-  ): Promise<{ equipment: Equipment; movement: any }> {
-    // 1. Proactive permission verification
-    if (userPermissions && !userPermissions.includes(REQUIRED_MOVEMENT_CREATE_PERMISSION)) {
-      throw new InsufficientPermissionException(
-        REQUIRED_MOVEMENT_CREATE_PERMISSION,
-        `Permission refusée : Vous n'avez pas le droit '${REQUIRED_MOVEMENT_CREATE_PERMISSION}' pour créer un mouvement d’équipement.`,
-      );
-    }
-
-    // 2. Client-side Zod validation
-    const validation = createEntryMovementWithEquipmentSchema.safeParse(input);
-    if (!validation.success) {
-      const fieldErrors: Record<string, string[]> = {};
-      validation.error.errors.forEach((err) => {
-        const field = err.path.join('.') || 'form';
-        if (!fieldErrors[field]) fieldErrors[field] = [];
-        fieldErrors[field].push(err.message);
-      });
-      throw new EquipmentValidationException(
-        'Données d’équipement ou de numéros de série invalides',
-        fieldErrors,
-      );
-    }
-
-    // 3. Dispatch POST request to NestJS backend
-    try {
-      const response = await client.post<{ equipment: Equipment; movement: any }>(
-        '/equipment-movements/entry-with-equipment',
-        validation.data,
-      );
-      return response.data;
-    } catch (error: unknown) {
-      if (isAxiosError(error)) {
-        if (error.response?.status === 403) {
-          const backendMsg =
-            error.response.data?.message ||
-            `Permission '${REQUIRED_MOVEMENT_CREATE_PERMISSION}' requise.`;
-          throw new InsufficientPermissionException(
-            REQUIRED_MOVEMENT_CREATE_PERMISSION,
-            Array.isArray(backendMsg) ? backendMsg.join(', ') : backendMsg,
-          );
-        }
-
-        if (error.response?.status === 401) {
-          throw new EquipmentServiceException(
-            'Session expirée ou non authentifiée. Veuillez vous reconnecter.',
-            401,
-          );
-        }
-
-        const backendMsg =
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          error.message ||
-          'Erreur lors de la création de l’équipement en mouvement.';
-
-        throw new EquipmentServiceException(
-          Array.isArray(backendMsg) ? backendMsg.join(', ') : backendMsg,
-          error.response?.status,
-          error.response?.data,
-        );
-      }
-
-      if (
-        error instanceof InsufficientPermissionException ||
-        error instanceof EquipmentValidationException
-      ) {
-        throw error;
-      }
-
-      throw new EquipmentServiceException(
-        error instanceof Error ? error.message : 'Erreur inconnue lors de la création.',
-      );
-    }
-  }
 
   /**
    * Fetch all equipments with pagination support and child serial numbers.
@@ -129,14 +48,14 @@ export class EquipmentService {
     try {
       const page = params?.page ?? 1;
       const limit = params?.limit ?? 10;
-      const response = await client.get<any>('/equipment', {
+      const response = await client.get<Partial<PaginatedEquipmentsResponse> | Equipment[]>('/equipment', {
         params: {
           page,
           limit,
         },
       });
 
-      if (response.data && Array.isArray(response.data.equipments)) {
+      if (response.data && !Array.isArray(response.data) && Array.isArray(response.data.equipments)) {
         return {
           equipments: response.data.equipments,
           totalEquipments: Number(response.data.totalEquipments ?? response.data.equipments.length),
@@ -185,7 +104,7 @@ export class EquipmentService {
     try {
       const page = params?.page ?? 1;
       const limit = params?.limit ?? 10;
-      const response = await client.get<any>('/equipment/search', {
+      const response = await client.get<Partial<PaginatedEquipmentsResponse> | Equipment[]>('/equipment/search', {
         params: {
           equipmentName: name,
           page,
@@ -193,7 +112,7 @@ export class EquipmentService {
         },
       });
 
-      if (response.data && Array.isArray(response.data.equipments)) {
+      if (response.data && !Array.isArray(response.data) && Array.isArray(response.data.equipments)) {
         return {
           equipments: response.data.equipments,
           totalEquipments: Number(response.data.totalEquipments ?? response.data.equipments.length),
@@ -241,6 +160,46 @@ export class EquipmentService {
         }
       }
       throw new EquipmentServiceException('Échec de la récupération de l’équipement.');
+    }
+  }
+
+  /**
+   * Retrieve all shelves where an equipment is stored (GET /equipment/:id/shelves)
+   * Returns the equipment with all its EquipmentShelfs tuples and allocation metrics.
+   */
+  static async getEquipmentShelves(
+    client: AxiosInstance,
+    id: string,
+    userPermissions?: string[],
+  ): Promise<EquipmentWithShelvesResponse> {
+    if (userPermissions && !userPermissions.includes(REQUIRED_EQUIPMENT_READ_PERMISSION)) {
+      throw new InsufficientPermissionException(
+        REQUIRED_EQUIPMENT_READ_PERMISSION,
+        `Permission '${REQUIRED_EQUIPMENT_READ_PERMISSION}' requise pour consulter les étagères de cet équipement.`,
+      );
+    }
+
+    try {
+      const response = await client.get<EquipmentWithShelvesResponse>(`/equipment/${id}/shelves`);
+      return response.data;
+    } catch (error: unknown) {
+      if (isAxiosError(error)) {
+        if (error.response?.status === 403) {
+          throw new InsufficientPermissionException(
+            REQUIRED_EQUIPMENT_READ_PERMISSION,
+            'Permission refusée pour consulter les étagères de cet équipement.',
+          );
+        }
+        if (error.response?.status === 404) {
+          throw new EquipmentServiceException(`L’équipement '${id}' est introuvable.`, 404);
+        }
+        const msg = error.response?.data?.message || 'Échec de la récupération des étagères.';
+        throw new EquipmentServiceException(
+          Array.isArray(msg) ? msg.join(', ') : msg,
+          error.response?.status,
+        );
+      }
+      throw new EquipmentServiceException('Échec de la récupération des étagères.');
     }
   }
 
@@ -332,10 +291,9 @@ export class EquipmentService {
     input: {
       serialNumberCode?: string;
       serialNumberStatus?: string;
-      shelfId?: string | null;
     },
     userPermissions?: string[],
-  ): Promise<any> {
+  ): Promise<SerialNumber> {
     const perm = 'serial-number.update';
     if (userPermissions && !userPermissions.includes(perm)) {
       throw new InsufficientPermissionException(
@@ -345,7 +303,7 @@ export class EquipmentService {
     }
 
     try {
-      const response = await client.patch(`/serial-number/${id}`, input);
+      const response = await client.patch<SerialNumber>(`/serial-number/${id}`, input);
       return response.data;
     } catch (error: unknown) {
       if (isAxiosError(error)) {
@@ -400,4 +358,88 @@ export class EquipmentService {
       throw new EquipmentServiceException('Erreur inconnue lors de la suppression du numéro de série.');
     }
   }
+
+  /**
+   * Create an equipment directly via EquipmentController (POST /equipment)
+   * and optionally creates serial numbers via SerialNumberController (POST /serial-number/batch).
+   */
+  static async createEquipmentDirect(
+    client: AxiosInstance,
+    input: CreateEquipmentDirectInput,
+    userPermissions?: string[],
+  ): Promise<Equipment> {
+    if (userPermissions && !userPermissions.includes(REQUIRED_EQUIPMENT_CREATE_PERMISSION)) {
+      throw new InsufficientPermissionException(
+        REQUIRED_EQUIPMENT_CREATE_PERMISSION,
+        `Permission refusée : Vous n'avez pas le droit '${REQUIRED_EQUIPMENT_CREATE_PERMISSION}' pour créer un équipement.`,
+      );
+    }
+
+    if (input.hasSerialNumber && userPermissions && !userPermissions.includes('serial-number.create')) {
+      throw new InsufficientPermissionException(
+        'serial-number.create',
+        `Permission refusée : Vous n'avez pas le droit 'serial-number.create' pour enregistrer des numéros de série.`,
+      );
+    }
+
+    // 1. Zod validate
+    const validation = createDirectEquipmentSchema.safeParse(input);
+    if (!validation.success) {
+      const fieldErrors: Record<string, string[]> = {};
+      const errorDetails: string[] = [];
+      validation.error.errors.forEach((err) => {
+        const field = err.path.join('.') || 'form';
+        if (!fieldErrors[field]) fieldErrors[field] = [];
+        fieldErrors[field].push(err.message);
+        errorDetails.push(`${err.message}`);
+      });
+      throw new EquipmentValidationException(
+        errorDetails.length > 0 ? `Données invalides : ${errorDetails.join(', ')}` : 'Données d’équipement invalides',
+        fieldErrors,
+      );
+    }
+
+    try {
+      // 2. Create equipment tuple
+      const eqPayload = {
+        equipmentName: input.equipmentName.trim(),
+        hasSerialNumber: input.hasSerialNumber,
+        equipmentQuantity: input.hasSerialNumber ? 0 : Number(input.equipmentQuantity),
+        minEquipmentQuantity: Number(input.minEquipmentQuantity ?? 0),
+      };
+
+      const eqResponse = await client.post<Equipment>('/equipment', eqPayload);
+      const createdEquipment = eqResponse.data;
+
+      // 3. If serialized and serial codes provided, create in bulk via SerialNumberController
+      // (Shelf allocation is decoupled and handled exclusively via Movement logic)
+      if (input.hasSerialNumber && input.serialNumbers && input.serialNumbers.length > 0) {
+        await client.post('/serial-number/batch', {
+          equipmentId: createdEquipment.equipmentId,
+          serialNumberCodes: input.serialNumbers,
+          serialNumberStatus: 'AVAILABLE',
+        });
+      }
+
+      // 4. Fetch freshly created equipment with relations
+      const finalRes = await client.get<Equipment>(`/equipment/${createdEquipment.equipmentId}`);
+      return finalRes.data;
+    } catch (error: unknown) {
+      if (isAxiosError(error)) {
+        if (error.response?.status === 403) {
+          throw new InsufficientPermissionException(
+            REQUIRED_EQUIPMENT_CREATE_PERMISSION,
+            error.response.data?.message || `Permission refusée.`,
+          );
+        }
+        const msg = error.response?.data?.message || 'Erreur lors de la création de l’équipement.';
+        throw new EquipmentServiceException(
+          Array.isArray(msg) ? msg.join(', ') : msg,
+          error.response?.status,
+        );
+      }
+      throw error;
+    }
+  }
+
 }

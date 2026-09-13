@@ -63,7 +63,6 @@ export class ShelfService {
     try {
       const response = await client.post<Shelf>('/shelves', {
         shelfName: validationResult.data.shelfName,
-        shelfQuantity: validationResult.data.shelfQuantity,
         shelfCode: validationResult.data.shelfCode,
       });
       return response.data;
@@ -125,14 +124,14 @@ export class ShelfService {
     try {
       const page = params?.page ?? 1;
       const limit = params?.limit ?? 10;
-      const response = await client.get<any>('/shelves', {
+      const response = await client.get<Partial<PaginatedShelvesResponse> | Shelf[]>('/shelves', {
         params: {
           page,
           limit,
         },
       });
 
-      if (response.data && Array.isArray(response.data.shelves)) {
+      if (response.data && !Array.isArray(response.data) && Array.isArray(response.data.shelves)) {
         return {
           shelves: response.data.shelves,
           totalShelves: Number(response.data.totalShelves ?? response.data.shelves.length),
@@ -206,7 +205,7 @@ export class ShelfService {
     try {
       const page = params?.page ?? 1;
       const limit = params?.limit ?? 10;
-      const response = await client.get<any>('/shelves/search', {
+      const response = await client.get<Partial<PaginatedShelvesResponse> | Shelf[]>('/shelves/search', {
         params: {
           shelfName: name,
           page,
@@ -214,7 +213,7 @@ export class ShelfService {
         },
       });
 
-      if (response.data && Array.isArray(response.data.shelves)) {
+      if (response.data && !Array.isArray(response.data) && Array.isArray(response.data.shelves)) {
         return {
           shelves: response.data.shelves,
           totalShelves: Number(response.data.totalShelves ?? response.data.shelves.length),

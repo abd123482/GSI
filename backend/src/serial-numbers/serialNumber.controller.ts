@@ -16,15 +16,22 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator.js'
 import { SerialNumberService } from './serialNumber.service.js';
 import type {
   CreateSerialNumberDTO,
+  CreateBatchSerialNumberDTO,
   UpdateSerialNumberDTO,
   UpdateSerialNumberStatusDTO,
   PaginationDTO,
 } from './dto/index.js';
 
 @UseGuards(ClerkAuthGuard, PermissionsGuard)
-@Controller('serial-number')
+@Controller(['serial-number', 'serial-numbers'])
 export class SerialNumberController {
   constructor(private readonly serialNumberService: SerialNumberService) {}
+
+  @RequirePermissions('serial-number.create')
+  @Post('batch')
+  async createBatchSerialNumbers(@Body() data: CreateBatchSerialNumberDTO) {
+    return this.serialNumberService.createBatchSerialNumbers(data);
+  }
 
   @RequirePermissions('serial-number.create')
   @Post()

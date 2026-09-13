@@ -1,29 +1,28 @@
 'use client';
 
+import { getErrorMessage } from '@/lib/error-message';
 import { useState } from 'react';
-import { useAuth, UserButton, SignInButton } from '@clerk/nextjs';
+import { useAuth, SignInButton } from '@clerk/nextjs';
 import Link from 'next/link';
 import {
-  ArrowLeft,
+  ArrowRightLeft,
   ShieldCheck,
   ShieldAlert,
-  Plus,
   PackagePlus,
   Cpu,
-  Barcode,
-  Layers,
-  Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { useEquipments } from '@/hooks/use-equipments';
 import { usePermissions } from '@/hooks/use-permissions';
 import { EquipmentListTable } from '@/components/equipment/EquipmentListTable';
-import { CreateEquipmentMovementModal } from '@/components/equipment/CreateEquipmentMovementModal';
+import { CreateEquipmentModal } from '@/components/equipment/CreateEquipmentModal';
+import { CreateMovementModal } from '@/components/equipment/CreateMovementModal';
 import { EquipmentDetailModal } from '@/components/equipment/EquipmentDetailModal';
 import { EditEquipmentModal } from '@/components/equipment/EditEquipmentModal';
 import { DeleteEquipmentModal } from '@/components/equipment/DeleteEquipmentModal';
 import { EditSerialNumberModal } from '@/components/equipment/EditSerialNumberModal';
 import { DeleteSerialNumberModal } from '@/components/equipment/DeleteSerialNumberModal';
-import { REQUIRED_MOVEMENT_CREATE_PERMISSION } from '@/services/equipment.service';
+import { ViewEquipmentShelvesModal } from '@/components/equipment/ViewEquipmentShelvesModal';
 import { Equipment, SerialNumber } from '@/types/equipment';
 import { toast } from 'sonner';
 
@@ -34,11 +33,16 @@ export default function EquipmentPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
 
-  // Edit / Delete modals state
+  // Movement modal state
+  const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
+  const [movementEquipment, setMovementEquipment] = useState<Equipment | null>(null);
+
+  // Edit / Delete / View Shelves modals state
   const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
   const [deletingEquipment, setDeletingEquipment] = useState<Equipment | null>(null);
   const [editingSerialNumber, setEditingSerialNumber] = useState<SerialNumber | null>(null);
   const [deletingSerialNumber, setDeletingSerialNumber] = useState<SerialNumber | null>(null);
+  const [viewShelvesEquipment, setViewShelvesEquipment] = useState<Equipment | null>(null);
 
   const {
     equipments,
@@ -53,7 +57,6 @@ export default function EquipmentPage() {
     isLoading: isEquipmentsLoading,
     refetch,
     getEquipmentById,
-    canCreateMovement,
     updateEquipment,
     isUpdating,
     deleteEquipment,
@@ -65,13 +68,14 @@ export default function EquipmentPage() {
   } = useEquipments({ page: 1, limit: 10 });
 
   const {
-    roleName,
-    isLoading: isPermsLoading,
+    canCreateEquipment,
     canUpdateEquipment,
     canDeleteEquipment,
+    canCreateSerialNumber,
     canUpdateSerialNumber,
     canDeleteSerialNumber,
   } = usePermissions();
+  const canCreateMovement = canCreateEquipment;
 
   const handleSelectEquipment = (equipment: Equipment) => {
     setSelectedEquipment(equipment);
@@ -85,9 +89,9 @@ export default function EquipmentPage() {
       setSelectedEquipment(equip);
       setIsDetailModalOpen(true);
       toast.success(`Équipement trouvé : ${equip.equipmentName ?? equip.equipmentId}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast.error('Recherche échouée', {
-        description: err?.message || `L'équipement avec le GUID '${id}' est introuvable.`,
+        description: getErrorMessage(err, `L'équipement avec le GUID '${id}' est introuvable.`),
       });
     } finally {
       setIsLookingUp(false);
@@ -96,10 +100,10 @@ export default function EquipmentPage() {
 
   if (!isLoaded) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-[#f6f5f4] text-[#37352f]">
-        <div className="flex items-center gap-2 text-sm text-[#787671]">
-          <span className="w-2 h-2 rounded-full bg-[#5645d4] animate-ping" />
-          Chargement de l'environnement Notion...
+      <main className="min-h-screen flex items-center justify-center bg-[#2b2622] text-[#f7f5f0]">
+        <div className="flex items-center gap-2 text-xs font-mono text-[#aea69c]">
+          <Loader2 className="w-4 h-4 animate-spin text-[#f7f5f0]" />
+          <span>Chargement des équipements...</span>
         </div>
       </main>
     );
@@ -107,29 +111,29 @@ export default function EquipmentPage() {
 
   if (!isSignedIn) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6 bg-[#f6f5f4] text-[#37352f]">
-        <div className="w-full max-w-md bg-white border border-[#e5e3df] rounded-xl p-8 shadow-xs text-center space-y-5">
-          <div className="w-12 h-12 rounded-xl bg-[#e6e0f5] border border-[#d6b6f6] flex items-center justify-center text-[#7b3ff2] mx-auto">
-            <Cpu className="w-6 h-6" />
+      <main className="min-h-screen flex items-center justify-center p-6 bg-[#2b2622] text-[#f7f5f0]">
+        <div className="w-full max-w-md bg-[#383330] border border-[#3f3a36] rounded-[4px] p-8 shadow-xl text-center space-y-4">
+          <div className="w-10 h-10 rounded-[3px] bg-[#2b2622] border border-[#3f3a36] flex items-center justify-center text-[#f7f5f0] mx-auto">
+            <Cpu className="w-5 h-5" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-xl font-semibold text-[#1a1a1a]">Connexion requise</h1>
-            <p className="text-xs text-[#5d5b54]">
-              Veuillez vous connecter pour gérer les équipements, numéros de série et mouvements d’entrée.
+            <h1 className="text-base font-medium text-[#f7f5f0]">Connexion requise</h1>
+            <p className="text-xs text-[#c9c0ad]">
+              Veuillez vous connecter pour gérer les équipements, numéros de série et mouvements.
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <div className="flex flex-col sm:flex-row gap-2 pt-2">
             <SignInButton mode="modal">
               <button
                 type="button"
-                className="flex-1 px-4 py-2.5 bg-[#5645d4] hover:bg-[#4534b3] active:bg-[#3a2a99] text-white text-sm font-medium rounded-lg transition-colors cursor-pointer"
+                className="flex-1 px-4 py-2 bg-[#f7f5f0] hover:bg-[#dad2c1] text-[#2b2622] text-xs font-medium rounded-[3px] transition-colors cursor-pointer"
               >
                 Se connecter
               </button>
             </SignInButton>
             <Link
               href="/"
-              className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-white hover:bg-[#f0eeec] text-[#1a1a1a] border border-[#c8c4be] text-sm font-medium rounded-lg transition-colors"
+              className="flex-1 inline-flex items-center justify-center px-4 py-2 bg-[#2b2622] hover:bg-[#383330] text-[#f7f5f0] border border-[#3f3a36] text-xs font-medium rounded-[3px] transition-colors"
             >
               Accueil
             </Link>
@@ -140,120 +144,67 @@ export default function EquipmentPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f5f4] text-[#37352f] flex flex-col">
-      {/* Notion Top Bar */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-xs border-b border-[#e5e3df] px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3 text-xs">
-          <Link
-            href="/"
-            className="flex items-center gap-1.5 text-[#5d5b54] hover:text-[#1a1a1a] transition-colors font-medium p-1 rounded-md hover:bg-[#f0eeec]"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Workspace Somépharm</span>
-          </Link>
-          <span className="text-[#a4a097]">/</span>
-          <span className="text-[#1a1a1a] font-semibold flex items-center gap-1.5">
-            <Cpu className="w-3.5 h-3.5 text-[#5645d4]" />
-            Équipements & Numéros de Série
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Permission Status Pill */}
-          <div
-            className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
-              canCreateMovement
-                ? 'bg-[#d9f3e1] text-[#1aae39] border-[#a3e5b3]'
-                : 'bg-[#ffe8d4] text-[#793400] border-[#fcd3b6]'
-            }`}
-          >
-            {canCreateMovement ? (
-              <>
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Droit {REQUIRED_MOVEMENT_CREATE_PERMISSION} accordé</span>
-              </>
-            ) : (
-              <>
-                <ShieldAlert className="w-3.5 h-3.5" />
-                <span>Droit {REQUIRED_MOVEMENT_CREATE_PERMISSION} manquant</span>
-              </>
-            )}
-          </div>
-
-          <div className="border-l border-[#ede9e4] pl-3">
-            <UserButton />
-          </div>
-        </div>
-      </header>
-
+    <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-[#f7f5f0] flex flex-col">
       {/* Main Body */}
-      <div className="flex-1 max-w-6xl w-full mx-auto p-6 md:p-8 space-y-6">
+      <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Page Hero Section */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#e5e3df]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#3f3a36]">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight text-[#1a1a1a]">
+            <div className="flex items-center gap-2 text-xs text-[#aea69c] mb-1 font-mono">
+              <Link href="/" className="hover:text-[#f7f5f0] transition-colors">
+                somepharm
+              </Link>
+              <span>/</span>
+              <span className="text-[#f7f5f0]">equipment</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-normal tracking-tight text-[#f7f5f0]">
                 Équipements & Numéros de Série
               </h1>
-              <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-[#f0eeec] text-[#5d5b54]">
+              <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-[2px] bg-[#383330] text-[#dad2c1] border border-[#3f3a36]">
                 dbo.Equipment • dbo.SerialNumber
               </span>
+              <div className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[2px] font-mono text-[10px] bg-[#383330] border border-[#3f3a36] text-[#c9c0ad]">
+                {canCreateEquipment ? (
+                  <>
+                    <ShieldCheck className="w-3 h-3 text-[#10b981]" />
+                    <span>Création autorisée</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldAlert className="w-3 h-3 text-[#f59e0b]" />
+                    <span>Lecture seule</span>
+                  </>
+                )}
+              </div>
             </div>
-            <p className="text-xs sm:text-sm text-[#5d5b54]">
-              Inventaire unitaire et par lots — Chaque entrée externe initialise un mouvement avec source nulle et étagère optionnelle.
+            <p className="text-xs text-[#c9c0ad]">
+              Inventaire et gestion de stock unitaire ou par lots — Traçabilité flexible sur les étagères.
             </p>
           </div>
 
-          {/* Action CTA: Notion button-primary (Signature #5645d4 purple, 8px rounded) */}
-          <button
-            type="button"
-            onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center justify-center gap-2 px-4.5 py-2.5 bg-[#5645d4] hover:bg-[#4534b3] active:bg-[#3a2a99] text-white text-sm font-medium rounded-lg shadow-xs transition-colors cursor-pointer shrink-0"
-          >
-            <PackagePlus className="w-4 h-4" />
-            <span>Nouveau mouvement d'entrée</span>
-          </button>
-        </div>
+          {/* Action CTAs: Warp primary and secondary */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setMovementEquipment(null);
+                setIsMovementModalOpen(true);
+              }}
+              className="inline-flex items-center justify-center gap-2 px-3 py-2 bg-[#383330] hover:bg-[#3f3a36] text-[#f7f5f0] border border-[#3f3a36] text-xs font-medium rounded-[3px] transition-colors cursor-pointer"
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5 text-[#aea69c]" />
+              <span>Nouveau mouvement</span>
+            </button>
 
-        {/* Feature Context Cards (Notion pastel-tinted cards) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Card 1: 32-bit Code Generator */}
-          <div className="bg-[#fafaf9] border border-[#e5e3df] rounded-xl p-4 text-left space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-md bg-[#e6e0f5] text-[#7b3ff2] flex items-center justify-center text-xs font-bold">
-                1
-              </span>
-              <h3 className="text-xs font-semibold text-[#1a1a1a]">Génération 32-bit aléatoire</h3>
-            </div>
-            <p className="text-[11px] text-[#5d5b54] leading-relaxed">
-              Choix direct entre la saisie manuelle ou la génération automatique de codes 32-bit uniques (8 hexadécimaux).
-            </p>
-          </div>
-
-          {/* Card 2: Nullable Destination Shelf */}
-          <div className="bg-[#fafaf9] border border-[#e5e3df] rounded-xl p-4 text-left space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-md bg-[#d9f3e1] text-[#1aae39] flex items-center justify-center text-xs font-bold">
-                2
-              </span>
-              <h3 className="text-xs font-semibold text-[#1a1a1a]">Mouvement source nulle</h3>
-            </div>
-            <p className="text-[11px] text-[#5d5b54] leading-relaxed">
-              La source du mouvement est automatiquement <code className="font-mono bg-white px-1 py-0.5 rounded text-[10px]">NULL</code> et l'étagère de destination peut rester non assignée.
-            </p>
-          </div>
-
-          {/* Card 3: Child Serial Numbers in SSMS */}
-          <div className="bg-[#fafaf9] border border-[#e5e3df] rounded-xl p-4 text-left space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-md bg-[#ffe8d4] text-[#dd5b00] flex items-center justify-center text-xs font-bold">
-                3
-              </span>
-              <h3 className="text-xs font-semibold text-[#1a1a1a]">S/N Enfants dans SSMS</h3>
-            </div>
-            <p className="text-[11px] text-[#5d5b54] leading-relaxed">
-              Chaque numéro de série enfant est persisté de manière unitaire et rattaché à son équipement parent.
-            </p>
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-[#f7f5f0] hover:bg-[#dad2c1] text-[#2b2622] text-xs font-medium rounded-[3px] shadow-xs transition-colors cursor-pointer"
+            >
+              <PackagePlus className="w-3.5 h-3.5" />
+              <span>Nouvel équipement</span>
+            </button>
           </div>
         </div>
 
@@ -272,10 +223,15 @@ export default function EquipmentPage() {
             setPage(1);
           }}
           onSelectEquipment={handleSelectEquipment}
+          onOpenMovement={(equip) => {
+            setMovementEquipment(equip);
+            setIsMovementModalOpen(true);
+          }}
           onEditEquipment={(equip) => setEditingEquipment(equip)}
           onDeleteEquipment={(equip) => setDeletingEquipment(equip)}
           onEditSerialNumber={(sn) => setEditingSerialNumber(sn)}
           onDeleteSerialNumber={(sn) => setDeletingSerialNumber(sn)}
+          onViewEquipmentShelves={(equip) => setViewShelvesEquipment(equip)}
           onLookupById={handleLookupById}
           isLoading={isEquipmentsLoading}
           onRefresh={refetch}
@@ -288,20 +244,31 @@ export default function EquipmentPage() {
         />
       </div>
 
-      {/* Entry Movement Creation Modal Component */}
-      <CreateEquipmentMovementModal
+      {/* View Equipment Shelves Modal Component */}
+      <ViewEquipmentShelvesModal
+        isOpen={!!viewShelvesEquipment}
+        equipment={viewShelvesEquipment}
+        onClose={() => setViewShelvesEquipment(null)}
+      />
+
+      {/* Direct Equipment Creation Modal Component */}
+      <CreateEquipmentModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => refetch()}
       />
 
-      {/* Equipment Detail Modal Component (Notion Document Design) */}
+      {/* Equipment Detail Modal Component */}
       <EquipmentDetailModal
         equipment={selectedEquipment}
         isOpen={isDetailModalOpen}
         onClose={() => {
           setIsDetailModalOpen(false);
           setSelectedEquipment(null);
+        }}
+        onOpenMovement={(equip) => {
+          setMovementEquipment(equip);
+          setIsMovementModalOpen(true);
         }}
         onRefresh={refetch}
         isLoading={isLookingUp}
@@ -353,6 +320,25 @@ export default function EquipmentPage() {
           refetch();
         }}
         isDeleting={isDeletingSerialNumber}
+      />
+
+      {/* Create Movement Modal Component */}
+      <CreateMovementModal
+        isOpen={isMovementModalOpen}
+        onClose={() => {
+          setIsMovementModalOpen(false);
+          setMovementEquipment(null);
+        }}
+        equipment={movementEquipment}
+        equipmentsList={equipments}
+        onSuccess={() => {
+          refetch();
+          if (selectedEquipment) {
+            getEquipmentById(selectedEquipment.equipmentId)
+              .then((updated) => setSelectedEquipment(updated))
+              .catch(() => {});
+          }
+        }}
       />
     </main>
   );

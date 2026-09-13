@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { createClerkClient } from '@clerk/backend';
+import { NotFoundException, BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { createClerkClient, User } from '@clerk/backend';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { Role } from '../generated/prisma/client.js';
 
 @Injectable()
 export class AuthService {
@@ -9,7 +10,7 @@ export class AuthService {
     secretKey: process.env.CLERK_SECRET_KEY!,
   });
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * Primary resolver: finds or lazily creates a local SQL Server user for the given clerkUserId.
@@ -49,6 +50,10 @@ export class AuthService {
       )?.emailAddress ??
       clerkUser?.emailAddresses?.[0]?.emailAddress ??
       null;
+
+    if (!email) {
+      throw new ForbiddenException('A Clerk email address is required to create a local account');
+    }
 
     const fullName =
       [clerkUser?.firstName, clerkUser?.lastName]
@@ -123,18 +128,24 @@ export class AuthService {
       return await this.prisma.user.update({
         where: { userId: existing.userId },
         data: {
-          ...(profile.userName !== undefined && { userName: profile.userName }),
-          ...(profile.userEmail !== undefined && { userEmail: profile.userEmail }),
+          ...(profile.userName != null && { userName: profile.userName }),
+          ...(profile.userEmail != null && { userEmail: profile.userEmail }),
         },
       });
+    }
+
+    // A webhook may arrive before Clerk has an email for the account.
+    if (!profile.userEmail) {
+      this.logger.warn(`Skipping local user creation without an email for Clerk ID ${clerkUserId}`);
+      return null;
     }
 
     // If user does not exist yet, create with PENDING status
     return await this.prisma.user.create({
       data: {
         clerkUserId,
-        userName: profile.userName ?? null,
-        userEmail: profile.userEmail ?? null,
+        ...(profile.userName != null && { userName: profile.userName }),
+        userEmail: profile.userEmail,
         userStatus: 'PENDING',
       },
     });
@@ -161,4 +172,70 @@ export class AuthService {
       },
     });
   }
+
+  async createRole(roleName: string, permissions: string[]) {
+    const existingRole = await this.prisma.role.findFirst({
+      where: { roleName },
+    });
+
+    if (existingRole) {
+      throw new BadRequestException(`Role with name ${roleName} already exists.`);
+    }
+    const permission = await this.prisma.permission.findMany({
+      where: { permissionName: { in: permissions } },
+    });
+
+    if (!permission || permission.length !== permissions.length) {
+      throw new BadRequestException(`One or more permissions do not exist.`);
+    }
+    const createdRole = await this.prisma.role.create({
+      data: {
+        roleName,
+        permissions: {
+          create: permissions.map((permissionName) => ({
+            permissionName: permissionName,
+          })),
+        },
+      },
+      include: {
+        permissions: true,
+      },
+    });
+
+  }
+
+
+  async addUserByRole(roleName: string, userId: string) {
+    const existedRole = await this.prisma.role.findFirst({
+      where: { roleName },
+    });
+
+    if (!existedRole) {
+      throw new NotFoundException(`Role '${roleName}' does not exist.`);
+    }
+
+    const registeredUser = await this.prisma.user.findUnique({
+      where: { userId },
+    });
+
+    if (!registeredUser) {
+      throw new NotFoundException(`User with ID ${userId} is not registered.`);
+    }
+
+    return await this.prisma.user.update({
+      where: { userId },
+      data: {
+        roleId: existedRole.roleId,
+        userStatus: 'ACTIVE',
+      },
+      include: {
+        role: {
+          include: {
+            permissions: true,
+          },
+        },
+      },
+    });
+  }
+
 }
