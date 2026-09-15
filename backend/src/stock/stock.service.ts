@@ -30,13 +30,23 @@ export class StockService {
       return defaultStatus;
     }
 
+    const normalizedInput = statusInput.trim();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalizedInput);
+
     const foundStatus = await this.prisma.stockStatus.findFirst({
-      where: {
-        OR: [
-          { stockStatusName: statusInput },
-          { stockStatusId: statusInput },
-        ],
-      },
+      where: isUuid
+        ? {
+            OR: [
+              { stockStatusId: normalizedInput },
+              { stockStatusName: normalizedInput },
+            ],
+          }
+        : {
+            OR: [
+              { stockStatusName: normalizedInput },
+              { stockStatusName: normalizedInput.toUpperCase() },
+            ],
+          },
     });
 
     if (!foundStatus) {

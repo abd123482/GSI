@@ -2,6 +2,7 @@
  * System-wide permission registry for SomePharm Maintenance RBAC.
  */
 export const ALL_SYSTEM_PERMISSIONS = [
+  'inventory.create',
   'equipment.read',
   'equipment.create',
   'equipment.update',

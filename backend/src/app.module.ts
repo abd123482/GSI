@@ -10,6 +10,7 @@ import { ShelfModule } from './shelves/shelves.module.js';
 import { StockModule } from './stock/stock.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
+import { OrdersModule } from './orders/orders.module.js';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { UsersModule } from './users/users.module.js';
     EquipmentMovementModule,
     ShelfModule,
     StockModule,
+    OrdersModule,
   ],
 
   controllers: [

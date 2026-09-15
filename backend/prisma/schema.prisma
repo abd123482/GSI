@@ -13,6 +13,7 @@ model Role {
   roleName    String       @db.VarChar(100)
   permissions Permission[]
   users       User[]
+  orders      Order[]
 
   @@map("Role")
 }
@@ -36,6 +37,7 @@ model User {
   clerkUserId    String?          @unique(map: "idx_user_clerkUserId_unique", where: raw("([clerkUserId] IS NOT NULL)")) @db.VarChar(255)
   Inventory_User Inventory_User[]
   sessions       Session[]
+  orders         Order[]
   role           Role?            @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction, map: "FK_User_Role")
 
   @@map("User")
@@ -63,6 +65,7 @@ model Equipment {
   Inventory_Equipment  Inventory_Equipment[]
   mouvements           Mouvement[]
   serialNumbers        SerialNumber[]
+  orders               Order[]
 
   @@index([equipmentId], map: "IDX_Equipment_EquipmentId")
   @@index([equipmentName], map: "IDX_Equipment_EquipmentName")
@@ -81,6 +84,7 @@ model SerialNumber {
   shelfId                String?                  @db.UniqueIdentifier
   Inventory_SerialNumber Inventory_SerialNumber[]
   mouvements             Mouvement[]
+  orders                 Order[]
   equipment              Equipment?               @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_SerialNumber_Equipment")
   shelf                  Shelf?                   @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_SerialNumber_Shelf")
 
@@ -98,6 +102,7 @@ model Shelf {
   sourceMouvements      Mouvement[]       @relation("SourceShelf")
   destinationMouvements Mouvement[]       @relation("DestinationShelf")
   serialNumbers         SerialNumber[]
+  orders                Order[]
   stock                 Stock?            @relation(fields: [stockId], references: [stockId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Shelf_Stock")
 
   @@index([shelfId], map: "INDEX_Shelf_ShelfId")
@@ -173,6 +178,7 @@ model Inventory {
   Inventory_Equipment    Inventory_Equipment[]
   Inventory_SerialNumber Inventory_SerialNumber[]
   Inventory_User         Inventory_User[]
+  orders                 Order[]
 }
 
 model Inventory_Equipment {
@@ -211,4 +217,30 @@ model sysdiagrams {
   definition   Bytes?
 
   @@unique([principal_id, name], map: "UK_principal_name")
+}
+
+model Order {
+  orderId            String        @id(map: "PK_Order") @default(dbgenerated("newid()")) @db.UniqueIdentifier
+  inventoryId        String?       @db.UniqueIdentifier
+  serialNumberId     String?       @db.UniqueIdentifier
+  equipmentId        String?       @db.UniqueIdentifier
+  shelfId            String?       @db.UniqueIdentifier
+  roleId             String?       @db.UniqueIdentifier
+  userId             String?       @db.UniqueIdentifier
+  quantityCalculated Int?
+  createdAt          DateTime      @default(dbgenerated("sysdatetime()"))
+  equipment          Equipment?    @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Order_Equipment")
+  inventory          Inventory?    @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Order_Inventory")
+  role               Role?         @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Order_Role")
+  serialNumber       SerialNumber? @relation(fields: [serialNumberId], references: [serialNumberId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Order_SerialNumber")
+  shelf              Shelf?        @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Order_Shelf")
+  user               User?         @relation(fields: [userId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Order_User")
+
+  @@index([equipmentId], map: "IDX_Order_EquipmentId")
+  @@index([inventoryId], map: "IDX_Order_InventoryId")
+  @@index([roleId], map: "IDX_Order_RoleId")
+  @@index([serialNumberId], map: "IDX_Order_SerialNumberId")
+  @@index([shelfId], map: "IDX_Order_ShelfId")
+  @@index([userId], map: "IDX_Order_UserId")
+  @@map("Order")
 }

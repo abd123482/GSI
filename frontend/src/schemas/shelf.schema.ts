@@ -11,6 +11,7 @@ export const createShelfSchema = z.object({
     .min(1, 'Le nom de l’étagère est obligatoire')
     .max(100, 'Le nom ne peut pas dépasser 100 caractères'),
   shelfCode: z.string().trim().optional(),
+  stockId: z.string().uuid('Identifiant de stock invalide').optional(),
 });
 
 export type CreateShelfFormValues = z.infer<typeof createShelfSchema>;
@@ -27,6 +28,7 @@ export const updateShelfSchema = z.object({
     .max(100, 'Le nom ne peut pas dépasser 100 caractères')
     .optional(),
   shelfCode: z.string().trim().optional(),
+  stockId: z.string().uuid('Identifiant de stock invalide').optional(),
 });
 
 export type UpdateShelfFormValues = z.infer<typeof updateShelfSchema>;

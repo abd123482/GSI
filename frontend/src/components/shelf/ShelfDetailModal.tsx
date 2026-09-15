@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Edit3,
   Trash2,
+  Warehouse,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -184,6 +185,24 @@ export function ShelfDetailModal({
                   <Hash className="w-3 h-3" />
                   {shelf.shelfQuantity} {shelf.shelfQuantity > 1 ? 'unités enregistrées' : 'unité enregistrée'}
                 </span>
+              </div>
+            </div>
+
+            {/* Property: Stock */}
+            <div className="p-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-white/85 w-36 shrink-0">
+                <Warehouse className="w-3.5 h-3.5 text-white" />
+                <span className="font-medium">Stock / Entrepôt</span>
+              </div>
+              <div className="text-xs text-white font-medium flex items-center gap-1.5">
+                <span className="text-[#38bdf8] font-semibold">
+                  {shelf.stock?.stockName ?? 'Stock Principal Yacine'}
+                </span>
+                {shelf.stockId && (
+                  <span className="font-mono text-[10px] text-white/70">
+                    ({shelf.stockId.slice(0, 8)}...)
+                  </span>
+                )}
               </div>
             </div>
 

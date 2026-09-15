@@ -7,16 +7,23 @@ export interface Shelf {
   shelfId: string;
   shelfName: string | null;
   shelfQuantity: number;
+  stockId?: string | null;
+  stock?: {
+    stockId: string;
+    stockName: string | null;
+  } | null;
 }
 
 export interface CreateShelfInput {
   shelfName: string;
   shelfCode?: string;
+  stockId?: string;
 }
 
 export interface UpdateShelfInput {
   shelfName?: string;
   shelfCode?: string;
+  stockId?: string;
 }
 
 export interface ShelfPaginationQuery {

@@ -5,6 +5,8 @@ import { UpdateShelfDTO } from './dto/updateShelf.dto.js';
 import { PaginationDTO } from './dto/pagination.dto.js';
 import { SearchShelfDTO } from './dto/searchShelf.dto.js';
 
+const DEFAULT_STOCK_ID = '606d4178-e0a8-48b9-be6d-9538fa61135a';
+
 @Injectable()
 export class ShelfService {
   constructor(private readonly prisma: PrismaService) { }
@@ -22,10 +24,26 @@ export class ShelfService {
     if (existingShelf) {
       throw new BadRequestException('Shelf already exists');
     }
+
+    const targetStockId = dto.stockId ?? DEFAULT_STOCK_ID;
+
+    if (targetStockId) {
+      const stockExists = await this.prisma.stock.findUnique({
+        where: { stockId: targetStockId },
+      });
+      if (!stockExists) {
+        throw new NotFoundException(`Stock with ID '${targetStockId}' not found`);
+      }
+    }
+
     return await this.prisma.shelf.create({
       data: {
         shelfName: dto.shelfName,
         shelfQuantity: 0,
+        stockId: targetStockId,
+      },
+      include: {
+        stock: true,
       },
     });
   }
@@ -40,6 +58,9 @@ export class ShelfService {
         skip,
         take: limit,
         orderBy: { shelfName: 'asc' },
+        include: {
+          stock: true,
+        },
       }),
       this.prisma.shelf.count(),
     ]);
@@ -56,6 +77,9 @@ export class ShelfService {
   async getShelfById(pagination: PaginationDTO, id: string) {
     const shelf = await this.prisma.shelf.findUnique({
       where: { shelfId: id },
+      include: {
+        stock: true,
+      },
     });
     if (!shelf) {
       throw new NotFoundException(`Shelf with ID '${id}' not found`);
@@ -71,6 +95,9 @@ export class ShelfService {
       take: limit,
       where: { shelfName },
       orderBy: { shelfName: 'asc' },
+      include: {
+        stock: true,
+      },
     });
   }
 
@@ -91,6 +118,9 @@ export class ShelfService {
         take: limit,
         where,
         orderBy: { shelfName: 'asc' },
+        include: {
+          stock: true,
+        },
       }),
       this.prisma.shelf.count({ where }),
     ]);
@@ -119,10 +149,23 @@ export class ShelfService {
       }
     }
 
+    if (dto.stockId !== undefined) {
+      const stockExists = await this.prisma.stock.findUnique({
+        where: { stockId: dto.stockId },
+      });
+      if (!stockExists) {
+        throw new NotFoundException(`Stock with ID '${dto.stockId}' not found`);
+      }
+    }
+
     return await this.prisma.shelf.update({
       where: { shelfId: id },
       data: {
         ...(dto.shelfName !== undefined && { shelfName: dto.shelfName }),
+        ...(dto.stockId !== undefined && { stockId: dto.stockId }),
+      },
+      include: {
+        stock: true,
       },
     });
   }

@@ -2,12 +2,15 @@
 
 import { getErrorMessage } from '@/lib/error-message';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createShelfSchema, CreateShelfFormValues } from '@/schemas/shelf.schema';
 import { useShelves } from '@/hooks/use-shelves';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useApi } from '@/hooks/use-api';
+import { StockService } from '@/services/stock.service';
+import { Stock } from '@/types/stock';
 import { REQUIRED_CREATE_PERMISSION } from '@/services/shelf.service';
 import { InsufficientPermissionException } from '@/services/shelf.errors';
 import {
@@ -17,9 +20,12 @@ import {
   ShieldAlert,
   Layers,
   Hash,
+  Warehouse,
   Database,
   AlertCircle,
 } from 'lucide-react';
+
+const DEFAULT_STOCK_ID = '606d4178-e0a8-48b9-be6d-9538fa61135a';
 
 interface CreateShelfModalProps {
   isOpen: boolean;
@@ -28,9 +34,12 @@ interface CreateShelfModalProps {
 }
 
 export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModalProps) {
+  const api = useApi();
   const { createShelf, isCreating } = useShelves();
   const { canCreateShelf, roleName } = usePermissions();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [stocks, setStocks] = useState<Stock[]>([]);
+  const [isLoadingStocks, setIsLoadingStocks] = useState(false);
 
   const {
     register,
@@ -42,9 +51,32 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
     defaultValues: {
       shelfName: '',
       shelfCode: '',
+      stockId: DEFAULT_STOCK_ID,
     },
     mode: 'onChange',
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      let isMounted = true;
+      setIsLoadingStocks(true);
+      StockService.getAllStocks(api, { limit: 100 })
+        .then((res) => {
+          if (isMounted && res?.stocks) {
+            setStocks(res.stocks);
+          }
+        })
+        .catch((err) => {
+          console.warn('[CreateShelfModal] Failed to load stocks list:', err);
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingStocks(false);
+        });
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [isOpen, api]);
 
   if (!isOpen) return null;
 
@@ -166,6 +198,46 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
             )}
           </div>
 
+          {/* Field: stockId (Rattachement Stock) */}
+          <div className="space-y-1.5">
+            <label
+              htmlFor="stockId"
+              className="flex items-center justify-between text-xs font-medium text-white"
+            >
+              <span className="flex items-center gap-1.5">
+                <Warehouse className="w-3.5 h-3.5 text-[#38bdf8]" />
+                Stock / Entrepôt de rattachement
+              </span>
+              <span className="text-[11px] text-white/70">Par défaut : Principal</span>
+            </label>
+            <div className="relative">
+              <select
+                id="stockId"
+                disabled={isCreating || isSubmitting || isLoadingStocks}
+                className="w-full h-11 px-3.5 bg-[#4f5d75] text-white text-sm border border-[#8191ad] rounded-lg transition-all outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 cursor-pointer disabled:opacity-50"
+                {...register('stockId')}
+              >
+                {stocks.length > 0 ? (
+                  stocks.map((stock) => (
+                    <option key={stock.stockId} value={stock.stockId} className="bg-[#4f5d75] text-white">
+                      {stock.stockName || 'Stock sans nom'} {stock.stockId === DEFAULT_STOCK_ID ? '(Par défaut)' : ''}
+                    </option>
+                  ))
+                ) : (
+                  <option value={DEFAULT_STOCK_ID} className="bg-[#4f5d75] text-white">
+                    Stock Principal Yacine (Par défaut)
+                  </option>
+                )}
+              </select>
+            </div>
+            {errors.stockId && (
+              <p className="text-xs text-rose-300 flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                {errors.stockId.message}
+              </p>
+            )}
+          </div>
+
           {/* Stock Info Note: Decoupled Stock Management */}
           <div className="p-3.5 bg-[#586680]/60 border border-[#8191ad] rounded-lg text-xs flex items-center justify-between">
             <div className="space-y-0.5">
@@ -210,7 +282,7 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
               </span>
             </div>
             <p className="text-[11px] text-white/80 font-mono truncate">
-              INSERT INTO Shelf (shelfId, shelfName, shelfQuantity) VALUES (NEWID(), ...)
+              INSERT INTO Shelf (shelfId, shelfName, shelfQuantity, stockId) VALUES (NEWID(), ..., &apos;606d4178-e0a8-48b9-be6d-9538fa61135a&apos;)
             </p>
           </div>
 

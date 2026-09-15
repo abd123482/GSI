@@ -22,6 +22,7 @@ import {
   Pencil,
   Trash2,
   Plus,
+  Warehouse,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -291,7 +292,16 @@ export function ShelfListTable({
                               {shelf.shelfName ?? 'Étagère sans nom'}
                             </p>
                             <span className="text-[11px] font-mono text-[#aea69c] flex items-center gap-1">
-                              <span>Emplacement physique</span>
+                              <span>Emplacement</span>
+                              {shelf.stock?.stockName && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-[#38bdf8] flex items-center gap-0.5">
+                                    <Warehouse className="w-3 h-3" />
+                                    {shelf.stock.stockName}
+                                  </span>
+                                </>
+                              )}
                               <span>•</span>
                               <span className="text-[#dad2c1]">
                                 RACK-{formattedIndex}
@@ -433,7 +443,16 @@ export function ShelfListTable({
 
                     {/* Stats & Quantity */}
                     <div className="pt-2 border-t border-[#3f3a36] flex items-center justify-between text-xs">
-                      <span className="text-[#aea69c] font-mono text-[11px]">Stock initial :</span>
+                      <span className="text-[#aea69c] font-mono text-[11px] flex items-center gap-1">
+                        {shelf.stock?.stockName ? (
+                          <>
+                            <Warehouse className="w-3 h-3 text-[#38bdf8]" />
+                            <span className="text-[#38bdf8] truncate max-w-[110px]">{shelf.stock.stockName}</span>
+                          </>
+                        ) : (
+                          'Stock initial :'
+                        )}
+                      </span>
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[2px] text-[10px] font-mono border ${
                           shelf.shelfQuantity > 0

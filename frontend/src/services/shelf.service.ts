@@ -64,6 +64,7 @@ export class ShelfService {
       const response = await client.post<Shelf>('/shelves', {
         shelfName: validationResult.data.shelfName,
         shelfCode: validationResult.data.shelfCode,
+        ...(validationResult.data.stockId ? { stockId: validationResult.data.stockId } : {}),
       });
       return response.data;
     } catch (error: unknown) {
