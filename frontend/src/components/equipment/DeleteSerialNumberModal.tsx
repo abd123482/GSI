@@ -36,12 +36,12 @@ export function DeleteSerialNumberModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
       <div
-        className="w-full max-w-sm bg-[#6b7b97] border border-[#8191ad] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
+        className="w-full max-w-sm bg-[#383330] border border-[#3f3a36] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
         role="dialog"
         aria-modal="true"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#455268] bg-[#53627c]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#3f3a36] bg-[#2b2622]">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-rose-500/20 border border-rose-400/40 flex items-center justify-center text-rose-200">
               <Trash2 className="w-3.5 h-3.5" />
@@ -78,7 +78,7 @@ export function DeleteSerialNumberModal({
             </div>
           </div>
 
-          <div className="p-3 bg-[#586680]/60 rounded-lg border border-[#8191ad] text-xs space-y-1.5 text-white">
+          <div className="p-3 bg-[#2b2622]/60 rounded-lg border border-[#3f3a36] text-xs space-y-1.5 text-white">
             <div className="flex items-center justify-between">
               <span className="text-white/80 flex items-center gap-1">
                 <Barcode className="w-3.5 h-3.5 text-emerald-300" />
@@ -96,7 +96,7 @@ export function DeleteSerialNumberModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-4 py-3 bg-[#53627c] border-t border-[#455268]">
+        <div className="flex items-center justify-end gap-2 px-4 py-3 bg-[#2b2622] border-t border-[#3f3a36]">
           <button
             type="button"
             onClick={onClose}

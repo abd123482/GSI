@@ -171,6 +171,66 @@ export class UsersAdminService {
     });
   }
 
+  async editRole(roleId: string, roleName?: string, permissions?: string[]) {
+    const existingRole = await this.prisma.role.findUnique({
+      where: { roleId },
+    });
+
+    if (!existingRole) {
+      throw new NotFoundException(`Role with ID '${roleId}' not found`);
+    }
+
+    if (existingRole.roleName.toUpperCase() === 'ADMIN') {
+      throw new BadRequestException('Action interdite : Vous ne pouvez pas modifier le rôle système ADMIN.');
+    }
+
+    if (roleName) {
+      const trimmedRoleName = roleName.trim();
+      const duplicateRole = await this.prisma.role.findFirst({
+        where: { roleName: trimmedRoleName, roleId: { not: roleId } },
+      });
+      if (duplicateRole) {
+        throw new BadRequestException(`Le rôle avec le nom '${trimmedRoleName}' existe déjà.`);
+      }
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      const data: any = {};
+      if (roleName) {
+        data.roleName = roleName.trim();
+      }
+
+      if (permissions) {
+        // Delete existing permissions
+        await tx.permission.deleteMany({
+          where: { roleId },
+        });
+
+        data.permissions = {
+          create: permissions.map((permissionName) => ({
+            permissionName,
+          })),
+        };
+      }
+
+      return await tx.role.update({
+        where: { roleId },
+        data,
+        include: {
+          permissions: {
+            select: {
+              permissionId: true,
+              permissionName: true,
+            },
+          },
+          _count: {
+            select: { users: true },
+          },
+        },
+      });
+    });
+  }
+
   async getAvailablePermissions(): Promise<string[]> {
     const SYSTEM_PERMISSIONS = [
       'equipment.read',

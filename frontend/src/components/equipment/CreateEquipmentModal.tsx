@@ -174,14 +174,14 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150">
       <div
-        className="w-full max-w-2xl bg-[#6b7b97] border border-[#8191ad] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 my-8 text-left"
+        className="w-full max-w-2xl bg-[#383330] border border-[#3f3a36] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 my-8 text-left"
         role="dialog"
         aria-modal="true"
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#455268] flex items-center justify-between bg-[#53627c]">
+        <div className="px-6 py-4 border-b border-[#3f3a36] flex items-center justify-between bg-[#2b2622]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#1e2b48] border border-[#3e4f73] flex items-center justify-center text-[#38bdf8]">
+            <div className="w-8 h-8 rounded-lg bg-[#2b2622] border border-[#3f3a36] flex items-center justify-center text-[#f7f5f0]">
               <PackagePlus className="w-4 h-4" />
             </div>
             <div>
@@ -221,10 +221,10 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
               type="text"
               {...register('equipmentName')}
               placeholder="Ex: Tensiomètre Électronique Omron M3"
-              className={`w-full h-9 px-3 bg-[#4f5d75] border rounded-lg text-xs text-white placeholder-white/50 focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 focus:outline-none transition-colors ${
+              className={`w-full h-9 px-3 bg-[#2b2622] border rounded-lg text-xs text-white placeholder-white/50 focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 focus:outline-none transition-colors ${
                 errors.equipmentName
                   ? 'border-rose-400 focus:border-rose-400'
-                  : 'border-[#8191ad]'
+                  : 'border-[#3f3a36]'
               }`}
             />
             {errors.equipmentName && (
@@ -247,10 +247,10 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
                     if (hasSerialNumber) syncSerialCount(Number(event.target.value));
                   },
                 })}
-                className={`w-full h-9 px-3 bg-[#4f5d75] border rounded-lg text-xs font-mono text-white focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 focus:outline-none transition-colors ${
+                className={`w-full h-9 px-3 bg-[#2b2622] border rounded-lg text-xs font-mono text-white focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 focus:outline-none transition-colors ${
                   errors.equipmentQuantity
                     ? 'border-rose-400 focus:border-rose-400'
-                    : 'border-[#8191ad]'
+                    : 'border-[#3f3a36]'
                 }`}
               />
               {errors.equipmentQuantity && (
@@ -267,13 +267,13 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
                 type="number"
                 min="0"
                 {...register('minEquipmentQuantity', { valueAsNumber: true })}
-                className="w-full h-9 px-3 bg-[#4f5d75] border border-[#8191ad] rounded-lg text-xs font-mono text-white focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 focus:outline-none"
+                className="w-full h-9 px-3 bg-[#2b2622] border border-[#3f3a36] rounded-lg text-xs font-mono text-white focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 focus:outline-none"
               />
             </div>
           </div>
 
           {/* Serialized Mode Toggle Card */}
-          <div className="p-4 bg-[#586680]/60 border border-[#8191ad] rounded-xl space-y-4 text-white">
+          <div className="p-4 bg-[#2b2622]/60 border border-[#3f3a36] rounded-xl space-y-4 text-white">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Barcode className="w-4 h-4 text-white" />
@@ -297,29 +297,29 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
                   })}
                   className="sr-only peer"
                 />
-                <div className="w-9 h-5 bg-[#4f5d75] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#8191ad] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#1e2b48]"></div>
+                <div className="w-9 h-5 bg-[#2b2622] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#3f3a36] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2b2622]"></div>
               </label>
             </div>
 
             {/* Serialized Configuration Area */}
             {hasSerialNumber ? (
-              <div className="pt-3 border-t border-[#8191ad] space-y-4 animate-in fade-in duration-150">
+              <div className="pt-3 border-t border-[#3f3a36] space-y-4 animate-in fade-in duration-150">
                 {/* Mode Selector Pill Tabs */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className="text-xs font-semibold text-white">
                     Génération des numéros :
                   </span>
-                  <div className="inline-flex p-0.5 bg-[#4f5d75] border border-[#8191ad] rounded-lg text-xs">
+                  <div className="inline-flex p-0.5 bg-[#2b2622] border border-[#3f3a36] rounded-lg text-xs">
                     <button
                       type="button"
                       onClick={handleSwitchToAuto}
                       className={`px-3 py-1.5 rounded-md font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
                         serialGenMode === 'auto'
-                          ? 'bg-[#1e2b48] text-white border border-[#3e4f73] shadow-xs'
+                          ? 'bg-[#2b2622] text-white border border-[#3f3a36] shadow-xs'
                           : 'text-white/80 hover:text-white'
                       }`}
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-[#38bdf8]" />
+                      <Sparkles className="w-3.5 h-3.5 text-[#f7f5f0]" />
                       <span>Auto-générer (32-bit aléatoire)</span>
                     </button>
                     <button
@@ -327,11 +327,11 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
                       onClick={handleSwitchToManual}
                       className={`px-3 py-1.5 rounded-md font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
                         serialGenMode === 'manual'
-                          ? 'bg-[#1e2b48] text-white border border-[#3e4f73] shadow-xs'
+                          ? 'bg-[#2b2622] text-white border border-[#3f3a36] shadow-xs'
                           : 'text-white/80 hover:text-white'
                       }`}
                     >
-                      <Barcode className="w-3.5 h-3.5 text-[#38bdf8]" />
+                      <Barcode className="w-3.5 h-3.5 text-[#f7f5f0]" />
                       <span>Saisie manuelle</span>
                     </button>
                   </div>
@@ -339,9 +339,9 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
 
                 {/* Auto Generation Banner */}
                 {serialGenMode === 'auto' && (
-                  <div className="p-3 bg-[#53627c] border border-[#8191ad] rounded-lg flex items-center justify-between gap-3 text-xs text-white">
+                  <div className="p-3 bg-[#2b2622] border border-[#3f3a36] rounded-lg flex items-center justify-between gap-3 text-xs text-white">
                     <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-[#38bdf8] shrink-0" />
+                      <Sparkles className="w-4 h-4 text-[#f7f5f0] shrink-0" />
                       <span>
                         Génération cryptographique de {quantity} code(s) 32-bit uniques (8 hexadécimaux).
                       </span>
@@ -364,7 +364,7 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
                     return (
                       <div
                         key={`sn-input-${idx}`}
-                        className="flex items-center gap-2 p-2 bg-[#4f5d75] border border-[#8191ad] rounded-lg text-xs text-white"
+                        className="flex items-center gap-2 p-2 bg-[#2b2622] border border-[#3f3a36] rounded-lg text-xs text-white"
                       >
                         <span className="w-8 font-mono font-semibold text-white/70 text-center">
                           #{String(idx + 1).padStart(2, '0')}
@@ -395,7 +395,7 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
                   })}
                 </div>
 
-                <div className="p-2.5 bg-[#4f5d75]/60 border border-[#8191ad] rounded-lg flex items-center gap-2 text-[11px] text-white/90">
+                <div className="p-2.5 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg flex items-center gap-2 text-[11px] text-white/90">
                   <Layers className="w-3.5 h-3.5 text-white shrink-0" />
                   <span>Les numéros de série seront créés sans étagère. L&apos;affectation aux étagères s&apos;effectue via les mouvements.</span>
                 </div>
@@ -408,8 +408,8 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
               </div>
             ) : (
               /* Non-Serialized Informative Box */
-              <div className="pt-3 border-t border-[#8191ad]">
-                <div className="p-3 bg-[#4f5d75]/60 border border-[#8191ad] rounded-lg flex items-start gap-2.5 text-xs text-white/90">
+              <div className="pt-3 border-t border-[#3f3a36]">
+                <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg flex items-start gap-2.5 text-xs text-white/90">
                   <Layers className="w-4 h-4 text-white shrink-0 mt-0.5" />
                   <div>
                     <span className="font-semibold text-white">Stock initial non assigné</span>
@@ -423,7 +423,7 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
           </div>
 
           {/* Modal Actions */}
-          <div className="pt-3 border-t border-[#8191ad] flex items-center justify-end gap-3">
+          <div className="pt-3 border-t border-[#3f3a36] flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -435,7 +435,7 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
             <button
               type="submit"
               disabled={isSubmitting || isCreatingEquipment}
-              className="px-4 py-2 bg-[#1e2b48] hover:bg-[#152037] text-white border border-[#2e3e63] rounded-lg text-xs font-medium transition-colors shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-[#2b2622] hover:bg-[#3f3a36] text-white border border-[#4d4742] rounded-lg text-xs font-medium transition-colors shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting || isCreatingEquipment ? (
                 <>

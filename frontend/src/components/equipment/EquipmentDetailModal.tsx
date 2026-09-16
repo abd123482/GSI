@@ -100,13 +100,13 @@ export function EquipmentDetailModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150">
       <div
-        className="w-full max-w-3xl bg-[#6b7b97] border border-[#8191ad] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 my-8 text-left"
+        className="w-full max-w-3xl bg-[#383330] border border-[#3f3a36] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 my-8 text-left"
         role="dialog"
         aria-modal="true"
         aria-labelledby="equipment-detail-title"
       >
         {/* Cover Banner */}
-        <div className="h-24 w-full bg-[#53627c] border-b border-[#455268] relative">
+        <div className="h-24 w-full bg-[#2b2622] border-b border-[#3f3a36] relative">
           <button
             type="button"
             onClick={onClose}
@@ -122,14 +122,14 @@ export function EquipmentDetailModal({
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div className="flex items-end gap-4">
               <div
-                className="w-20 h-20 rounded-2xl bg-[#1e2b48] border-2 border-white shadow-md flex items-center justify-center text-[#38bdf8]"
+                className="w-20 h-20 rounded-2xl bg-[#2b2622] border-2 border-white shadow-md flex items-center justify-center text-[#f7f5f0]"
               >
                 <IconComp className="w-10 h-10" />
               </div>
 
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-[#1e2b48] text-white border border-[#3e4f73]">
+                  <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-[#2b2622] text-white border border-[#3f3a36]">
                     dbo.Equipment
                   </span>
                   <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-emerald-950/40 text-emerald-200 border border-emerald-400/40">
@@ -147,7 +147,7 @@ export function EquipmentDetailModal({
           </div>
 
           {/* Properties Table (#6b7b97 Theme) */}
-          <div className="bg-[#586680]/60 border border-[#8191ad] rounded-xl divide-y divide-[#455268] text-xs text-white">
+          <div className="bg-[#2b2622]/60 border border-[#3f3a36] rounded-xl divide-y divide-[#455268] text-xs text-white">
             {/* Property: GUID */}
             <div className="p-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-white/85 w-40 shrink-0">
@@ -205,7 +205,7 @@ export function EquipmentDetailModal({
               </div>
               <div>
                 {equipment.hasSerialNumber ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-[#1e2b48] text-white font-semibold text-xs border border-[#3e4f73]">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-[#2b2622] text-white font-semibold text-xs border border-[#3f3a36]">
                     <Barcode className="w-3 h-3" />
                     Sérialisé ({serials.length} numéros de série)
                   </span>
@@ -226,7 +226,7 @@ export function EquipmentDetailModal({
                   equipment.equipmentShelfs.map((es) => (
                     <span
                       key={es.equipmentShelfId}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#1e2b48] border border-[#3e4f73] text-xs font-medium text-white"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#2b2622] border border-[#3f3a36] text-xs font-medium text-white"
                     >
                       <Layers className="w-3.5 h-3.5 text-white" />
                       <span>{es.shelf?.shelfName ?? 'Étagère'}</span>
@@ -258,13 +258,13 @@ export function EquipmentDetailModal({
               </div>
 
               {serials.length === 0 ? (
-                <div className="p-4 bg-[#586680]/30 border border-[#8191ad] rounded-lg text-center text-xs text-white/80 italic">
+                <div className="p-4 bg-[#2b2622]/30 border border-[#3f3a36] rounded-lg text-center text-xs text-white/80 italic">
                   Aucun numéro de série enregistré pour cet équipement.
                 </div>
               ) : (
-                <div className="border border-[#8191ad] rounded-lg overflow-hidden max-h-60 overflow-y-auto bg-[#586680]/60">
+                <div className="border border-[#3f3a36] rounded-lg overflow-hidden max-h-60 overflow-y-auto bg-[#2b2622]/60">
                   <table className="w-full text-xs text-left">
-                    <thead className="bg-[#53627c] text-white font-semibold border-b border-[#8191ad] sticky top-0">
+                    <thead className="bg-[#2b2622] text-white font-semibold border-b border-[#3f3a36] sticky top-0">
                       <tr>
                         <th className="py-2 px-3 w-12 text-center">#</th>
                         <th className="py-2 px-3">CODE DE SÉRIE</th>
@@ -329,7 +329,7 @@ export function EquipmentDetailModal({
           )}
 
           {/* Movement Audit & Quantity Calculation Ledger */}
-          <div className="space-y-3.5 pt-2 border-t border-[#8191ad]">
+          <div className="space-y-3.5 pt-2 border-t border-[#3f3a36]">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <ArrowRightLeft className="w-4 h-4 text-white" />
@@ -347,7 +347,7 @@ export function EquipmentDetailModal({
                 <button
                   type="button"
                   onClick={() => onOpenMovement(equipment)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1e2b48] hover:bg-[#152037] text-white text-xs font-medium rounded-lg border border-[#2e3e63] shadow-xs transition-colors cursor-pointer shrink-0"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#2b2622] hover:bg-[#3f3a36] text-white text-xs font-medium rounded-lg border border-[#4d4742] shadow-xs transition-colors cursor-pointer shrink-0"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Nouveau mouvement</span>
@@ -359,7 +359,7 @@ export function EquipmentDetailModal({
             {auditSummary && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {/* Initial Stock */}
-                <div className="p-3 bg-[#586680]/60 border border-[#8191ad] rounded-xl text-left space-y-1 text-white">
+                <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-xl text-left space-y-1 text-white">
                   <div className="flex items-center justify-between text-white/80">
                     <span className="text-[10px] font-medium uppercase tracking-wider">Stock Initial</span>
                     <Package className="w-3.5 h-3.5 text-white" />
@@ -395,7 +395,7 @@ export function EquipmentDetailModal({
                 </div>
 
                 {/* Current Total */}
-                <div className="p-3 bg-[#1e2b48] border border-[#3e4f73] rounded-xl text-left space-y-1 text-white">
+                <div className="p-3 bg-[#2b2622] border border-[#3f3a36] rounded-xl text-left space-y-1 text-white">
                   <div className="flex items-center justify-between text-white/80">
                     <span className="text-[10px] font-medium uppercase tracking-wider">Stock Actuel</span>
                     <Hash className="w-3.5 h-3.5" />
@@ -410,12 +410,12 @@ export function EquipmentDetailModal({
 
             {/* Chronological Movements Ledger */}
             {isLoadingMovements ? (
-              <div className="p-6 bg-[#586680]/30 border border-[#8191ad] rounded-lg text-center text-xs text-white/80 flex items-center justify-center gap-2">
+              <div className="p-6 bg-[#2b2622]/30 border border-[#3f3a36] rounded-lg text-center text-xs text-white/80 flex items-center justify-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin text-white" />
                 <span>Chargement de l&apos;historique des mouvements...</span>
               </div>
             ) : movements.length === 0 ? (
-              <div className="p-4 bg-[#586680]/30 border border-[#8191ad] rounded-lg text-center text-xs text-white/80 space-y-1">
+              <div className="p-4 bg-[#2b2622]/30 border border-[#3f3a36] rounded-lg text-center text-xs text-white/80 space-y-1">
                 <p className="italic">Aucun mouvement individuel enregistré pour cet équipement.</p>
                 {onOpenMovement && (
                   <button
@@ -429,9 +429,9 @@ export function EquipmentDetailModal({
                 )}
               </div>
             ) : (
-              <div className="border border-[#8191ad] rounded-lg overflow-hidden max-h-64 overflow-y-auto bg-[#586680]/60">
+              <div className="border border-[#3f3a36] rounded-lg overflow-hidden max-h-64 overflow-y-auto bg-[#2b2622]/60">
                 <table className="w-full text-xs text-left">
-                  <thead className="bg-[#53627c] text-white font-semibold border-b border-[#8191ad] sticky top-0">
+                  <thead className="bg-[#2b2622] text-white font-semibold border-b border-[#3f3a36] sticky top-0">
                     <tr>
                       <th className="py-2 px-3 w-10 text-center">#</th>
                       <th className="py-2 px-3 text-center">STATUT</th>
@@ -460,7 +460,7 @@ export function EquipmentDetailModal({
                                   ? 'bg-emerald-950/40 text-emerald-200 border border-emerald-400/40'
                                   : isExit
                                   ? 'bg-amber-950/40 text-amber-200 border border-amber-400/40'
-                                  : 'bg-[#1e2b48] text-white border border-[#3e4f73]'
+                                  : 'bg-[#2b2622] text-white border border-[#3f3a36]'
                               }`}
                             >
                               {isEntry ? (
@@ -488,7 +488,7 @@ export function EquipmentDetailModal({
                                 <span>{m.sourceShelf.shelfName}</span>
                               </span>
                             ) : (
-                              <span className="font-mono text-[10px] text-white/80 bg-[#1e2b48] border border-[#3e4f73] px-1.5 py-0.5 rounded">
+                              <span className="font-mono text-[10px] text-white/80 bg-[#2b2622] border border-[#3f3a36] px-1.5 py-0.5 rounded">
                                 NULL (Création)
                               </span>
                             )}
@@ -552,7 +552,7 @@ export function EquipmentDetailModal({
             </button>
 
             {showRawJson && (
-              <div className="relative bg-[#1e2b48] border border-[#3e4f73] text-[#f6f5f4] rounded-lg p-3 font-mono text-[11px] overflow-x-auto shadow-inner">
+              <div className="relative bg-[#2b2622] border border-[#3f3a36] text-[#f6f5f4] rounded-lg p-3 font-mono text-[11px] overflow-x-auto shadow-inner">
                 <pre>{JSON.stringify(equipment, null, 2)}</pre>
                 <button
                   type="button"
@@ -571,7 +571,7 @@ export function EquipmentDetailModal({
           </div>
 
           {/* Modal Footer */}
-          <div className="pt-3 border-t border-[#8191ad] flex items-center justify-between">
+          <div className="pt-3 border-t border-[#3f3a36] flex items-center justify-between">
             <button
               type="button"
               onClick={handleCopyId}
@@ -584,7 +584,7 @@ export function EquipmentDetailModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4.5 py-2 bg-[#1e2b48] hover:bg-[#152037] text-white border border-[#2e3e63] text-xs font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
+              className="px-4.5 py-2 bg-[#2b2622] hover:bg-[#3f3a36] text-white border border-[#4d4742] text-xs font-medium rounded-lg shadow-xs transition-colors cursor-pointer"
             >
               Fermer la fiche
             </button>

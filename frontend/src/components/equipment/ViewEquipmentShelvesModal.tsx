@@ -81,13 +81,13 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-2xl max-h-[90vh] bg-[#6b7b97] text-white rounded-xl shadow-2xl border border-[#8191ad] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+        className="relative w-full max-w-2xl max-h-[90vh] bg-[#383330] text-white rounded-xl shadow-2xl border border-[#3f3a36] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#455268] bg-[#53627c]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#3f3a36] bg-[#2b2622]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#1e2b48] border border-white/20 flex items-center justify-center text-[#38bdf8] shrink-0 shadow-2xs">
+            <div className="w-10 h-10 rounded-lg bg-[#2b2622] border border-white/20 flex items-center justify-center text-[#f7f5f0] shrink-0 shadow-2xs">
               <Layers className="w-5 h-5" />
             </div>
             <div>
@@ -128,8 +128,8 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-5">
           {/* Informational Callout */}
-          <div className="p-3.5 bg-[#586680]/60 border border-[#8191ad] rounded-lg text-xs text-white flex items-start gap-2.5">
-            <Info className="w-4 h-4 text-[#38bdf8] shrink-0 mt-0.5" />
+          <div className="p-3.5 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg text-xs text-white flex items-start gap-2.5">
+            <Info className="w-4 h-4 text-[#f7f5f0] shrink-0 mt-0.5" />
             <div className="leading-relaxed">
               <p className="font-semibold text-white mb-0.5">
                 Architecture de stockage multi-étagères
@@ -140,7 +140,7 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
 
           {/* Metric Cards Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3 bg-[#586680]/60 border border-[#8191ad] rounded-lg">
+            <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg">
               <span className="text-[11px] font-medium text-white/70 flex items-center gap-1 mb-1">
                 <Package className="w-3.5 h-3.5 text-white" />
                 Stock Total
@@ -150,7 +150,7 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
               </p>
             </div>
 
-            <div className="p-3 bg-[#1e2b48]/70 border border-emerald-400/40 rounded-lg">
+            <div className="p-3 bg-[#2b2622]/70 border border-emerald-400/40 rounded-lg">
               <span className="text-[11px] font-medium text-emerald-300 flex items-center gap-1 mb-1">
                 <Check className="w-3.5 h-3.5" />
                 Alloué en Rayons
@@ -163,7 +163,7 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
             <div className={`p-3 rounded-lg border ${
               unallocated > 0
                 ? 'bg-amber-950/40 border-amber-400/40'
-                : 'bg-[#586680]/60 border border-[#8191ad]'
+                : 'bg-[#2b2622]/60 border border-[#3f3a36]'
             }`}>
               <span className={`text-[11px] font-medium flex items-center gap-1 mb-1 ${
                 unallocated > 0 ? 'text-amber-300' : 'text-white/70'
@@ -178,7 +178,7 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
               </p>
             </div>
 
-            <div className="p-3 bg-[#586680]/60 border border-[#8191ad] rounded-lg">
+            <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg">
               <span className="text-[11px] font-medium text-white/70 flex items-center gap-1 mb-1">
                 <Layers className="w-3.5 h-3.5 text-white" />
                 Étagères
@@ -201,8 +201,8 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
             </div>
 
             {tuples.length > 0 ? (
-              <div className="border border-[#8191ad] rounded-lg overflow-hidden divide-y divide-[#8191ad]/50 bg-[#586680]/60">
-                <div className="bg-[#4f5d75] px-4 py-2 text-[11px] font-semibold text-white/90 grid grid-cols-12 gap-2">
+              <div className="border border-[#3f3a36] rounded-lg overflow-hidden divide-y divide-[#8191ad]/50 bg-[#2b2622]/60">
+                <div className="bg-[#2b2622] px-4 py-2 text-[11px] font-semibold text-white/90 grid grid-cols-12 gap-2">
                   <span className="col-span-5">Étagère</span>
                   <span className="col-span-3 text-center">Quantité Allouée</span>
                   <span className="col-span-4 text-right">Part du Stock</span>
@@ -219,7 +219,7 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
                     >
                       <div className="col-span-5 min-w-0">
                         <div className="flex items-center gap-2">
-                          <Layers className="w-4 h-4 text-[#38bdf8] shrink-0" />
+                          <Layers className="w-4 h-4 text-[#f7f5f0] shrink-0" />
                           <span className="font-semibold text-xs text-white truncate">
                             {shelfName}
                           </span>
@@ -244,7 +244,7 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
                       </div>
 
                       <div className="col-span-3 text-center">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#1e2b48] text-emerald-300 border border-emerald-400/40 text-xs font-semibold">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#2b2622] text-emerald-300 border border-emerald-400/40 text-xs font-semibold">
                           <Hash className="w-3 h-3" />
                           {qty} {qty > 1 ? 'unités' : 'unité'}
                         </span>
@@ -268,7 +268,7 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
                 })}
               </div>
             ) : (
-              <div className="text-center py-8 border border-dashed border-[#8191ad] rounded-lg bg-[#586680]/40 px-4">
+              <div className="text-center py-8 border border-dashed border-[#3f3a36] rounded-lg bg-[#2b2622]/40 px-4">
                 <Layers className="w-8 h-8 text-white/50 mx-auto mb-2" />
                 <p className="text-xs font-semibold text-white mb-1">
                   Aucun tuple dans EquipmentShelfs
@@ -293,7 +293,7 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
               </div>
 
               {serials.length > 0 ? (
-                <div className="max-h-52 overflow-y-auto border border-[#8191ad] rounded-lg divide-y divide-[#8191ad]/50 bg-[#586680]/60">
+                <div className="max-h-52 overflow-y-auto border border-[#3f3a36] rounded-lg divide-y divide-[#8191ad]/50 bg-[#2b2622]/60">
                   {serials.map((sn) => (
                     <div
                       key={sn.serialNumberId}
@@ -307,8 +307,8 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
                       </div>
                       <div className="flex items-center gap-2">
                         {sn.shelf ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#1e2b48] border border-white/20 text-[11px] font-medium text-white">
-                            <Layers className="w-3 h-3 text-[#38bdf8]" />
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#2b2622] border border-white/20 text-[11px] font-medium text-white">
+                            <Layers className="w-3 h-3 text-[#f7f5f0]" />
                             {sn.shelf.shelfName}
                           </span>
                         ) : (
@@ -330,7 +330,7 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-t border-[#455268] bg-[#53627c]">
+        <div className="flex items-center justify-between px-6 py-3.5 border-t border-[#3f3a36] bg-[#2b2622]">
           <div className="text-[11px] text-white/70 flex items-center gap-1">
             <Info className="w-3.5 h-3.5 text-white/80" />
             <span>Consultation en lecture seule</span>

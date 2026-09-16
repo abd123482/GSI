@@ -32,6 +32,10 @@ import {
   type CreateRoleDTO,
   createRoleSchema,
 } from './dto/create-role.dto.js';
+import {
+  type EditRoleDTO,
+  editRoleSchema,
+} from './dto/edit-role.dto.js';
 
 @UseGuards(ClerkAuthGuard, PermissionsGuard)
 @Controller('admin')
@@ -92,6 +96,20 @@ export class UsersAdminController {
   async createRole(@Body() body: CreateRoleDTO) {
     const validated = createRoleSchema.parse(body);
     return this.usersAdminService.createRole(
+      validated.roleName,
+      validated.permissions,
+    );
+  }
+
+  @RequirePermissions('role.manage')
+  @Patch('roles/:roleId')
+  async editRole(
+    @Param('roleId', new ParseUUIDPipe({ version: '4' })) roleId: string,
+    @Body() body: EditRoleDTO,
+  ) {
+    const validated = editRoleSchema.parse(body);
+    return this.usersAdminService.editRole(
+      roleId,
       validated.roleName,
       validated.permissions,
     );

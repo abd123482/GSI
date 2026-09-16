@@ -1,12 +1,13 @@
 'use client';
 
 import { Role } from '@/types/user-role';
-import { Shield, Users, Lock } from 'lucide-react';
+import { Shield, Users, Lock, Edit2 } from 'lucide-react';
 
 interface RoleListCardsProps {
   roles: Role[];
   isLoading: boolean;
   onOpenCreateRole: () => void;
+  onOpenEditRole?: (role: Role) => void;
   canManageRoles?: boolean;
 }
 
@@ -14,6 +15,7 @@ export function RoleListCards({
   roles,
   isLoading,
   onOpenCreateRole,
+  onOpenEditRole,
   canManageRoles = true,
 }: RoleListCardsProps) {
   if (isLoading) {
@@ -127,6 +129,17 @@ export function RoleListCards({
                 <Lock className="w-3 h-3 text-[#aea69c]" />
                 UUID: {role.roleId.slice(0, 8)}...
               </span>
+              
+              {canManageRoles && !isAdmin && onOpenEditRole && (
+                <button
+                  type="button"
+                  onClick={() => onOpenEditRole(role)}
+                  className="p-1.5 text-[#aea69c] hover:text-[#f7f5f0] hover:bg-[#2b2622] rounded-[3px] transition-colors cursor-pointer"
+                  title="Modifier le rôle"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
         );

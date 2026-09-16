@@ -78,13 +78,13 @@ export function EditSerialNumberModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div
-        className="relative w-full max-w-md overflow-hidden rounded-xl border border-[#8191ad] bg-[#6b7b97] text-white shadow-2xl transition-all"
+        className="relative w-full max-w-md overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="h-12 bg-[#53627c] px-4 flex items-center justify-between border-b border-[#455268]">
+        <div className="h-12 bg-[#2b2622] px-4 flex items-center justify-between border-b border-[#3f3a36]">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-[#1e2b48] shadow-sm border border-white/20 flex items-center justify-center text-[#38bdf8]">
+            <div className="w-7 h-7 rounded-md bg-[#2b2622] shadow-sm border border-white/20 flex items-center justify-center text-[#f7f5f0]">
               <Barcode className="w-4 h-4" />
             </div>
             <span className="text-xs font-semibold uppercase tracking-wider text-white">
@@ -119,7 +119,7 @@ export function EditSerialNumberModal({
                 <button
                   type="button"
                   onClick={generate32BitCode}
-                  className="text-[11px] font-medium text-white bg-[#1e2b48] hover:bg-[#152037] px-2 py-0.5 rounded border border-white/20 flex items-center gap-1 transition-colors cursor-pointer"
+                  className="text-[11px] font-medium text-white bg-[#2b2622] hover:bg-[#3f3a36] px-2 py-0.5 rounded border border-white/20 flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   <Sparkles className="w-3 h-3 text-amber-300" />
                   Générer 32-bit
@@ -129,7 +129,7 @@ export function EditSerialNumberModal({
                 type="text"
                 {...register('serialNumberCode')}
                 placeholder="Ex: SN-A1B2C3D4"
-                className="w-full h-10 px-3 rounded-lg border border-[#8191ad] bg-[#4f5d75] text-white placeholder-white/50 text-sm font-mono focus:outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
+                className="w-full h-10 px-3 rounded-lg border border-[#3f3a36] bg-[#2b2622] text-white placeholder-white/50 text-sm font-mono focus:outline-none focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
               />
               {errors.serialNumberCode && (
                 <p className="mt-1 text-xs text-rose-300">{errors.serialNumberCode.message}</p>
@@ -143,12 +143,12 @@ export function EditSerialNumberModal({
               </label>
               <select
                 {...register('serialNumberStatus')}
-                className="w-full h-10 px-3 rounded-lg border border-[#8191ad] bg-[#4f5d75] text-white text-sm focus:outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
+                className="w-full h-10 px-3 rounded-lg border border-[#3f3a36] bg-[#2b2622] text-white text-sm focus:outline-none focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
               >
-                <option value="AVAILABLE" className="bg-[#4f5d75] text-white">DISPONIBLE (AVAILABLE)</option>
-                <option value="IN_USE" className="bg-[#4f5d75] text-white">EN UTILISATION (IN_USE)</option>
-                <option value="MAINTENANCE" className="bg-[#4f5d75] text-white">EN MAINTENANCE (MAINTENANCE)</option>
-                <option value="DEFECTIVE" className="bg-[#4f5d75] text-white">DÉFECTUEUX (DEFECTIVE)</option>
+                <option value="AVAILABLE" className="bg-[#2b2622] text-white">DISPONIBLE (AVAILABLE)</option>
+                <option value="IN_USE" className="bg-[#2b2622] text-white">EN UTILISATION (IN_USE)</option>
+                <option value="MAINTENANCE" className="bg-[#2b2622] text-white">EN MAINTENANCE (MAINTENANCE)</option>
+                <option value="DEFECTIVE" className="bg-[#2b2622] text-white">DÉFECTUEUX (DEFECTIVE)</option>
               </select>
               {errors.serialNumberStatus && (
                 <p className="mt-1 text-xs text-rose-300">{errors.serialNumberStatus.message}</p>
@@ -156,7 +156,7 @@ export function EditSerialNumberModal({
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#8191ad]/50">
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#3f3a36]/50">
               <button
                 type="button"
                 onClick={onClose}
@@ -168,7 +168,7 @@ export function EditSerialNumberModal({
               <button
                 type="submit"
                 disabled={isUpdating || !canUpdateSerialNumber}
-                className="px-4 py-1.5 text-xs font-medium text-white bg-[#1e2b48] border border-[#2e3e63] rounded-lg hover:bg-[#152037] active:scale-[0.98] disabled:opacity-50 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                className="px-4 py-1.5 text-xs font-medium text-white bg-[#2b2622] border border-[#4d4742] rounded-lg hover:bg-[#3f3a36] active:scale-[0.98] disabled:opacity-50 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
               >
                 {isUpdating && <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
                 Actualiser

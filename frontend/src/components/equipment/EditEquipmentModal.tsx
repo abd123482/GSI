@@ -224,13 +224,13 @@ function EditEquipmentModalContent({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div
-        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-[#8191ad] bg-[#6b7b97] text-white shadow-2xl transition-all"
+        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 z-10 h-14 bg-[#53627c] px-5 py-4 flex items-center justify-between border-b border-[#455268]">
+        <div className="sticky top-0 z-10 h-14 bg-[#2b2622] px-5 py-4 flex items-center justify-between border-b border-[#3f3a36]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#1e2b48] shadow-sm border border-white/20 flex items-center justify-center text-[#38bdf8]">
+            <div className="w-8 h-8 rounded-lg bg-[#2b2622] shadow-sm border border-white/20 flex items-center justify-center text-[#f7f5f0]">
               <Pencil className="w-4 h-4" />
             </div>
             <div>
@@ -263,13 +263,13 @@ function EditEquipmentModalContent({
           )}
 
           {/* Interactive Serialized Toggle Card */}
-          <div className="p-4 rounded-xl border border-[#8191ad] bg-[#586680]/60 transition-all">
+          <div className="p-4 rounded-xl border border-[#3f3a36] bg-[#2b2622]/60 transition-all">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div
                   className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
                     hasSerialNumber
-                      ? 'bg-[#1e2b48] text-[#38bdf8] border border-white/20'
+                      ? 'bg-[#2b2622] text-[#f7f5f0] border border-white/20'
                       : 'bg-black/20 text-white/60 border border-white/15'
                   }`}
                 >
@@ -281,7 +281,7 @@ function EditEquipmentModalContent({
                     <span
                       className={`px-2 py-0.5 rounded-full text-[10px] font-medium tracking-wide ${
                         hasSerialNumber
-                          ? 'bg-[#1e2b48] text-emerald-300 border border-emerald-400/30'
+                          ? 'bg-[#2b2622] text-emerald-300 border border-emerald-400/30'
                           : 'bg-black/30 text-white/70 border border-white/20'
                       }`}
                     >
@@ -305,7 +305,7 @@ function EditEquipmentModalContent({
                   disabled={!canUpdateEquipment || isBusy}
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-black/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1e2b48]" />
+                <div className="w-11 h-6 bg-black/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2b2622]" />
               </label>
             </div>
           </div>
@@ -321,7 +321,7 @@ function EditEquipmentModalContent({
                 {...register('equipmentName')}
                 placeholder="Ex: Barcode Scanner Epson M0289"
                 disabled={!canUpdateEquipment || isBusy}
-                className="w-full h-10 px-3 rounded-lg border border-[#8191ad] bg-[#4f5d75] text-white placeholder-white/50 text-sm focus:outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
+                className="w-full h-10 px-3 rounded-lg border border-[#3f3a36] bg-[#2b2622] text-white placeholder-white/50 text-sm focus:outline-none focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
               />
               {errors.equipmentName && (
                 <p className="mt-1 text-xs text-rose-300">{errors.equipmentName.message}</p>
@@ -330,13 +330,13 @@ function EditEquipmentModalContent({
 
             {/* Mode 1: Converting Standard -> Serialized */}
             {isConvertingToSerialized && (
-              <div className="rounded-xl border border-[#8191ad] bg-[#586680]/70 p-4 space-y-3 animate-in fade-in">
+              <div className="rounded-xl border border-[#3f3a36] bg-[#2b2622]/70 p-4 space-y-3 animate-in fade-in">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-white flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                     Conversion en équipement sérialisé
                   </span>
-                  <span className="text-[11px] text-[#38bdf8] bg-[#1e2b48] px-2 py-0.5 rounded font-medium border border-[#38bdf8]/30">
+                  <span className="text-[11px] text-[#f7f5f0] bg-[#2b2622] px-2 py-0.5 rounded font-medium border border-[#38bdf8]/30">
                     {serialList.length} code(s) requis
                   </span>
                 </div>
@@ -355,12 +355,12 @@ function EditEquipmentModalContent({
                     max="200"
                     value={serialCount}
                     onChange={(e) => handleSerialCountChange(parseInt(e.target.value, 10) || 1)}
-                    className="w-20 h-8 px-2 rounded-lg border border-[#8191ad] bg-[#4f5d75] text-white text-xs font-mono font-medium text-center focus:outline-none focus:border-white"
+                    className="w-20 h-8 px-2 rounded-lg border border-[#3f3a36] bg-[#2b2622] text-white text-xs font-mono font-medium text-center focus:outline-none focus:border-white"
                   />
                   <button
                     type="button"
                     onClick={handleRegenerateCodes}
-                    className="ml-auto px-2.5 py-1 text-xs font-medium text-white bg-[#1e2b48] border border-white/20 rounded-md hover:bg-[#152037] transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    className="ml-auto px-2.5 py-1 text-xs font-medium text-white bg-[#2b2622] border border-white/20 rounded-md hover:bg-[#3f3a36] transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
                     <RefreshCw className="w-3 h-3" />
                     Régénérer les codes
@@ -368,11 +368,11 @@ function EditEquipmentModalContent({
                 </div>
 
                 {/* Preview list */}
-                <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1 border border-[#8191ad]/60 rounded-lg p-2 bg-[#4f5d75]/50">
+                <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1 border border-[#3f3a36]/60 rounded-lg p-2 bg-[#2b2622]/50">
                   {serialList.map((code, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between px-2.5 py-1 bg-[#4f5d75] border border-[#8191ad] rounded text-xs font-mono text-white"
+                      className="flex items-center justify-between px-2.5 py-1 bg-[#2b2622] border border-[#3f3a36] rounded text-xs font-mono text-white"
                     >
                       <span className="text-[11px] text-white/60">#{idx + 1}</span>
                       <span className="font-semibold text-emerald-300">{code}</span>
@@ -413,7 +413,7 @@ function EditEquipmentModalContent({
                       type="number"
                       min="0"
                       {...register('equipmentQuantity', { valueAsNumber: true })}
-                      className="w-full h-10 px-3 pl-8 rounded-lg border border-amber-400/40 bg-[#4f5d75] text-white text-sm focus:outline-none focus:border-white"
+                      className="w-full h-10 px-3 pl-8 rounded-lg border border-amber-400/40 bg-[#2b2622] text-white text-sm focus:outline-none focus:border-white"
                     />
                     <Hash className="w-4 h-4 text-white/60 absolute left-2.5 top-3" />
                   </div>
@@ -423,10 +423,10 @@ function EditEquipmentModalContent({
 
             {/* Mode 3: Already Serialized & Staying Serialized */}
             {!isConvertingToSerialized && !isConvertingToStandard && hasSerialNumber && (
-              <div className="rounded-xl border border-[#8191ad] bg-[#586680]/60 p-3.5 space-y-2">
+              <div className="rounded-xl border border-[#3f3a36] bg-[#2b2622]/60 p-3.5 space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium text-white">Quantité en stock</span>
-                  <span className="font-semibold px-2 py-0.5 rounded bg-[#1e2b48] text-emerald-300 border border-emerald-400/30">
+                  <span className="font-semibold px-2 py-0.5 rounded bg-[#2b2622] text-emerald-300 border border-emerald-400/30">
                     {equipment.equipmentQuantity} exemplaire(s)
                   </span>
                 </div>
@@ -448,7 +448,7 @@ function EditEquipmentModalContent({
                     min="0"
                     {...register('equipmentQuantity', { valueAsNumber: true })}
                     disabled={!canUpdateEquipment || isBusy}
-                    className="w-full h-10 px-3 pl-8 rounded-lg border border-[#8191ad] bg-[#4f5d75] text-white placeholder-white/50 text-sm focus:outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
+                    className="w-full h-10 px-3 pl-8 rounded-lg border border-[#3f3a36] bg-[#2b2622] text-white placeholder-white/50 text-sm focus:outline-none focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
                   />
                   <Hash className="w-4 h-4 text-white/60 absolute left-2.5 top-3" />
                 </div>
@@ -468,7 +468,7 @@ function EditEquipmentModalContent({
                 min="0"
                 {...register('minEquipmentQuantity', { valueAsNumber: true })}
                 disabled={!canUpdateEquipment || isBusy}
-                className="w-full h-10 px-3 rounded-lg border border-[#8191ad] bg-[#4f5d75] text-white placeholder-white/50 text-sm focus:outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
+                className="w-full h-10 px-3 rounded-lg border border-[#3f3a36] bg-[#2b2622] text-white placeholder-white/50 text-sm focus:outline-none focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 transition-all"
               />
               {errors.minEquipmentQuantity && (
                 <p className="mt-1 text-xs text-rose-300">{errors.minEquipmentQuantity.message}</p>
@@ -476,7 +476,7 @@ function EditEquipmentModalContent({
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#8191ad]/50">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#3f3a36]/50">
               <button
                 type="button"
                 onClick={onClose}
@@ -488,7 +488,7 @@ function EditEquipmentModalContent({
               <button
                 type="submit"
                 disabled={isBusy || !canUpdateEquipment}
-                className="px-5 py-2 text-xs font-medium text-white bg-[#1e2b48] border border-[#2e3e63] rounded-lg hover:bg-[#152037] active:scale-[0.98] disabled:opacity-50 transition-all flex items-center gap-2 shadow-sm cursor-pointer"
+                className="px-5 py-2 text-xs font-medium text-white bg-[#2b2622] border border-[#4d4742] rounded-lg hover:bg-[#3f3a36] active:scale-[0.98] disabled:opacity-50 transition-all flex items-center gap-2 shadow-sm cursor-pointer"
               >
                 {isBusy && (
                   <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />

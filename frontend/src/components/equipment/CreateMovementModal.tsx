@@ -237,15 +237,15 @@ function CreateMovementModalContent({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150">
       <div
-        className="w-full max-w-xl bg-[#6b7b97] border border-[#8191ad] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 my-8 text-left"
+        className="w-full max-w-xl bg-[#383330] border border-[#3f3a36] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 my-8 text-left"
         role="dialog"
         aria-modal="true"
         aria-labelledby="movement-modal-title"
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#455268] flex items-center justify-between bg-[#53627c]">
+        <div className="px-6 py-4 border-b border-[#3f3a36] flex items-center justify-between bg-[#2b2622]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#1e2b48] border border-white/20 flex items-center justify-center text-[#38bdf8]">
+            <div className="w-8 h-8 rounded-lg bg-[#2b2622] border border-white/20 flex items-center justify-center text-[#f7f5f0]">
               <ArrowRightLeft className="w-4 h-4" />
             </div>
             <div>
@@ -281,7 +281,7 @@ function CreateMovementModalContent({
               Équipement concerné <span className="text-rose-300">*</span>
             </label>
             {initialEquipment ? (
-              <div className="p-3 bg-[#586680]/60 border border-[#8191ad] rounded-lg flex items-center justify-between">
+              <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <Package className="w-4 h-4 text-white" />
                   <div>
@@ -308,13 +308,13 @@ function CreateMovementModalContent({
                     handleSelectEquipment(eq);
                   }
                 }}
-                className="w-full h-9 px-3 bg-[#4f5d75] text-white border border-[#8191ad] rounded-lg outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20"
+                className="w-full h-9 px-3 bg-[#2b2622] text-white border border-[#3f3a36] rounded-lg outline-none focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20"
               >
-                <option value="" disabled className="bg-[#4f5d75] text-white">
+                <option value="" disabled className="bg-[#2b2622] text-white">
                   -- Choisissez un équipement --
                 </option>
                 {equipmentsList.map((eq) => (
-                  <option key={eq.equipmentId} value={eq.equipmentId} className="bg-[#4f5d75] text-white">
+                  <option key={eq.equipmentId} value={eq.equipmentId} className="bg-[#2b2622] text-white">
                     {eq.equipmentName} ({eq.equipmentQuantity} en stock) {eq.hasSerialNumber ? '• Sérialisé' : ''}
                   </option>
                 ))}
@@ -334,13 +334,13 @@ function CreateMovementModalContent({
                 onClick={() => handleTypeChange('TRANSFER')}
                 className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
                   movementType === 'TRANSFER'
-                    ? 'bg-[#1e2b48] border-white/40 text-white ring-2 ring-white/20'
-                    : 'bg-[#586680]/50 border-[#8191ad]/60 hover:bg-[#586680]/80 text-white/80'
+                    ? 'bg-[#2b2622] border-white/40 text-white ring-2 ring-white/20'
+                    : 'bg-[#2b2622]/50 border-[#3f3a36]/60 hover:bg-[#2b2622]/80 text-white/80'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <ArrowRightLeft className={`w-3.5 h-3.5 ${movementType === 'TRANSFER' ? 'text-[#38bdf8]' : 'text-white/70'}`} />
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/40 text-[#38bdf8] border border-[#38bdf8]/40">
+                  <ArrowRightLeft className={`w-3.5 h-3.5 ${movementType === 'TRANSFER' ? 'text-[#f7f5f0]' : 'text-white/70'}`} />
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/40 text-[#f7f5f0] border border-[#38bdf8]/40">
                     ⇄ TRANSFER
                   </span>
                 </div>
@@ -356,8 +356,8 @@ function CreateMovementModalContent({
                 onClick={() => handleTypeChange('IN')}
                 className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
                   movementType === 'IN'
-                    ? 'bg-[#1e2b48] border-emerald-400 text-white ring-2 ring-emerald-400/40'
-                    : 'bg-[#586680]/50 border-[#8191ad]/60 hover:bg-[#586680]/80 text-white/80'
+                    ? 'bg-[#2b2622] border-emerald-400 text-white ring-2 ring-emerald-400/40'
+                    : 'bg-[#2b2622]/50 border-[#3f3a36]/60 hover:bg-[#2b2622]/80 text-white/80'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -378,8 +378,8 @@ function CreateMovementModalContent({
                 onClick={() => handleTypeChange('OUT')}
                 className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
                   movementType === 'OUT'
-                    ? 'bg-[#1e2b48] border-amber-400 text-white ring-2 ring-amber-400/40'
-                    : 'bg-[#586680]/50 border-[#8191ad]/60 hover:bg-[#586680]/80 text-white/80'
+                    ? 'bg-[#2b2622] border-amber-400 text-white ring-2 ring-amber-400/40'
+                    : 'bg-[#2b2622]/50 border-[#3f3a36]/60 hover:bg-[#2b2622]/80 text-white/80'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -398,7 +398,7 @@ function CreateMovementModalContent({
 
           {/* 3. Serial Number Selector (If Serialized Equipment) */}
           {selectedEquipment?.hasSerialNumber && (
-            <div className="space-y-1.5 p-3 bg-[#586680]/60 border border-[#8191ad] rounded-lg">
+            <div className="space-y-1.5 p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg">
               <div className="flex items-center justify-between">
                 <label className="font-semibold text-white flex items-center gap-1.5">
                   <Barcode className="w-3.5 h-3.5 text-emerald-300" />
@@ -414,13 +414,13 @@ function CreateMovementModalContent({
                 <select
                   value={selectedSerialNumberId}
                   onChange={(e) => handleSelectSerialNumber(e.target.value)}
-                  className="w-full h-9 px-3 bg-[#4f5d75] font-mono text-xs text-white border border-[#8191ad] rounded-lg outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20"
+                  className="w-full h-9 px-3 bg-[#2b2622] font-mono text-xs text-white border border-[#3f3a36] rounded-lg outline-none focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20"
                 >
-                  <option value="" disabled className="bg-[#4f5d75] text-white">
+                  <option value="" disabled className="bg-[#2b2622] text-white">
                     -- Choisissez un numéro de série --
                   </option>
                   {selectedEquipment.serialNumbers.map((sn) => (
-                    <option key={sn.serialNumberId} value={sn.serialNumberId} className="bg-[#4f5d75] text-white">
+                    <option key={sn.serialNumberId} value={sn.serialNumberId} className="bg-[#2b2622] text-white">
                       {sn.serialNumberCode} — ({sn.shelf?.shelfName ? `Étagère: ${sn.shelf.shelfName}` : 'Non assigné'})
                     </option>
                   ))}
@@ -449,15 +449,15 @@ function CreateMovementModalContent({
                   value={sourceShelfId}
                   onChange={(e) => setSourceShelfId(e.target.value)}
                   disabled={selectedEquipment?.hasSerialNumber}
-                  className="w-full h-9 px-3 bg-[#4f5d75] text-white text-xs border border-[#8191ad] rounded-lg outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full h-9 px-3 bg-[#2b2622] text-white text-xs border border-[#3f3a36] rounded-lg outline-none focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <option value="" className="bg-[#4f5d75] text-white">-- Choisir étagère source --</option>
+                  <option value="" className="bg-[#2b2622] text-white">-- Choisir étagère source --</option>
                   {shelves.map((sh) => {
                     const alloc = selectedEquipment?.equipmentShelfs?.find(
                       (es) => es.shelfId === sh.shelfId,
                     );
                     return (
-                      <option key={sh.shelfId} value={sh.shelfId} className="bg-[#4f5d75] text-white">
+                      <option key={sh.shelfId} value={sh.shelfId} className="bg-[#2b2622] text-white">
                         {sh.shelfName} {alloc ? `(${alloc.equipmentQuantity} en stock)` : ''}
                       </option>
                     );
@@ -479,13 +479,13 @@ function CreateMovementModalContent({
                 <select
                   value={destinationShelfId}
                   onChange={(e) => setDestinationShelfId(e.target.value)}
-                  className="w-full h-9 px-3 bg-[#4f5d75] text-white text-xs border border-[#8191ad] rounded-lg outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20"
+                  className="w-full h-9 px-3 bg-[#2b2622] text-white text-xs border border-[#3f3a36] rounded-lg outline-none focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20"
                 >
-                  <option value="" className="bg-[#4f5d75] text-white">-- Choisir étagère cible --</option>
+                  <option value="" className="bg-[#2b2622] text-white">-- Choisir étagère cible --</option>
                   {shelves
                     .filter((sh) => sh.shelfId !== sourceShelfId)
                     .map((sh) => (
-                      <option key={sh.shelfId} value={sh.shelfId} className="bg-[#4f5d75] text-white">
+                      <option key={sh.shelfId} value={sh.shelfId} className="bg-[#2b2622] text-white">
                         {sh.shelfName}
                       </option>
                     ))}
@@ -496,7 +496,7 @@ function CreateMovementModalContent({
 
           {/* 5. Quantity Controls (All Quantity vs Partial Quantity) */}
           {!selectedEquipment?.hasSerialNumber && (
-            <div className="space-y-1.5 p-3 bg-[#586680]/60 border border-[#8191ad] rounded-lg">
+            <div className="space-y-1.5 p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg">
               <div className="flex items-center justify-between">
                 <label className="font-semibold text-white">
                   Quantité à déplacer <span className="text-rose-300">*</span>
@@ -515,14 +515,14 @@ function CreateMovementModalContent({
                   max={movementType === 'IN' ? 99999 : maxAvailableQuantity}
                   value={quantity}
                   onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="flex-1 h-9 px-3 bg-[#4f5d75] text-white font-mono text-xs border border-[#8191ad] rounded-lg outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20"
+                  className="flex-1 h-9 px-3 bg-[#2b2622] text-white font-mono text-xs border border-[#3f3a36] rounded-lg outline-none focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20"
                 />
 
                 {movementType !== 'IN' && (
                   <button
                     type="button"
                     onClick={handleSetAllQuantity}
-                    className="h-9 px-3 bg-[#1e2b48] hover:bg-[#152037] text-white text-xs font-semibold rounded-lg border border-white/20 transition-colors cursor-pointer shrink-0"
+                    className="h-9 px-3 bg-[#2b2622] hover:bg-[#3f3a36] text-white text-xs font-semibold rounded-lg border border-white/20 transition-colors cursor-pointer shrink-0"
                     title="Déplacer l'intégralité du stock disponible"
                   >
                     Toute la quantité ({maxAvailableQuantity})
@@ -533,7 +533,7 @@ function CreateMovementModalContent({
           )}
 
           {/* 6. Live Impact & Calculation Summary Box */}
-          <div className="p-3 bg-[#586680]/70 border border-[#8191ad] rounded-lg space-y-1.5 text-white">
+          <div className="p-3 bg-[#2b2622]/70 border border-[#3f3a36] rounded-lg space-y-1.5 text-white">
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold text-white flex items-center gap-1">
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
@@ -557,7 +557,7 @@ function CreateMovementModalContent({
                       ? 'text-emerald-300'
                       : movementType === 'OUT'
                       ? 'text-amber-300'
-                      : 'text-[#38bdf8]'
+                      : 'text-[#f7f5f0]'
                   }`}
                 >
                   {movementType === 'IN' ? `+${quantity}` : movementType === 'OUT' ? `-${quantity}` : '0 (Transfert)'}
@@ -577,7 +577,7 @@ function CreateMovementModalContent({
           </div>
 
           {/* Modal Actions */}
-          <div className="pt-3 border-t border-[#8191ad]/50 flex items-center justify-end gap-2">
+          <div className="pt-3 border-t border-[#3f3a36]/50 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
@@ -588,7 +588,7 @@ function CreateMovementModalContent({
             <button
               type="submit"
               disabled={isCreatingMovement || isShelvesLoading}
-              className="inline-flex items-center justify-center gap-2 px-4.5 py-2 bg-[#1e2b48] hover:bg-[#152037] text-white text-xs font-medium rounded-lg border border-[#2e3e63] shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 px-4.5 py-2 bg-[#2b2622] hover:bg-[#3f3a36] text-white text-xs font-medium rounded-lg border border-[#4d4742] shadow-xs transition-colors cursor-pointer disabled:opacity-50"
             >
               {isCreatingMovement ? (
                 <>

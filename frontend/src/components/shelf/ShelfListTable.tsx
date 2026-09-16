@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { Shelf } from '@/types/shelf';
-import { getShelfVisualTheme } from './shelf-icons';
 import {
   Search,
   RefreshCw,
@@ -261,8 +260,6 @@ export function ShelfListTable({
                 shelves.map((shelf, idx) => {
                   const globalIndex = (currentPage - 1) * limit + idx + 1;
                   const formattedIndex = String(globalIndex).padStart(2, '0');
-                  const visualTheme = getShelfVisualTheme(shelf.shelfName, idx);
-                  const IconComp = visualTheme.icon;
 
                   return (
                     <tr
@@ -277,16 +274,9 @@ export function ShelfListTable({
                         </span>
                       </td>
 
-                      {/* 2. Beautiful Icon + Shelf Name */}
+                      {/* 2. Shelf Name */}
                       <td className="py-3 px-4 font-medium text-[#f7f5f0]">
                         <div className="flex items-center gap-2.5">
-                          <div
-                            className={`w-7 h-7 rounded-[3px] ${visualTheme.bg} border ${visualTheme.border} flex items-center justify-center ${visualTheme.text} shrink-0`}
-                            title={visualTheme.label}
-                          >
-                            <IconComp className="w-3.5 h-3.5" />
-                          </div>
-
                           <div className="min-w-0">
                             <p className="font-medium text-xs text-[#f7f5f0] truncate max-w-xs group-hover:text-white transition-colors">
                               {shelf.shelfName ?? 'Étagère sans nom'}
@@ -296,7 +286,7 @@ export function ShelfListTable({
                               {shelf.stock?.stockName && (
                                 <>
                                   <span>•</span>
-                                  <span className="text-[#38bdf8] flex items-center gap-0.5">
+                                  <span className="text-[#f7f5f0] flex items-center gap-0.5">
                                     <Warehouse className="w-3 h-3" />
                                     {shelf.stock.stockName}
                                   </span>
@@ -404,8 +394,6 @@ export function ShelfListTable({
               {shelves.map((shelf, idx) => {
                 const globalIndex = (currentPage - 1) * limit + idx + 1;
                 const formattedIndex = String(globalIndex).padStart(2, '0');
-                const visualTheme = getShelfVisualTheme(shelf.shelfName, idx);
-                const IconComp = visualTheme.icon;
 
                 return (
                   <div
@@ -423,21 +411,12 @@ export function ShelfListTable({
                       </span>
                     </div>
 
-                    {/* Icon and Title */}
+                    {/* Title */}
                     <div className="flex items-start gap-3">
-                      <div
-                        className={`w-9 h-9 rounded-[3px] ${visualTheme.bg} border ${visualTheme.border} flex items-center justify-center ${visualTheme.text} shrink-0`}
-                      >
-                        <IconComp className="w-4 h-4" />
-                      </div>
-
                       <div className="min-w-0 flex-1">
                         <h3 className="font-medium text-xs text-[#f7f5f0] truncate group-hover:text-white transition-colors">
                           {shelf.shelfName ?? 'Étagère sans nom'}
                         </h3>
-                        <p className="text-[11px] font-mono text-[#aea69c] truncate mt-0.5">
-                          {visualTheme.label}
-                        </p>
                       </div>
                     </div>
 
@@ -446,8 +425,8 @@ export function ShelfListTable({
                       <span className="text-[#aea69c] font-mono text-[11px] flex items-center gap-1">
                         {shelf.stock?.stockName ? (
                           <>
-                            <Warehouse className="w-3 h-3 text-[#38bdf8]" />
-                            <span className="text-[#38bdf8] truncate max-w-[110px]">{shelf.stock.stockName}</span>
+                            <Warehouse className="w-3 h-3 text-[#f7f5f0]" />
+                            <span className="text-[#f7f5f0] truncate max-w-[110px]">{shelf.stock.stockName}</span>
                           </>
                         ) : (
                           'Stock initial :'

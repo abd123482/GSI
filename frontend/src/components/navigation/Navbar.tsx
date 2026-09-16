@@ -13,9 +13,17 @@ import {
   Menu,
   X,
   Users,
+  ClipboardList,
+  ChevronDown
 } from 'lucide-react';
 import { useState } from 'react';
 import { usePermissions } from '@/hooks/use-permissions';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export function Navbar() {
   const pathname = usePathname();
@@ -29,6 +37,7 @@ export function Navbar() {
   const isEquipmentActive =
     pathname?.startsWith('/equipment') || pathname?.startsWith('/equipments');
   const isUsersActive = pathname?.startsWith('/users');
+  const isInventoryActive = pathname?.startsWith('/inventory');
 
   return (
     <header className="sticky top-0 z-40 w-full bg-[#2b2622]/95 backdrop-blur-md border-b border-[#3f3a36] transition-colors">
@@ -55,9 +64,6 @@ export function Navbar() {
               <span className="text-[13px] font-medium text-[#f7f5f0] tracking-tight">
                 SomePharm
               </span>
-              <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded-[2px] bg-[#383330] text-[#dad2c1] border border-[#3f3a36]">
-                dev-env
-              </span>
             </div>
           </Link>
 
@@ -66,62 +72,61 @@ export function Navbar() {
 
           {/* Desktop Navigation Links */}
           <nav className="hidden sm:flex items-center gap-1">
-            {/* Stocks Link */}
-            <Link
-              href="/stocks"
-              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-[3px] text-xs font-medium transition-colors ${
-                isStocksActive
-                  ? 'bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]'
-                  : 'text-[#c9c0ad] hover:text-[#f7f5f0] hover:bg-[#383330]/70'
-              }`}
-            >
-              <Warehouse className="w-3.5 h-3.5 text-[#aea69c]" />
-              <span>Stocks</span>
-            </Link>
+            {/* Stocks Dropdown Link */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-[3px] text-xs font-medium transition-colors outline-none focus:ring-1 focus:ring-[#aea69c] ${
+                    isStocksActive || isShelvesActive || isEquipmentActive
+                      ? 'bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]'
+                      : 'text-[#c9c0ad] hover:text-[#f7f5f0] hover:bg-[#383330]/70'
+                  }`}
+                >
+                  <Warehouse className="w-3.5 h-3.5 text-[#aea69c]" />
+                  <span>Stocks</span>
+                  <ChevronDown className="w-3 h-3 text-[#5c544d]" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48 bg-[#2f2a26] border-[#3f3a36] text-[#c9c0ad]">
+                <DropdownMenuItem className="focus:bg-[#383330] focus:text-[#f7f5f0] cursor-pointer">
+                  <Link href="/stocks" className="flex items-center gap-2 w-full">
+                    <Warehouse className="w-3.5 h-3.5" />
+                    <span>Vue d'ensemble</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="focus:bg-[#383330] focus:text-[#f7f5f0] cursor-pointer">
+                  <Link href="/shelves" className="flex items-center gap-2 w-full">
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Étagères</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="focus:bg-[#383330] focus:text-[#f7f5f0] cursor-pointer">
+                  <Link href="/equipment" className="flex items-center gap-2 w-full">
+                    <Cpu className="w-3.5 h-3.5" />
+                    <span>Équipements</span>
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-            {/* Étagères Link */}
+            {/* Inventaire Link (Moved to last) */}
             <Link
-              href="/shelves"
+              href="/inventory"
               className={`flex items-center gap-2 px-2.5 py-1.5 rounded-[3px] text-xs font-medium transition-colors ${
-                isShelvesActive
+                isInventoryActive
                   ? 'bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]'
                   : 'text-[#c9c0ad] hover:text-[#f7f5f0] hover:bg-[#383330]/70'
               }`}
             >
-              <Layers className="w-3.5 h-3.5 text-[#aea69c]" />
-              <span>Étagères</span>
-            </Link>
-
-            {/* Équipements Link */}
-            <Link
-              href="/equipment"
-              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-[3px] text-xs font-medium transition-colors ${
-                isEquipmentActive
-                  ? 'bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]'
-                  : 'text-[#c9c0ad] hover:text-[#f7f5f0] hover:bg-[#383330]/70'
-              }`}
-            >
-              <Cpu className="w-3.5 h-3.5 text-[#aea69c]" />
-              <span>Équipements</span>
-            </Link>
-
-            {/* Utilisateurs & Rôles Link */}
-            <Link
-              href="/users"
-              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-[3px] text-xs font-medium transition-colors ${
-                isUsersActive
-                  ? 'bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]'
-                  : 'text-[#c9c0ad] hover:text-[#f7f5f0] hover:bg-[#383330]/70'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5 text-[#aea69c]" />
-              <span>Rôles & Accès</span>
+              <ClipboardList className="w-3.5 h-3.5 text-[#aea69c]" />
+              <span>Inventaires</span>
             </Link>
           </nav>
         </div>
 
         {/* Right: Auth / User Profile / Quick Actions */}
         <div className="flex items-center gap-3">
+
           {/* Permission Status Pill (Desktop) */}
           {isSignedIn && (
             <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] bg-[#383330] text-[#c9c0ad] text-[11px] font-mono border border-[#3f3a36]">
@@ -146,7 +151,23 @@ export function Navbar() {
             <div className="w-7 h-7 rounded-[3px] bg-[#383330] animate-pulse" />
           ) : isSignedIn ? (
             <div className="p-0.5 rounded-[3px] border border-[#3f3a36] hover:border-[#4d4742] transition-colors flex items-center justify-center bg-[#383330]">
-              <UserButton />
+              <UserButton
+                appearance={{
+                  elements: {
+                    userButtonPopoverFooter: 'hidden',
+                  },
+                }}
+              >
+                <UserButton.MenuItems>
+                  <UserButton.Action label="manageAccount" />
+                  <UserButton.Link
+                    label="Rôles & Accès"
+                    labelIcon={<Users className="w-4 h-4" />}
+                    href="/users"
+                  />
+                  <UserButton.Action label="signOut" />
+                </UserButton.MenuItems>
+              </UserButton>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -185,52 +206,70 @@ export function Navbar() {
       {/* Mobile Navigation Drawer */}
       {mobileMenuOpen && (
         <div className="sm:hidden border-t border-[#3f3a36] bg-[#2b2622] px-4 py-3 space-y-1.5">
-          <Link
-            href="/stocks"
-            onClick={() => setMobileMenuOpen(false)}
-            className={`flex items-center justify-between p-2 rounded-[3px] text-xs font-medium ${
-              isStocksActive
-                ? 'bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]'
-                : 'text-[#c9c0ad] hover:bg-[#383330]'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <Warehouse className="w-4 h-4 text-[#aea69c]" />
-              <span>Gestion des Stocks</span>
-            </div>
-            <span className="text-[11px] font-mono text-[#aea69c]">/stocks</span>
-          </Link>
+          <div className="space-y-1">
+            <div className="p-2 text-[10px] font-mono text-[#5c544d] uppercase tracking-wider">Stocks & Matériel</div>
+            
+            <Link
+              href="/stocks"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center justify-between p-2 rounded-[3px] text-xs font-medium ${
+                isStocksActive
+                  ? 'bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]'
+                  : 'text-[#c9c0ad] hover:bg-[#383330]'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Warehouse className="w-4 h-4 text-[#aea69c]" />
+                <span>Vue d'ensemble</span>
+              </div>
+            </Link>
+
+            <Link
+              href="/shelves"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center justify-between p-2 rounded-[3px] text-xs font-medium ${
+                isShelvesActive
+                  ? 'bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]'
+                  : 'text-[#c9c0ad] hover:bg-[#383330]'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Layers className="w-4 h-4 text-[#aea69c]" />
+                <span>Gestion des Étagères</span>
+              </div>
+            </Link>
+
+            <Link
+              href="/equipment"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center justify-between p-2 rounded-[3px] text-xs font-medium ${
+                isEquipmentActive
+                  ? 'bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]'
+                  : 'text-[#c9c0ad] hover:bg-[#383330]'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Cpu className="w-4 h-4 text-[#aea69c]" />
+                <span>Équipements & Séries</span>
+              </div>
+            </Link>
+          </div>
+          
+          <div className="h-px bg-[#3f3a36] my-2" />
 
           <Link
-            href="/shelves"
+            href="/inventory"
             onClick={() => setMobileMenuOpen(false)}
             className={`flex items-center justify-between p-2 rounded-[3px] text-xs font-medium ${
-              isShelvesActive
+              isInventoryActive
                 ? 'bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]'
                 : 'text-[#c9c0ad] hover:bg-[#383330]'
             }`}
           >
             <div className="flex items-center gap-2.5">
-              <Layers className="w-4 h-4 text-[#aea69c]" />
-              <span>Gestion des Étagères</span>
+              <ClipboardList className="w-4 h-4 text-[#aea69c]" />
+              <span>Inventaires</span>
             </div>
-            <span className="text-[11px] font-mono text-[#aea69c]">/shelves</span>
-          </Link>
-
-          <Link
-            href="/equipment"
-            onClick={() => setMobileMenuOpen(false)}
-            className={`flex items-center justify-between p-2 rounded-[3px] text-xs font-medium ${
-              isEquipmentActive
-                ? 'bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]'
-                : 'text-[#c9c0ad] hover:bg-[#383330]'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <Cpu className="w-4 h-4 text-[#aea69c]" />
-              <span>Équipements & Séries</span>
-            </div>
-            <span className="text-[11px] font-mono text-[#aea69c]">/equipment</span>
           </Link>
 
           <Link
@@ -246,7 +285,6 @@ export function Navbar() {
               <Users className="w-4 h-4 text-[#aea69c]" />
               <span>Utilisateurs & Rôles</span>
             </div>
-            <span className="text-[11px] font-mono text-[#aea69c]">/users</span>
           </Link>
         </div>
       )}

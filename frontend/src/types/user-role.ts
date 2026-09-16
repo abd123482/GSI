@@ -37,6 +37,12 @@ export interface CreateRoleInput {
   permissions: string[];
 }
 
+export interface EditRoleInput {
+  roleId: string;
+  roleName?: string;
+  permissions?: string[];
+}
+
 export interface AssignRoleInput {
   userId: string;
   roleId: string | null;

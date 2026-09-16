@@ -87,17 +87,17 @@ function UpdateStockModalContent({ stock, isOpen, onClose, onSuccess }: UpdateSt
   const isBusy = isSubmitting || isSubmittingManual;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#0a1530]/40 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#111]/40 backdrop-blur-xs animate-in fade-in duration-150">
       <div
-        className="relative w-full max-w-lg bg-[#6b7b97] border border-[#8191ad] text-white rounded-xl shadow-2xl overflow-hidden transform transition-all"
+        className="relative w-full max-w-lg bg-[#383330] border border-[#3f3a36] text-white rounded-xl shadow-2xl overflow-hidden transform transition-all"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-update-stock-title"
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4.5 border-b border-[#455268] bg-[#53627c]">
+        <div className="flex items-center justify-between px-6 py-4.5 border-b border-[#3f3a36] bg-[#2b2622]">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#1e2b48] border border-[#3e4f73] text-[#38bdf8] flex items-center justify-center shadow-2xs">
+            <div className="w-9 h-9 rounded-lg bg-[#2b2622] border border-[#3f3a36] text-[#f7f5f0] flex items-center justify-center shadow-2xs">
               <Warehouse className="w-5 h-5" />
             </div>
             <div>
@@ -156,10 +156,10 @@ function UpdateStockModalContent({ stock, isOpen, onClose, onSuccess }: UpdateSt
               id="editStockName"
               type="text"
               disabled={isBusy}
-              className={`w-full h-11 px-3.5 bg-[#4f5d75] text-white placeholder-white/50 text-sm border rounded-lg transition-all outline-none ${
+              className={`w-full h-11 px-3.5 bg-[#2b2622] text-white placeholder-white/50 text-sm border rounded-lg transition-all outline-none ${
                 errors.stockName
                   ? 'border-rose-400 focus:ring-2 focus:ring-rose-400/30'
-                  : 'border-[#8191ad] focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20'
+                  : 'border-[#3f3a36] focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20'
               }`}
               {...register('stockName')}
             />
@@ -183,25 +183,25 @@ function UpdateStockModalContent({ stock, isOpen, onClose, onSuccess }: UpdateSt
             <select
               id="editStockStatus"
               disabled={isBusy}
-              className="w-full h-11 px-3.5 bg-[#4f5d75] text-white text-sm border border-[#8191ad] rounded-lg transition-all outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20"
+              className="w-full h-11 px-3.5 bg-[#2b2622] text-white text-sm border border-[#3f3a36] rounded-lg transition-all outline-none focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20"
               {...register('stockStatus')}
             >
-              <option value="ACTIVE" className="bg-[#4f5d75] text-white">ACTIVE (En activité)</option>
-              <option value="INACTIVE" className="bg-[#4f5d75] text-white">INACTIVE (En pause)</option>
-              <option value="ARCHIVED" className="bg-[#4f5d75] text-white">ARCHIVED (Archivé)</option>
+              <option value="ACTIVE" className="bg-[#2b2622] text-white">ACTIVE (En activité)</option>
+              <option value="INACTIVE" className="bg-[#2b2622] text-white">INACTIVE (En pause)</option>
+              <option value="ARCHIVED" className="bg-[#2b2622] text-white">ARCHIVED (Archivé)</option>
             </select>
           </div>
 
           {/* Associated Shelves Count info */}
-          <div className="p-3 bg-[#586680]/60 border border-[#8191ad] rounded-lg flex items-center justify-between text-xs text-white">
+          <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg flex items-center justify-between text-xs text-white">
             <span className="text-white/85">Étagères rattachées à ce stock :</span>
-            <span className="px-2 py-0.5 rounded-full bg-[#1e2b48] border border-[#3e4f73] text-white font-semibold text-xs">
+            <span className="px-2 py-0.5 rounded-full bg-[#2b2622] border border-[#3f3a36] text-white font-semibold text-xs">
               {stock._count?.shelves ?? stock.shelves?.length ?? 0} étagères
             </span>
           </div>
 
           {/* Action Buttons */}
-          <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-[#8191ad]">
+          <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-[#3f3a36]">
             <button
               type="button"
               onClick={onClose}
@@ -214,7 +214,7 @@ function UpdateStockModalContent({ stock, isOpen, onClose, onSuccess }: UpdateSt
             <button
               type="submit"
               disabled={isBusy || !canUpdateStock}
-              className="px-4.5 py-2.5 bg-[#1e2b48] hover:bg-[#152037] text-white border border-[#2e3e63] text-sm font-medium rounded-lg shadow-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4.5 py-2.5 bg-[#2b2622] hover:bg-[#3f3a36] text-white border border-[#4d4742] text-sm font-medium rounded-lg shadow-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isBusy ? (
                 <>

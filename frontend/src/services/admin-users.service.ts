@@ -7,6 +7,7 @@ import {
   UpdateUserStatusInput,
   UsersQuery,
   PaginatedUsersResponse,
+  EditRoleInput,
 } from '@/types/user-role';
 
 export class AdminUsersService {
@@ -54,6 +55,18 @@ export class AdminUsersService {
       roleName: input.roleName.trim(),
       permissions: input.permissions,
     });
+    return response.data;
+  }
+
+  /**
+   * Edit an existing role.
+   */
+  static async editRole(
+    client: AxiosInstance,
+    input: EditRoleInput,
+  ): Promise<Role> {
+    const { roleId, ...payload } = input;
+    const response = await client.patch<Role>(`/admin/roles/${roleId}`, payload);
     return response.data;
   }
 

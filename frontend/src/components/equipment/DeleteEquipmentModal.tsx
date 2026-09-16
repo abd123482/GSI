@@ -63,13 +63,13 @@ export function DeleteEquipmentModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
       <div
-        className="w-full max-w-md bg-[#6b7b97] border border-[#8191ad] rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left text-white"
+        className="w-full max-w-md bg-[#383330] border border-[#3f3a36] rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left text-white"
         role="dialog"
         aria-modal="true"
         aria-labelledby="delete-equipment-title"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#455268] bg-[#53627c]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#3f3a36] bg-[#2b2622]">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-rose-500/20 border border-rose-400/40 flex items-center justify-center text-rose-200">
               <Trash2 className="w-4 h-4" />
@@ -112,7 +112,7 @@ export function DeleteEquipmentModal({
           </div>
 
           {/* Record Details */}
-          <div className="p-3 bg-[#586680]/60 rounded-lg border border-[#8191ad] space-y-2 text-xs">
+          <div className="p-3 bg-[#2b2622]/60 rounded-lg border border-[#3f3a36] space-y-2 text-xs">
             <div className="flex items-center justify-between text-white/80">
               <span className="flex items-center gap-1.5 font-medium text-white/90">
                 <Cpu className="w-3.5 h-3.5 text-white/70" />
@@ -133,7 +133,7 @@ export function DeleteEquipmentModal({
                   <Barcode className="w-3.5 h-3.5 text-emerald-300" />
                   Numéros de série enfants :
                 </span>
-                <span className="font-semibold px-2 py-0.5 rounded bg-[#1e2b48] text-emerald-300 border border-emerald-400/30">
+                <span className="font-semibold px-2 py-0.5 rounded bg-[#2b2622] text-emerald-300 border border-emerald-400/30">
                   {serialCount} code(s) (seront également supprimés)
                 </span>
               </div>
@@ -146,7 +146,7 @@ export function DeleteEquipmentModal({
         </div>
 
         {/* Actions Footer */}
-        <div className="flex items-center justify-end gap-2.5 px-5 py-3.5 bg-[#53627c] border-t border-[#455268]">
+        <div className="flex items-center justify-end gap-2.5 px-5 py-3.5 bg-[#2b2622] border-t border-[#3f3a36]">
           <button
             type="button"
             onClick={onClose}

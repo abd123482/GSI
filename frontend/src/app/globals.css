@@ -116,3 +116,11 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #4d4742;
 }
+
+/* Hide Clerk watermarks and dev mode badges */
+.cl-userButtonPopoverFooter,
+.cl-footer,
+.cl-internal-1dauvpw,
+.cl-internal-phgxti {
+  display: none !important;
+}

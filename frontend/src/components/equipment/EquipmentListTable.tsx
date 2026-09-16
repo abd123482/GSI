@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { Equipment, SerialNumber } from '@/types/equipment';
-import { getEquipmentVisualTheme } from './equipment-icons';
 import {
   Search,
   RefreshCw,
@@ -316,8 +315,6 @@ export function EquipmentListTable({
                 equipments.map((equipment, idx) => {
                   const globalIndex = (currentPage - 1) * limit + idx + 1;
                   const formattedIndex = String(globalIndex).padStart(2, '0');
-                  const visualTheme = getEquipmentVisualTheme(equipment.equipmentName, idx);
-                  const IconComp = visualTheme.icon;
                   const isExpanded = !!expandedEquipmentIds[equipment.equipmentId];
                   const serials = equipment.serialNumbers ?? [];
 
@@ -353,16 +350,9 @@ export function EquipmentListTable({
                           </span>
                         </td>
 
-                        {/* 2. Icon + Equipment Name */}
+                        {/* 2. Equipment Name */}
                         <td className="py-3 px-4 font-medium text-[#f7f5f0]">
                           <div className="flex items-center gap-2.5">
-                            <div
-                              className={`w-7 h-7 rounded-[3px] ${visualTheme.bg} border ${visualTheme.border} flex items-center justify-center ${visualTheme.text} shrink-0`}
-                              title={visualTheme.label}
-                            >
-                              <IconComp className="w-3.5 h-3.5" />
-                            </div>
-
                             <div className="min-w-0">
                               <p className="font-medium text-xs text-[#f7f5f0] truncate max-w-xs group-hover:text-white transition-colors">
                                 {equipment.equipmentName ?? 'Équipement sans nom'}
@@ -420,87 +410,27 @@ export function EquipmentListTable({
 
                         {/* 5. Shelf Locations */}
                         <td className="py-3 px-4">
-                          {!equipment.hasSerialNumber ? (
-                            <div className="space-y-1">
-                              {equipment.equipmentShelfs && equipment.equipmentShelfs.length > 0 ? (
-                                <div className="flex flex-wrap gap-1 items-center">
-                                  {equipment.equipmentShelfs.map((es) => (
-                                    <button
-                                      key={es.equipmentShelfId || es.shelfId}
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onViewEquipmentShelves?.(equipment);
-                                      }}
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] bg-[#2b2622] hover:bg-[#383330] border border-[#3f3a36] text-[10px] font-mono text-[#dad2c1] transition-colors cursor-pointer"
-                                      title="Cliquer pour voir les détails de cette étagère"
-                                    >
-                                      <Layers className="w-3 h-3 text-[#aea69c]" />
-                                      <span>{es.shelf?.shelfName ?? 'Étagère'}</span>
-                                      <span className="text-[#aea69c]">
-                                        ({es.equipmentQuantity})
-                                      </span>
-                                    </button>
-                                  ))}
-                                  {onViewEquipmentShelves && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onViewEquipmentShelves(equipment);
-                                      }}
-                                      className="inline-flex items-center gap-1 px-1 py-0.5 rounded-[2px] text-[10px] font-mono text-[#aea69c] hover:text-[#f7f5f0] hover:bg-[#2b2622] transition-colors cursor-pointer"
-                                      title="Consulter toutes les étagères de cet équipement"
-                                    >
-                                      <Eye className="w-2.5 h-2.5" />
-                                      <span>({equipment.equipmentShelfs.length})</span>
-                                    </button>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1.5">
-                                  <span className="inline-flex items-center gap-1 text-[11px] font-mono text-[#aea69c]">
-                                    <MapPin className="w-3 h-3 text-[#aea69c]" />
-                                    <span>Non assigné</span>
-                                  </span>
-                                  {onViewEquipmentShelves && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onViewEquipmentShelves(equipment);
-                                      }}
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] text-[10px] font-mono bg-[#2b2622] hover:bg-[#383330] border border-[#3f3a36] text-[#dad2c1] transition-colors cursor-pointer"
-                                      title="Voir les détails d'attribution aux étagères"
-                                    >
-                                      <Layers className="w-2.5 h-2.5 text-[#aea69c]" />
-                                      <span>Étagères</span>
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[11px] font-mono text-[#aea69c]">
-                                {serials.filter((s) => s.shelfId).length}/{serials.length} en rayons
-                              </span>
-                              {onViewEquipmentShelves && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onViewEquipmentShelves(equipment);
-                                  }}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] text-[10px] font-mono bg-[#2b2622] hover:bg-[#383330] border border-[#3f3a36] text-[#dad2c1] transition-colors cursor-pointer"
-                                  title="Voir la répartition des numéros de série par étagère"
-                                >
-                                  <Layers className="w-2.5 h-2.5 text-[#aea69c]" />
-                                  <span>Voir étagères</span>
-                                </button>
-                              )}
-                            </div>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-mono text-[#aea69c]">
+                              {equipment.hasSerialNumber 
+                                ? serials.filter((s) => s.shelfId).length 
+                                : (equipment.equipmentShelfs?.reduce((sum, es) => sum + (es.equipmentQuantity || 0), 0) || 0)}/{equipment.hasSerialNumber ? serials.length : equipment.equipmentQuantity} en rayons
+                            </span>
+                            {onViewEquipmentShelves && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onViewEquipmentShelves(equipment);
+                                }}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] text-[10px] font-mono bg-[#2b2622] hover:bg-[#383330] border border-[#3f3a36] text-[#dad2c1] transition-colors cursor-pointer"
+                                title="Voir les étagères de cet équipement"
+                              >
+                                <Layers className="w-2.5 h-2.5 text-[#aea69c]" />
+                                <span>Voir étagères</span>
+                              </button>
+                            )}
+                          </div>
                         </td>
 
                         {/* 6. GUID SQL Server */}
@@ -734,8 +664,6 @@ export function EquipmentListTable({
               {equipments.map((equipment, idx) => {
                 const globalIndex = (currentPage - 1) * limit + idx + 1;
                 const formattedIndex = String(globalIndex).padStart(2, '0');
-                const visualTheme = getEquipmentVisualTheme(equipment.equipmentName, idx);
-                const IconComp = visualTheme.icon;
                 const serials = equipment.serialNumbers ?? [];
                 const isExpanded = !!expandedEquipmentIds[equipment.equipmentId];
 
@@ -748,12 +676,6 @@ export function EquipmentListTable({
                     {/* Top Header Card */}
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2.5">
-                        <div
-                          className={`w-9 h-9 rounded-[3px] ${visualTheme.bg} border ${visualTheme.border} flex items-center justify-center ${visualTheme.text} shrink-0`}
-                        >
-                          <IconComp className="w-4.5 h-4.5" />
-                        </div>
-
                         <div>
                           <span className="font-mono text-[10px] text-[#dad2c1] bg-[#2b2622] border border-[#3f3a36] px-1.5 py-0.5 rounded-[2px]">
                             #{formattedIndex}

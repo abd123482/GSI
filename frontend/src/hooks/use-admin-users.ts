@@ -9,6 +9,7 @@ import {
   AdminUser,
   Role,
   CreateRoleInput,
+  EditRoleInput,
   AssignRoleInput,
   UpdateUserStatusInput,
   UserStatus,
@@ -102,6 +103,21 @@ export function useAdminUsers(options: UseAdminUsersOptions = {}) {
     },
   });
 
+  // Mutation: Edit Role
+  const editRoleMutation = useMutation({
+    mutationFn: (input: EditRoleInput) =>
+      AdminUsersService.editRole(api, input),
+    onSuccess: (updatedRole) => {
+      toast.success(`Le rôle '${updatedRole.roleName}' a été modifié avec succès !`);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'roles'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+    },
+    onError: (err) => {
+      const msg = getErrorMessage(err, 'Une erreur est survenue lors de la modification du rôle.');
+      toast.error(`Échec de modification du rôle : ${msg}`);
+    },
+  });
+
   // Mutation: Assign Role to User
   const assignRoleMutation = useMutation({
     mutationFn: (input: AssignRoleInput) =>
@@ -159,6 +175,8 @@ export function useAdminUsers(options: UseAdminUsersOptions = {}) {
     refetchRoles,
     createRole: createRoleMutation.mutateAsync,
     isCreatingRole: createRoleMutation.isPending,
+    editRole: editRoleMutation.mutateAsync,
+    isEditingRole: editRoleMutation.isPending,
     assignRole: assignRoleMutation.mutateAsync,
     isAssigningRole: assignRoleMutation.isPending,
     updateStatus: updateStatusMutation.mutateAsync,

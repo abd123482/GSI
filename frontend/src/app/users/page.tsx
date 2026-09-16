@@ -16,7 +16,8 @@ import { usePermissions } from '@/hooks/use-permissions';
 import { UserListTable } from '@/components/users/UserListTable';
 import { RoleListCards } from '@/components/users/RoleListCards';
 import { CreateRoleModal } from '@/components/users/CreateRoleModal';
-import { UserStatus } from '@/types/user-role';
+import { EditRoleModal } from '@/components/users/EditRoleModal';
+import { UserStatus, Role } from '@/types/user-role';
 
 export default function UsersAndRolesPage() {
   const { isSignedIn, isLoaded } = useAuth();
@@ -25,6 +26,8 @@ export default function UsersAndRolesPage() {
 
   const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users');
   const [isCreateRoleModalOpen, setIsCreateRoleModalOpen] = useState(false);
+  const [isEditRoleModalOpen, setIsEditRoleModalOpen] = useState(false);
+  const [roleToEdit, setRoleToEdit] = useState<Role | null>(null);
 
   const {
     users,
@@ -45,6 +48,8 @@ export default function UsersAndRolesPage() {
     refetchUsers,
     refetchRoles,
     createRole,
+    editRole,
+    isEditingRole,
     assignRole,
     updateStatus,
   } = useAdminUsers({ initialLimit: 10 });
@@ -266,6 +271,10 @@ export default function UsersAndRolesPage() {
               roles={roles}
               isLoading={isRolesLoading}
               onOpenCreateRole={() => setIsCreateRoleModalOpen(true)}
+              onOpenEditRole={(role) => {
+                setRoleToEdit(role);
+                setIsEditRoleModalOpen(true);
+              }}
               canManageRoles={canManageRoles}
             />
           </div>
@@ -280,6 +289,21 @@ export default function UsersAndRolesPage() {
             await createRole(input);
           }}
           isSubmitting={isCreatingRole}
+        />
+
+        {/* Modal: Edit Role */}
+        <EditRoleModal
+          isOpen={isEditRoleModalOpen}
+          onClose={() => {
+            setIsEditRoleModalOpen(false);
+            setRoleToEdit(null);
+          }}
+          availablePermissions={availablePermissions}
+          roleToEdit={roleToEdit}
+          onSubmitRole={async (input) => {
+            await editRole(input);
+          }}
+          isSubmitting={isEditingRole}
         />
       </div>
     </div>

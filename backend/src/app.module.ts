@@ -11,6 +11,7 @@ import { StockModule } from './stock/stock.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
 import { OrdersModule } from './orders/orders.module.js';
+import { InventoryModule } from './inventory/inventory.module.js';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { OrdersModule } from './orders/orders.module.js';
     ShelfModule,
     StockModule,
     OrdersModule,
+    InventoryModule,
   ],
 
   controllers: [

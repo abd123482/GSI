@@ -125,15 +125,15 @@ function UpdateShelfModalContent({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
       {/* Modal Surface (#6b7b97 Theme) */}
       <div
-        className="w-full max-w-lg bg-[#6b7b97] border border-[#8191ad] text-white rounded-xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-150"
+        className="w-full max-w-lg bg-[#383330] border border-[#3f3a36] text-white rounded-xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-150"
         role="dialog"
         aria-modal="true"
         aria-labelledby="update-shelf-title"
       >
         {/* Modal Header */}
-        <div className="px-6 py-5 border-b border-[#455268] flex items-center justify-between bg-[#53627c]">
+        <div className="px-6 py-5 border-b border-[#3f3a36] flex items-center justify-between bg-[#2b2622]">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#1e2b48] border border-[#3e4f73] flex items-center justify-center text-[#38bdf8]">
+            <div className="w-9 h-9 rounded-lg bg-[#2b2622] border border-[#3f3a36] flex items-center justify-center text-[#f7f5f0]">
               <Edit3 className="w-5 h-5" />
             </div>
             <div>
@@ -183,7 +183,7 @@ function UpdateShelfModalContent({
         {/* Form Body */}
         <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-5 text-left">
           {/* Target Shelf UUID info */}
-          <div className="p-3 bg-[#586680]/60 border border-[#8191ad] rounded-lg text-xs space-y-1 text-white">
+          <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg text-xs space-y-1 text-white">
             <div className="flex items-center justify-between text-white/85">
               <span className="font-medium flex items-center gap-1.5">
                 <Database className="w-3.5 h-3.5 text-white" />
@@ -208,10 +208,10 @@ function UpdateShelfModalContent({
               id="edit-shelfName"
               type="text"
               disabled={isUpdating || isSubmitting}
-              className={`w-full h-11 px-3.5 bg-[#4f5d75] text-white placeholder-white/50 text-sm border rounded-lg transition-all outline-none ${
+              className={`w-full h-11 px-3.5 bg-[#2b2622] text-white placeholder-white/50 text-sm border rounded-lg transition-all outline-none ${
                 errors.shelfName
                   ? 'border-rose-400 focus:ring-2 focus:ring-rose-400/30'
-                  : 'border-[#8191ad] focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20'
+                  : 'border-[#3f3a36] focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20'
               }`}
               {...register('shelfName')}
             />
@@ -230,7 +230,7 @@ function UpdateShelfModalContent({
               className="flex items-center justify-between text-xs font-medium text-white"
             >
               <span className="flex items-center gap-1.5">
-                <Warehouse className="w-3.5 h-3.5 text-[#38bdf8]" />
+                <Warehouse className="w-3.5 h-3.5 text-[#f7f5f0]" />
                 Stock / Entrepôt de rattachement
               </span>
               <span className="text-[11px] text-white/70">dbo.Stock</span>
@@ -239,17 +239,17 @@ function UpdateShelfModalContent({
               <select
                 id="edit-stockId"
                 disabled={isUpdating || isSubmitting || isLoadingStocks}
-                className="w-full h-11 px-3.5 bg-[#4f5d75] text-white text-sm border border-[#8191ad] rounded-lg transition-all outline-none focus:bg-[#435167] focus:border-white focus:ring-2 focus:ring-white/20 cursor-pointer disabled:opacity-50"
+                className="w-full h-11 px-3.5 bg-[#2b2622] text-white text-sm border border-[#3f3a36] rounded-lg transition-all outline-none focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 cursor-pointer disabled:opacity-50"
                 {...register('stockId')}
               >
                 {stocks.length > 0 ? (
                   stocks.map((stock) => (
-                    <option key={stock.stockId} value={stock.stockId} className="bg-[#4f5d75] text-white">
+                    <option key={stock.stockId} value={stock.stockId} className="bg-[#2b2622] text-white">
                       {stock.stockName || 'Stock sans nom'} {stock.stockId === DEFAULT_STOCK_ID ? '(Principal)' : ''}
                     </option>
                   ))
                 ) : (
-                  <option value={DEFAULT_STOCK_ID} className="bg-[#4f5d75] text-white">
+                  <option value={DEFAULT_STOCK_ID} className="bg-[#2b2622] text-white">
                     Stock Principal Yacine
                   </option>
                 )}
@@ -264,7 +264,7 @@ function UpdateShelfModalContent({
           </div>
 
           {/* Read-only Shelf Quantity Card */}
-          <div className="p-3.5 bg-[#586680]/60 border border-[#8191ad] rounded-lg text-xs flex items-center justify-between">
+          <div className="p-3.5 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg text-xs flex items-center justify-between">
             <div className="space-y-0.5">
               <span className="font-semibold text-white flex items-center gap-1.5">
                 <Hash className="w-3.5 h-3.5 text-white" />
@@ -274,13 +274,13 @@ function UpdateShelfModalContent({
                 Les stocks sont gérés exclusivement via les mouvements d&apos;entrée et de transfert.
               </p>
             </div>
-            <span className="text-base font-bold font-mono px-3 py-1 bg-[#1e2b48] border border-[#3e4f73] rounded-md text-white">
+            <span className="text-base font-bold font-mono px-3 py-1 bg-[#2b2622] border border-[#3f3a36] rounded-md text-white">
               {shelf.shelfQuantity}
             </span>
           </div>
 
           {/* Action Buttons */}
-          <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-[#8191ad]">
+          <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-[#3f3a36]">
             <button
               type="button"
               onClick={onClose}
@@ -293,7 +293,7 @@ function UpdateShelfModalContent({
             <button
               type="submit"
               disabled={isUpdating || isSubmitting || !canUpdateShelf}
-              className="px-4.5 py-2.5 bg-[#1e2b48] hover:bg-[#152037] text-white border border-[#2e3e63] text-sm font-medium rounded-lg shadow-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4.5 py-2.5 bg-[#2b2622] hover:bg-[#3f3a36] text-white border border-[#4d4742] text-sm font-medium rounded-lg shadow-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUpdating || isSubmitting ? (
                 <>

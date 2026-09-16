@@ -62,13 +62,13 @@ export function DeleteShelfModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
       {/* Danger Card Modal (#6b7b97 Theme) */}
       <div
-        className="w-full max-w-md bg-[#6b7b97] border border-[#8191ad] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
+        className="w-full max-w-md bg-[#383330] border border-[#3f3a36] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
         role="dialog"
         aria-modal="true"
         aria-labelledby="delete-shelf-title"
       >
         {/* Header */}
-        <div className="px-6 py-5 border-b border-[#455268] flex items-center justify-between bg-[#53627c]">
+        <div className="px-6 py-5 border-b border-[#3f3a36] flex items-center justify-between bg-[#2b2622]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-rose-950/60 border border-rose-500/50 flex items-center justify-center text-rose-300">
               <Trash2 className="w-5 h-5" />
@@ -121,12 +121,12 @@ export function DeleteShelfModal({
           </p>
 
           {/* Target Shelf Summary Box */}
-          <div className="p-3.5 bg-[#586680]/60 border border-[#8191ad] rounded-lg space-y-2 text-xs text-white">
+          <div className="p-3.5 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg space-y-2 text-xs text-white">
             <div className="flex items-center justify-between font-medium">
               <span className="text-white text-sm font-semibold truncate">
                 {shelf.shelfName ?? 'Étagère sans nom'}
               </span>
-              <span className="px-2 py-0.5 rounded bg-[#1e2b48] border border-[#3e4f73] font-mono text-[11px] text-white">
+              <span className="px-2 py-0.5 rounded bg-[#2b2622] border border-[#3f3a36] font-mono text-[11px] text-white">
                 {shelf.shelfQuantity} unités
               </span>
             </div>
@@ -136,7 +136,7 @@ export function DeleteShelfModal({
           </div>
 
           {/* Modal Action Buttons */}
-          <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-[#8191ad]">
+          <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-[#3f3a36]">
             <button
               type="button"
               onClick={onClose}

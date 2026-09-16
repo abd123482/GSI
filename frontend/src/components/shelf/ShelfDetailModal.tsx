@@ -70,13 +70,13 @@ export function ShelfDetailModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
       {/* Document Card (#6b7b97 Slate Blue Theme) */}
       <div
-        className="w-full max-w-xl bg-[#6b7b97] border border-[#8191ad] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
+        className="w-full max-w-xl bg-[#383330] border border-[#3f3a36] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
         role="dialog"
         aria-modal="true"
         aria-labelledby="shelf-detail-title"
       >
         {/* Cover Banner */}
-        <div className="h-24 bg-[#53627c] border-b border-[#455268] relative flex items-end px-6 pb-0">
+        <div className="h-24 bg-[#2b2622] border-b border-[#3f3a36] relative flex items-end px-6 pb-0">
           {/* Top Bar Actions */}
           <div className="absolute top-3 right-3 flex items-center gap-1.5">
             {onRefresh && (
@@ -103,7 +103,7 @@ export function ShelfDetailModal({
 
           {/* Overlapping Icon Tile */}
           <div
-            className="w-14 h-14 rounded-xl bg-[#1e2b48] border-2 border-white/80 shadow-md flex items-center justify-center text-[#38bdf8] translate-y-5"
+            className="w-14 h-14 rounded-xl bg-[#2b2622] border-2 border-white/80 shadow-md flex items-center justify-center text-[#f7f5f0] translate-y-5"
           >
             <IconComp className="w-7 h-7" />
           </div>
@@ -133,7 +133,7 @@ export function ShelfDetailModal({
           </div>
 
           {/* Property Table */}
-          <div className="border border-[#8191ad] rounded-lg divide-y divide-[#5a6f98] text-xs bg-[#586680]/70">
+          <div className="border border-[#3f3a36] rounded-lg divide-y divide-[#5a6f98] text-xs bg-[#2b2622]/70">
             {/* Property: UUID */}
             <div className="p-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-white/85 w-36 shrink-0">
@@ -195,7 +195,7 @@ export function ShelfDetailModal({
                 <span className="font-medium">Stock / Entrepôt</span>
               </div>
               <div className="text-xs text-white font-medium flex items-center gap-1.5">
-                <span className="text-[#38bdf8] font-semibold">
+                <span className="text-[#f7f5f0] font-semibold">
                   {shelf.stock?.stockName ?? 'Stock Principal Yacine'}
                 </span>
                 {shelf.stockId && (
@@ -230,7 +230,7 @@ export function ShelfDetailModal({
             </button>
 
             {showRawJson && (
-              <div className="relative bg-[#1e2b48] border border-[#3e4f73] text-[#f6f5f4] rounded-lg p-3 font-mono text-[11px] overflow-x-auto shadow-inner">
+              <div className="relative bg-[#2b2622] border border-[#3f3a36] text-[#f6f5f4] rounded-lg p-3 font-mono text-[11px] overflow-x-auto shadow-inner">
                 <pre>{JSON.stringify(shelf, null, 2)}</pre>
                 <button
                   type="button"
@@ -249,7 +249,7 @@ export function ShelfDetailModal({
           </div>
 
           {/* Modal Footer */}
-          <div className="pt-3 border-t border-[#8191ad] flex flex-wrap items-center justify-between gap-2.5">
+          <div className="pt-3 border-t border-[#3f3a36] flex flex-wrap items-center justify-between gap-2.5">
             <button
               type="button"
               onClick={handleCopyId}
@@ -291,7 +291,7 @@ export function ShelfDetailModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4.5 py-2 bg-[#1e2b48] hover:bg-[#152037] text-white text-xs font-medium rounded-lg border border-[#2e3e63] shadow-xs transition-colors cursor-pointer"
+                className="px-4.5 py-2 bg-[#2b2622] hover:bg-[#3f3a36] text-white text-xs font-medium rounded-lg border border-[#4d4742] shadow-xs transition-colors cursor-pointer"
               >
                 Fermer
               </button>

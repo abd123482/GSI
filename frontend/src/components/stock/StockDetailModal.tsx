@@ -37,16 +37,16 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
   const statusName = stock?.stockStatus?.stockStatusName || 'ACTIVE';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#0a1530]/40 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#111]/40 backdrop-blur-xs animate-in fade-in duration-150">
       <div
-        className="relative w-full max-w-2xl bg-[#6b7b97] border border-[#8191ad] text-white rounded-xl shadow-2xl overflow-hidden transform transition-all max-h-[90vh] flex flex-col text-left"
+        className="relative w-full max-w-2xl bg-[#383330] border border-[#3f3a36] text-white rounded-xl shadow-2xl overflow-hidden transform transition-all max-h-[90vh] flex flex-col text-left"
         role="dialog"
         aria-modal="true"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4.5 border-b border-[#455268] bg-[#53627c]">
+        <div className="flex items-center justify-between px-6 py-4.5 border-b border-[#3f3a36] bg-[#2b2622]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#1e2b48] border border-[#3e4f73] text-[#38bdf8] flex items-center justify-center shadow-2xs">
+            <div className="w-10 h-10 rounded-lg bg-[#2b2622] border border-[#3f3a36] text-[#f7f5f0] flex items-center justify-center shadow-2xs">
               <Warehouse className="w-5 h-5" />
             </div>
             <div>
@@ -101,7 +101,7 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
             <>
               {/* Summary Metric Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-4 rounded-lg bg-[#586680]/60 border border-[#8191ad] space-y-1 text-white">
+                <div className="p-4 rounded-lg bg-[#2b2622]/60 border border-[#3f3a36] space-y-1 text-white">
                   <div className="flex items-center justify-between text-xs text-white/85">
                     <span>Étagères associées</span>
                     <Layers className="w-4 h-4 text-white" />
@@ -114,7 +114,7 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
                   </p>
                 </div>
 
-                <div className="p-4 rounded-lg bg-[#586680]/60 border border-[#8191ad] space-y-1 text-white">
+                <div className="p-4 rounded-lg bg-[#2b2622]/60 border border-[#3f3a36] space-y-1 text-white">
                   <div className="flex items-center justify-between text-xs text-white/85">
                     <span>Statut SQL Server</span>
                     <Database className="w-4 h-4 text-white" />
@@ -146,13 +146,13 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
                 </div>
 
                 {(!stock.shelves || stock.shelves.length === 0) ? (
-                  <div className="p-6 text-center border border-dashed border-[#8191ad] rounded-lg text-xs text-white/80 bg-[#586680]/30">
+                  <div className="p-6 text-center border border-dashed border-[#3f3a36] rounded-lg text-xs text-white/80 bg-[#2b2622]/30">
                     Aucune étagère rattachée pour le moment à cet entrepôt.
                   </div>
                 ) : (
-                  <div className="border border-[#8191ad] rounded-lg overflow-hidden max-h-60 overflow-y-auto bg-[#586680]/60">
+                  <div className="border border-[#3f3a36] rounded-lg overflow-hidden max-h-60 overflow-y-auto bg-[#2b2622]/60">
                     <table className="w-full text-xs text-left">
-                      <thead className="bg-[#53627c] text-white font-medium border-b border-[#8191ad]">
+                      <thead className="bg-[#2b2622] text-white font-medium border-b border-[#3f3a36]">
                         <tr>
                           <th className="px-3 py-2">Nom de l&apos;étagère</th>
                           <th className="px-3 py-2 text-right">Quantité d&apos;équipements</th>
@@ -165,7 +165,7 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
                               {sh.shelfName || 'Étagère sans nom'}
                             </td>
                             <td className="px-3 py-2.5 text-right font-mono text-white/90">
-                              <span className="px-2 py-0.5 rounded-full bg-[#1e2b48] border border-[#3e4f73] text-white">
+                              <span className="px-2 py-0.5 rounded-full bg-[#2b2622] border border-[#3f3a36] text-white">
                                 {sh.shelfQuantity} {sh.shelfQuantity > 1 ? 'unités' : 'unité'}
                               </span>
                             </td>
@@ -181,11 +181,11 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3.5 bg-[#53627c] border-t border-[#455268] flex items-center justify-end">
+        <div className="px-6 py-3.5 bg-[#2b2622] border-t border-[#3f3a36] flex items-center justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-4.5 py-2 bg-[#1e2b48] hover:bg-[#152037] text-white border border-[#2e3e63] text-xs font-medium rounded-lg transition-colors cursor-pointer"
+            className="px-4.5 py-2 bg-[#2b2622] hover:bg-[#3f3a36] text-white border border-[#4d4742] text-xs font-medium rounded-lg transition-colors cursor-pointer"
           >
             Fermer
           </button>

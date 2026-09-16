@@ -87,6 +87,7 @@ describe('Equipment & Serial Number Controllers - Decoupled from Shelf', () => {
     const result = await serialNumberService.createBatchSerialNumbers({
       equipmentId: validUuid1,
       serialNumberCodes: ['SN-BATCH-01', 'SN-BATCH-02', 'SN-BATCH-03'],
+      serialNumberStatus: 'AVAILABLE',
     });
 
     expect(result.count).toBe(3);
@@ -118,6 +119,7 @@ describe('Equipment & Serial Number Controllers - Decoupled from Shelf', () => {
     const result = await serialNumberService.createSerialNumber({
       equipmentId: validUuid1,
       serialNumberCode: 'SN-SINGLE-01',
+      serialNumberStatus: 'AVAILABLE',
     });
 
     expect(result.shelfId).toBeNull();

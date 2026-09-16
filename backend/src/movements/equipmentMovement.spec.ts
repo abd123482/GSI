@@ -61,6 +61,7 @@ describe('Equipment Lifecycle & Movements Decoupled Flow', () => {
     const batchResult = await serialNumberService.createBatchSerialNumbers({
       equipmentId: equipment.equipmentId,
       serialNumberCodes: [sn1, sn2],
+      serialNumberStatus: 'AVAILABLE',
     });
     expect(batchResult.success).toBe(true);
     expect(batchResult.count).toBe(2);
@@ -78,7 +79,7 @@ describe('Equipment Lifecycle & Movements Decoupled Flow', () => {
     // 4. Record ENTRY movement for serialItem1 into shelf1
     const entryMovement = await movementService.createEquipmentMovement({
       equipmentId: equipment.equipmentId,
-      serialNumberId: serialItem1.serialNumberId,
+      serialNumberId: serialItem1!.serialNumberId,
       sourceShelfId: null,
       destinationShelfId: shelf1.shelfId,
       movementQuantity: 1,
@@ -93,14 +94,14 @@ describe('Equipment Lifecycle & Movements Decoupled Flow', () => {
 
     // Verify serialItem1 is now located on shelf1
     const updatedSerial1 = await prisma.serialNumber.findUnique({
-      where: { serialNumberId: serialItem1.serialNumberId },
+      where: { serialNumberId: serialItem1!.serialNumberId },
     });
     expect(updatedSerial1.shelfId).toBe(shelf1.shelfId);
 
     // 5. Record TRANSFER movement from shelf1 to shelf2
     const transferMovement = await movementService.createEquipmentMovement({
       equipmentId: equipment.equipmentId,
-      serialNumberId: serialItem1.serialNumberId,
+      serialNumberId: serialItem1!.serialNumberId,
       sourceShelfId: shelf1.shelfId,
       destinationShelfId: shelf2.shelfId,
       movementQuantity: 1,
@@ -122,13 +123,13 @@ describe('Equipment Lifecycle & Movements Decoupled Flow', () => {
         serialNumberCode: updatedSnCode,
         serialNumberStatus: 'IN_USE',
       },
-      serialItem2.serialNumberId,
+      serialItem2!.serialNumberId,
     );
     expect(updatedSn.serialNumberCode).toBe(updatedSnCode);
     expect(updatedSn.serialNumberStatus).toBe('IN_USE');
 
     // 7. Test deleting a single serial number -> equipmentQuantity must decrement automatically
-    await serialNumberService.deleteSerialNumber(serialItem2.serialNumberId);
+    await serialNumberService.deleteSerialNumber(serialItem2!.serialNumberId);
     const equipAfterSnDelete = await equipmentService.getEquipmentById(equipment.equipmentId);
     expect(equipAfterSnDelete.equipmentQuantity).toBe(1);
     expect(equipAfterSnDelete.serialNumbers.length).toBe(1);
