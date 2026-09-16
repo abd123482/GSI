@@ -1,184 +1,125 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { InventoryService } from './inventory.service.js';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
-describe('InventoryService - ByEquipment', () => {
-    it('throws NotFoundException for unknown inventoryType', async () => {
-        const prisma = {
-            inventory: {
-                findFirst: vi.fn().mockResolvedValue(null),
-            },
-        };
-        const service = new InventoryService(prisma as any);
 
-        await expect(
-            service.createInventory({
-                typeInventory: 'UnknownType',
-                equipments: [],
-                shelfs: [],
-                serialNumbers: [],
-            })
-        ).rejects.toThrow(NotFoundException);
+describe('Inventory Workflow', () => {
+  let inventoryService: InventoryService;
+
+  let prismaMock: any;
+  let txMock: any;
+
+  beforeEach(() => {
+    txMock = {
+      inventory: {
+        create: vi.fn(),
+        findUnique: vi.fn(),
+        update: vi.fn(),
+      },
+      inventory_User: {
+        createMany: vi.fn(),
+      },
+
+      inventoryWorkUnit: {
+        create: vi.fn(),
+      },
+      inventory_Equipment_Shelf_Snapshot: {
+        createMany: vi.fn(),
+      },
+      inventoryCountAttempt: {
+        createMany: vi.fn(),
+        findMany: vi.fn(),
+      },
+      equipmentShelfs: {
+        findMany: vi.fn(),
+      }
+    };
+
+    prismaMock = {
+      $transaction: vi.fn(async (cb) => cb(txMock)),
+      inventoryCountAttempt: txMock.inventoryCountAttempt,
+    };
+
+    inventoryService = new InventoryService(prismaMock);
+
+  });
+
+  describe('createInventory', () => {
+    it('creates an inventory draft with users and equipment scope', async () => {
+      txMock.inventory.create.mockResolvedValue({ inventoryId: 'inv-1', status: 'DRAFT' });
+
+      const result = await inventoryService.createInventory({
+        title: 'Annual Count',
+        typeInventory: 'ByEquipment',
+        users: [
+          { userId: 'u1', responsibility: 'COUNT' },
+          { userId: 'u2', responsibility: 'ADJUDICATE' }
+        ],
+        equipmentIds: ['eq-1', 'eq-2']
+      }, 'creator');
+
+      expect(result.inventoryId).toBe('inv-1');
+      expect(txMock.inventory.create).toHaveBeenCalled();
+      expect(txMock.inventory_User.createMany).toHaveBeenCalledWith({
+        data: [
+          { inventoryId: 'inv-1', userId: 'u1', sequence: 0, responsibility: 'COUNT' },
+          { inventoryId: 'inv-1', userId: 'u2', sequence: 1, responsibility: 'ADJUDICATE' }
+        ]
+      });
+      expect(txMock.inventory.update).toHaveBeenCalledWith({
+        where: { inventoryId: 'inv-1' },
+        data: { equipmentScopeIds: JSON.stringify(['eq-1', 'eq-2']) }
+      });
+    });
+  });
+
+  describe('launchInventory', () => {
+    it('throws if inventory is not DRAFT', async () => {
+      txMock.inventory.findUnique.mockResolvedValue({
+        inventoryId: 'inv-1',
+        status: 'IN_PROGRESS',
+        Inventory_User: []
+      });
+
+      await expect(inventoryService.launchInventory('inv-1')).rejects.toThrow(BadRequestException);
     });
 
-    it('creates an inventory, checks serial numbers and validates shelves', async () => {
-        const tx = {
-            shelf: {
-                findMany: vi.fn().mockResolvedValue([
-                    { shelfId: 'shelf-1', shelfName: 'Shelf-A' },
-                ]),
-            },
-            inventory: {
-                create: vi.fn().mockResolvedValue({
-                    inventoryId: 'inv-123',
-                    typeInventory: 'ByEquipment',
-                    createdAt: new Date('2026-09-14T10:00:00Z'),
-                }),
-            },
-            serialNumber: {
-                findMany: vi.fn().mockResolvedValue([
-                    {
-                        serialNumberId: 'sn-1',
-                        serialNumberCode: 'SN-001',
-                        shelfId: 'shelf-1',
-                        shelf: { shelfId: 'shelf-1', shelfName: 'Shelf-A' },
-                        equipment: { equipmentName: 'Device 1' },
-                    },
-                ]),
-            },
-            inventory_SerialNumber: {
-                createMany: vi.fn().mockResolvedValue({ count: 1 }),
-            },
-            equipment: {
-                findMany: vi.fn().mockResolvedValue([]),
-            },
-            inventory_Equipment: {
-                create: vi.fn(),
-            },
-        };
+    it('launches inventory and generates work units and snapshots', async () => {
+      txMock.inventory.findUnique.mockResolvedValue({
+        inventoryId: 'inv-1',
+        status: 'DRAFT',
+        typeInventory: 'ByEquipment',
+        Inventory_User: [
+          { userId: 'u1', sequence: 0, responsibility: 'COUNT' },
+          { userId: 'u2', sequence: 1, responsibility: 'ADJUDICATE' }
+        ],
+        equipmentScopeIds: JSON.stringify(['eq-1'])
+      });
 
-        const prisma = {
-            $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
-        };
+      txMock.inventoryWorkUnit.create.mockResolvedValue({ unitId: 'unit-1' });
+      txMock.equipmentShelfs.findMany.mockResolvedValue([
+        { equipmentId: 'eq-1', shelfId: 'shelf-1', equipmentQuantity: 10 }
+      ]);
 
-        const service = new InventoryService(prisma as any);
+      await inventoryService.launchInventory('inv-1');
 
-        const result = await service.createInventory({
-            typeInventory: 'ByEquipment',
-            shelfs: ['Shelf-A'],
-            serialNumbers: ['SN-001'],
-            equipments: [],
-        });
-
-        expect(result.inventoryId).toBe('inv-123');
-        expect(result.typeInventory).toBe('ByEquipment');
-        expect(tx.inventory.create).toHaveBeenCalled();
-        expect(tx.inventory_SerialNumber.createMany).toHaveBeenCalledWith({
-            data: [{ inventoryId: 'inv-123', serialNumberId: 'sn-1' }],
-        });
+      expect(txMock.inventory.update).toHaveBeenCalledWith({
+        where: { inventoryId: 'inv-1' },
+        data: { status: 'IN_PROGRESS' }
+      });
+      expect(txMock.inventoryWorkUnit.create).toHaveBeenCalled();
+      expect(txMock.inventory_Equipment_Shelf_Snapshot.createMany).toHaveBeenCalled();
+      expect(txMock.inventoryCountAttempt.createMany).toHaveBeenCalledWith({
+        data: [
+          {
+            unitId: 'unit-1',
+            assignedUserId: 'u1',
+            sequence: 0,
+            purpose: 'INITIAL',
+            status: 'AVAILABLE'
+          }
+        ]
+      });
     });
-
-    it('throws BadRequestException if serial number is on the wrong shelf', async () => {
-        const tx = {
-            shelf: {
-                findMany: vi.fn().mockResolvedValue([
-                    { shelfId: 'shelf-1', shelfName: 'Shelf-A' },
-                ]),
-            },
-            inventory: {
-                create: vi.fn().mockResolvedValue({
-                    inventoryId: 'inv-123',
-                    typeInventory: 'ByEquipment',
-                }),
-            },
-            serialNumber: {
-                findMany: vi.fn().mockResolvedValue([
-                    {
-                        serialNumberId: 'sn-2',
-                        serialNumberCode: 'SN-002',
-                        shelfId: 'shelf-2',
-                        shelf: { shelfId: 'shelf-2', shelfName: 'Shelf-B' },
-                        equipment: { equipmentName: 'Device 2' },
-                    },
-                ]),
-            },
-        };
-
-        const prisma = {
-            $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
-        };
-
-        const service = new InventoryService(prisma as any);
-
-        await expect(
-            service.createInventory({
-                typeInventory: 'ByEquipment',
-                shelfs: ['Shelf-A'],
-                serialNumbers: ['SN-002'],
-                equipments: [],
-            })
-        ).rejects.toThrow(BadRequestException);
-    });
-
-    it('creates inventory for equipment and links to Inventory_Equipment', async () => {
-        const tx = {
-            shelf: {
-                findMany: vi.fn().mockResolvedValue([
-                    { shelfId: 'shelf-1', shelfName: 'Shelf-A' },
-                ]),
-            },
-            inventory: {
-                create: vi.fn().mockResolvedValue({
-                    inventoryId: 'inv-456',
-                    typeInventory: 'ByEquipment',
-                    createdAt: new Date('2026-09-14T10:00:00Z'),
-                }),
-            },
-            serialNumber: {
-                findMany: vi.fn().mockResolvedValue([]),
-            },
-            equipment: {
-                findMany: vi.fn().mockResolvedValue([
-                    {
-                        equipmentId: 'eq-1',
-                        equipmentName: 'Tool Box',
-                        hasSerialNumber: false,
-                        equipmentShelfs: [
-                            {
-                                shelfId: 'shelf-1',
-                                equipmentQuantity: 5,
-                                shelf: { shelfId: 'shelf-1', shelfName: 'Shelf-A' },
-                            },
-                        ],
-                    },
-                ]),
-            },
-            inventory_Equipment: {
-                create: vi.fn().mockResolvedValue({}),
-            },
-        };
-
-        const prisma = {
-            $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
-        };
-
-        const service = new InventoryService(prisma as any);
-
-        const result = await service.createInventory({
-            typeInventory: 'ByEquipment',
-            shelfs: ['Shelf-A'],
-            equipments: ['Tool Box'],
-            amount: 5,
-            serialNumbers: [],
-        });
-
-        expect(result.inventoryId).toBe('inv-456');
-        expect(tx.inventory_Equipment.create).toHaveBeenCalledWith({
-            data: {
-                inventoryId: 'inv-456',
-                equipmentId: 'eq-1',
-                countedQuantity: 5,
-            },
-        });
-    });
+  });
 });
