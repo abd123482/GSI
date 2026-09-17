@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { usePermissions } from '@/hooks/use-permissions';
+import { NotificationBell } from './NotificationBell';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,18 +75,16 @@ export function Navbar() {
           <nav className="hidden sm:flex items-center gap-1">
             {/* Stocks Dropdown Link */}
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-[3px] text-xs font-medium transition-colors outline-none focus:ring-1 focus:ring-[#aea69c] ${
-                    isStocksActive || isShelvesActive || isEquipmentActive
-                      ? 'bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]'
-                      : 'text-[#c9c0ad] hover:text-[#f7f5f0] hover:bg-[#383330]/70'
-                  }`}
-                >
-                  <Warehouse className="w-3.5 h-3.5 text-[#aea69c]" />
-                  <span>Stocks</span>
-                  <ChevronDown className="w-3 h-3 text-[#5c544d]" />
-                </button>
+              <DropdownMenuTrigger
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-[3px] text-xs font-medium transition-colors outline-none focus:ring-1 focus:ring-[#aea69c] ${
+                  isStocksActive || isShelvesActive || isEquipmentActive
+                    ? 'bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]'
+                    : 'text-[#c9c0ad] hover:text-[#f7f5f0] hover:bg-[#383330]/70'
+                }`}
+              >
+                <Warehouse className="w-3.5 h-3.5 text-[#aea69c]" />
+                <span>Stocks</span>
+                <ChevronDown className="w-3 h-3 text-[#5c544d]" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-48 bg-[#2f2a26] border-[#3f3a36] text-[#c9c0ad]">
                 <DropdownMenuItem className="focus:bg-[#383330] focus:text-[#f7f5f0] cursor-pointer">
@@ -145,6 +144,9 @@ export function Navbar() {
               )}
             </div>
           )}
+
+          {/* Notifications Bell */}
+          {isSignedIn && <NotificationBell />}
 
           {/* User Profile / Auth Buttons */}
           {!isLoaded ? (

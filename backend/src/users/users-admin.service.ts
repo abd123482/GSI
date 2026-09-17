@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ALL_SYSTEM_PERMISSIONS } from '../auth/constants/permissions.constant.js';
 import type { GetUsersQueryDTO } from './dto/get-users-query.dto.js';
 import type { UserStatusType } from './dto/update-user-status.dto.js';
 
@@ -232,35 +233,12 @@ export class UsersAdminService {
   }
 
   async getAvailablePermissions(): Promise<string[]> {
-    const SYSTEM_PERMISSIONS = [
-      'equipment.read',
-      'equipment.create',
-      'equipment.update',
-      'equipment.delete',
-      'serial-number.read',
-      'serial-number.create',
-      'serial-number.update',
-      'serial-number.delete',
-      'movement.read',
-      'movement.create',
-      'shelf.read',
-      'shelf.create',
-      'shelf.update',
-      'shelf.delete',
-      'stock.read',
-      'stock.create',
-      'stock.update',
-      'stock.delete',
-      'user.manage',
-      'role.manage',
-    ];
-
     const dbPermissions = await this.prisma.permission.findMany({
       select: { permissionName: true },
       distinct: ['permissionName'],
     });
 
-    const set = new Set<string>(SYSTEM_PERMISSIONS);
+    const set = new Set<string>(ALL_SYSTEM_PERMISSIONS);
     for (const p of dbPermissions) {
       if (p.permissionName) {
         set.add(p.permissionName);

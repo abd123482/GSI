@@ -3,7 +3,8 @@
 import { useAuth } from '@clerk/nextjs';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller, useFieldArray } from 'react-hook-form';
+import { UserAutocomplete } from '@/components/users/UserAutocomplete';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createInventorySchema } from '@/schemas/inventory.schema';
 import {
@@ -15,6 +16,7 @@ import { useState } from 'react';
 import { z } from 'zod';
 import { useCreateInventory } from '@/hooks/use-inventory';
 import { useEquipments } from '@/hooks/use-equipments';
+import { useShelves } from '@/hooks/use-shelves';
 import { toast } from 'sonner';
 
 type CreateInventoryForm = z.infer<typeof createInventorySchema>;
@@ -23,20 +25,29 @@ export default function CreateInventoryPage() {
   const { isLoaded, isSignedIn } = useAuth();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hoveredEqId, setHoveredEqId] = useState<string | null>(null);
 
-  const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<CreateInventoryForm>({
+  const { register, handleSubmit, formState: { errors }, watch, setValue, control } = useForm<CreateInventoryForm>({
     resolver: zodResolver(createInventorySchema),
     defaultValues: {
       typeInventory: 'ByEquipment',
-      users: [{ userId: '', responsibility: 'COUNT' }],
+      users: [
+        { userId: '', responsibility: 'COUNT' },
+        { userId: '', responsibility: 'COUNT' },
+      ],
       equipmentIds: [],
       shelfIds: [],
     }
   });
 
   const inventoryType = watch('typeInventory');
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: 'users'
+  });
   const { mutateAsync: createInventory } = useCreateInventory();
   const { equipments } = useEquipments({ page: 1, limit: 100 }); // Temporary basic fetch
+  const { shelves } = useShelves({ limit: 100 });
 
   const onSubmit = async (data: CreateInventoryForm) => {
     setIsSubmitting(true);
@@ -110,16 +121,72 @@ export default function CreateInventoryPage() {
             <p className="text-xs text-[#c9c0ad]">
               Sélectionnez les {inventoryType === 'ByEquipment' ? 'équipements' : 'étagères'} à inclure.
             </p>
-            <div className="max-h-48 overflow-y-auto border border-[#3f3a36] bg-[#2b2622] rounded-[3px] p-2 space-y-1">
-              {inventoryType === 'ByEquipment' ? (
-                equipments.map(eq => (
-                  <label key={eq.equipmentId} className="flex items-center gap-2 text-sm hover:bg-[#383330] p-1.5 rounded cursor-pointer">
-                    <input type="checkbox" value={eq.equipmentId} {...register('equipmentIds')} className="accent-[#aea69c]" />
-                    <span>{eq.equipmentName || eq.equipmentId}</span>
-                  </label>
-                ))
-              ) : (
-                <div className="text-xs text-[#aea69c] p-2">Sélection d'étagères (À connecter)</div>
+            <div className="flex gap-4">
+              <div className="w-1/2 max-h-48 overflow-y-auto border border-[#3f3a36] bg-[#2b2622] rounded-[3px] p-2 space-y-1">
+                {inventoryType === 'ByEquipment' ? (
+                  equipments.length > 0 ? (
+                    equipments.map(eq => (
+                      <div 
+                        key={eq.equipmentId} 
+                        className="flex items-center justify-between hover:bg-[#383330] p-1.5 rounded transition-colors group"
+                        onMouseEnter={() => setHoveredEqId(eq.equipmentId)}
+                      >
+                        <label className="flex items-center gap-2 text-sm cursor-pointer text-[#f7f5f0] flex-1">
+                          <input type="checkbox" value={eq.equipmentId} {...register('equipmentIds')} className="accent-[#aea69c]" />
+                          <span>{eq.equipmentName || eq.equipmentId}</span>
+                        </label>
+                        {eq.hasSerialNumber && eq.serialNumbers && eq.serialNumbers.length > 0 && (
+                          <div className="relative flex items-center justify-center">
+                            <div className="w-5 h-5 rounded-full bg-[#3f3a36] text-[#aea69c] flex items-center justify-center text-[10px]">
+                              {eq.serialNumbers.length}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-[#aea69c] p-2">Aucun équipement disponible.</div>
+                  )
+                ) : (
+                  shelves.length > 0 ? (
+                    shelves.map(shelf => (
+                      <label key={shelf.shelfId} className="flex items-center gap-2 text-sm hover:bg-[#383330] p-1.5 rounded cursor-pointer transition-colors text-[#f7f5f0]">
+                        <input type="checkbox" value={shelf.shelfId} {...register('shelfIds')} className="accent-[#aea69c]" />
+                        <span>{shelf.shelfName}</span>
+                      </label>
+                    ))
+                  ) : (
+                    <div className="text-xs text-[#aea69c] p-2">Aucune étagère disponible.</div>
+                  )
+                )}
+              </div>
+
+              {/* Right Panel for SN Display */}
+              {inventoryType === 'ByEquipment' && (
+                <div className="w-1/2 max-h-48 border border-[#3f3a36] bg-[#2b2622] rounded-[3px] p-3 flex flex-col">
+                  {hoveredEqId ? (() => {
+                    const eq = equipments.find(e => e.equipmentId === hoveredEqId);
+                    if (eq?.hasSerialNumber && eq.serialNumbers && eq.serialNumbers.length > 0) {
+                      return (
+                        <>
+                          <div className="text-[11px] font-semibold text-[#f7f5f0] mb-2 truncate" title={eq.equipmentName || eq.equipmentId}>
+                            SN: {eq.equipmentName}
+                          </div>
+                          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                            {eq.serialNumbers.map(sn => (
+                              <div key={sn.serialNumberId} className="text-[11px] text-[#aea69c] bg-[#1f1b18] border border-[#3f3a36] px-2 py-1 rounded shadow-sm">
+                                {sn.serialNumberCode || sn.serialNumberId}
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      );
+                    }
+                    return <div className="text-xs text-[#5c544d] m-auto text-center px-4">Aucun numéro de série pour cet équipement</div>;
+                  })() : (
+                    <div className="text-xs text-[#5c544d] m-auto text-center px-4">Survolez un équipement pour voir ses numéros de série</div>
+                  )}
+                </div>
               )}
             </div>
             {(errors.equipmentIds || errors.shelfIds) && (
@@ -134,22 +201,52 @@ export default function CreateInventoryPage() {
               Définissez les utilisateurs qui effectueront le comptage et l'adjudication finale.
             </p>
             
-            <div className="space-y-2">
-              <div className="flex gap-2 items-end">
-                <div className="flex-1 space-y-1.5">
-                   <label className="text-xs font-medium text-[#aea69c]">Utilisateur ID</label>
-                   <input {...register('users.0.userId')} placeholder="Saisir ID utilisateur Clerk..." className="w-full h-9 bg-[#2b2622] border border-[#3f3a36] rounded-[3px] px-3 text-sm focus:outline-none" />
+            <div className="space-y-4">
+              {fields.map((field, index) => (
+                <div key={field.id} className="flex gap-2 items-end">
+                  <div className="flex-1 space-y-1.5">
+                     <label className="text-xs font-medium text-[#aea69c]">Utilisateur</label>
+                     <Controller
+                       control={control}
+                       name={`users.${index}.userId`}
+                       render={({ field: { value, onChange }, fieldState: { error } }) => (
+                         <UserAutocomplete 
+                           value={value} 
+                           onChange={onChange} 
+                           error={error?.message}
+                         />
+                       )}
+                     />
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                     <label className="text-xs font-medium text-[#aea69c]">Rôle</label>
+                     <select {...register(`users.${index}.responsibility`)} className="w-full h-9 bg-[#2b2622] border border-[#3f3a36] rounded-[3px] px-3 text-sm focus:outline-none">
+                       <option value="COUNT">Compteur</option>
+                       <option value="ADJUDICATE">Adjudicateur</option>
+                     </select>
+                  </div>
+                  {fields.length > 2 && (
+                    <button 
+                      type="button" 
+                      onClick={() => remove(index)}
+                      className="h-9 px-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-[3px] text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      Retirer
+                    </button>
+                  )}
                 </div>
-                <div className="flex-1 space-y-1.5">
-                   <label className="text-xs font-medium text-[#aea69c]">Rôle</label>
-                   <select {...register('users.0.responsibility')} className="w-full h-9 bg-[#2b2622] border border-[#3f3a36] rounded-[3px] px-3 text-sm focus:outline-none">
-                     <option value="COUNT">Compteur</option>
-                     <option value="ADJUDICATE">Adjudicateur</option>
-                   </select>
-                </div>
-              </div>
-              <button type="button" className="text-[10px] font-medium text-[#f7f5f0] underline hover:text-[#dad2c1]">
-                + Ajouter un participant (Interface en dev)
+              ))}
+              {errors.users && (
+                <p className="text-xs text-red-400 font-medium">
+                  {errors.users.message || (errors.users as any)?.root?.message || 'Au moins 2 participants distincts sont obligatoires.'}
+                </p>
+              )}
+              <button 
+                type="button" 
+                onClick={() => append({ userId: '', responsibility: 'COUNT' })}
+                className="text-xs font-medium text-[#f7f5f0] underline hover:text-[#dad2c1] cursor-pointer"
+              >
+                + Ajouter un participant
               </button>
             </div>
           </section>

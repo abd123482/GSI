@@ -43,6 +43,13 @@ export const ALL_SYSTEM_PERMISSIONS: string[] = [
   'stock.delete',
   'user.manage',
   'role.manage',
+  'inventory.read',
+  'inventory.create',
+  'inventory.count',
+  'inventory.adjudicate',
+  'inventory.launch',
+  'inventory.finalize',
+  'inventory.delete',
 ];
 
 const EMPTY_PERMISSIONS: string[] = [];
@@ -111,9 +118,18 @@ export function usePermissions() {
   const canManageUsers = isAdmin || hasPermission('user.manage');
   const canManageRoles = isAdmin || hasPermission('role.manage');
 
+  const canReadInventory = isAdmin || hasPermission('inventory.read');
+  const canCreateInventory = isAdmin || hasPermission('inventory.create');
+  const canLaunchInventory = isAdmin || hasPermission('inventory.launch');
+  const canCountInventory = isAdmin || hasPermission('inventory.count');
+  const canAdjudicateInventory = isAdmin || hasPermission('inventory.adjudicate');
+  const canFinalizeInventory = isAdmin || hasPermission('inventory.finalize');
+  const canDeleteInventory = isAdmin || hasPermission('inventory.delete');
+
   return useMemo(
     () => ({
       user: authUser ?? null,
+      authUser: authUser ?? null,
       permissions,
       roleName: authUser?.roleName ?? null,
       isAdmin,
@@ -131,6 +147,13 @@ export function usePermissions() {
       canDeleteSerialNumber,
       canManageUsers,
       canManageRoles,
+      canReadInventory,
+      canCreateInventory,
+      canLaunchInventory,
+      canCountInventory,
+      canAdjudicateInventory,
+      canFinalizeInventory,
+      canDeleteInventory,
       hasPermission,
       isLoading: !isLoaded || (isSignedIn && isLoading),
       error,

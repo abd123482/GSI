@@ -1,8 +1,17 @@
 /**
  * System-wide permission registry for SomePharm Maintenance RBAC.
  */
-export const ALL_SYSTEM_PERMISSIONS = [
+export const INVENTORY_PERMISSIONS = [
+  'inventory.read',
   'inventory.create',
+  'inventory.launch',
+  'inventory.count',
+  'inventory.adjudicate',
+  'inventory.finalize',
+  'inventory.delete',
+] as const;
+
+export const ALL_SYSTEM_PERMISSIONS = [
   'equipment.read',
   'equipment.create',
   'equipment.update',
@@ -23,6 +32,7 @@ export const ALL_SYSTEM_PERMISSIONS = [
   'stock.delete',
   'user.manage',
   'role.manage',
+  ...INVENTORY_PERMISSIONS,
 ] as const;
 
 export type SystemPermission = (typeof ALL_SYSTEM_PERMISSIONS)[number];

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { X, ShieldCheck, Check, Loader2, AlertCircle } from 'lucide-react';
 import { CreateRoleInput } from '@/types/user-role';
 
@@ -65,6 +65,20 @@ const PERMISSION_GROUPS: {
     ],
   },
   {
+    id: 'inventory',
+    title: 'Inventaires & Réconciliations',
+    icon: '📋',
+    permissions: [
+      { name: 'inventory.read', label: 'Consulter les inventaires et rapports' },
+      { name: 'inventory.create', label: 'Créer de nouveaux projets d’inventaire' },
+      { name: 'inventory.launch', label: 'Lancer et démarrer un inventaire' },
+      { name: 'inventory.count', label: 'Comptage physique & mes tâches' },
+      { name: 'inventory.adjudicate', label: 'Arbitrer les écarts et réconciliations' },
+      { name: 'inventory.finalize', label: 'Clôturer et ajuster le stock final' },
+      { name: 'inventory.delete', label: 'Supprimer un inventaire' },
+    ],
+  },
+  {
     id: 'admin',
     title: 'Administration Système',
     icon: '🛡️',
@@ -85,6 +99,32 @@ export function CreateRoleModal({
   const [roleName, setRoleName] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  const groupsToDisplay = useMemo(() => {
+    const knownPerms = new Set(
+      PERMISSION_GROUPS.flatMap((g) => g.permissions.map((p) => p.name)),
+    );
+    const extraPerms = (availablePermissions || []).filter(
+      (p) => !knownPerms.has(p),
+    );
+
+    if (extraPerms.length === 0) {
+      return PERMISSION_GROUPS;
+    }
+
+    return [
+      ...PERMISSION_GROUPS,
+      {
+        id: 'other',
+        title: 'Autres Permissions',
+        icon: '⚙️',
+        permissions: extraPerms.map((name) => ({
+          name,
+          label: name,
+        })),
+      },
+    ];
+  }, [availablePermissions]);
 
   if (!isOpen) return null;
 
@@ -110,7 +150,7 @@ export function CreateRoleModal({
   };
 
   const handleSelectAll = () => {
-    const all = PERMISSION_GROUPS.flatMap((g) => g.permissions.map((p) => p.name));
+    const all = groupsToDisplay.flatMap((g) => g.permissions.map((p) => p.name));
     setSelectedPermissions(all);
   };
 
@@ -232,7 +272,7 @@ export function CreateRoleModal({
 
               {/* Grouped Permissions Grid */}
               <div className="space-y-3 border border-[#3f3a36] rounded-[3px] p-3 bg-[#2b2622]">
-                {PERMISSION_GROUPS.map((group) => {
+                {groupsToDisplay.map((group) => {
                   const groupPermNames = group.permissions.map((p) => p.name);
                   const isAllGroupSelected = groupPermNames.every((p) =>
                     selectedPermissions.includes(p),

@@ -1,10 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient as api } from '@/lib/api';
+import { useApi } from './use-api';
 
 // Types can be imported from our definitions
 // For simplicity, we assume `api` throws on error and returns data.
 
 export function useInventories() {
+  const api = useApi();
   return useQuery({
     queryKey: ['inventories'],
     queryFn: async () => {
@@ -15,6 +16,7 @@ export function useInventories() {
 }
 
 export function useInventoryById(id: string) {
+  const api = useApi();
   return useQuery({
     queryKey: ['inventories', id],
     queryFn: async () => {
@@ -25,7 +27,20 @@ export function useInventoryById(id: string) {
   });
 }
 
+export function useMyTasks(userId?: string) {
+  const api = useApi();
+  return useQuery({
+    queryKey: ['my-tasks', userId ?? 'current'],
+    queryFn: async () => {
+      const url = userId ? `/inventory/my-tasks/${userId}` : `/inventory/my-tasks`;
+      const res = await api.get(url);
+      return res.data;
+    },
+  });
+}
+
 export function useInventoryTask(taskId: string) {
+  const api = useApi();
   return useQuery({
     queryKey: ['inventory-tasks', taskId],
     queryFn: async () => {
@@ -37,6 +52,7 @@ export function useInventoryTask(taskId: string) {
 }
 
 export function useAdjudicationUnit(unitId: string) {
+  const api = useApi();
   return useQuery({
     queryKey: ['inventory-adjudicate', unitId],
     queryFn: async () => {
@@ -48,6 +64,7 @@ export function useAdjudicationUnit(unitId: string) {
 }
 
 export function usePreviewAdjustments(inventoryId: string) {
+  const api = useApi();
   return useQuery({
     queryKey: ['inventory-preview', inventoryId],
     queryFn: async () => {
@@ -60,6 +77,7 @@ export function usePreviewAdjustments(inventoryId: string) {
 
 export function useCreateInventory() {
   const queryClient = useQueryClient();
+  const api = useApi();
   return useMutation({
     mutationFn: async (data: any) => {
       const res = await api.post('/inventory', data);
@@ -73,6 +91,7 @@ export function useCreateInventory() {
 
 export function useLaunchInventory() {
   const queryClient = useQueryClient();
+  const api = useApi();
   return useMutation({
     mutationFn: async (inventoryId: string) => {
       const res = await api.post(`/inventory/${inventoryId}/launch`);
@@ -87,6 +106,7 @@ export function useLaunchInventory() {
 
 export function useSubmitTask() {
   const queryClient = useQueryClient();
+  const api = useApi();
   return useMutation({
     mutationFn: async ({ taskId, data }: { taskId: string; data: any }) => {
       const res = await api.post(`/inventory/tasks/${taskId}/submit`, data);
@@ -101,6 +121,7 @@ export function useSubmitTask() {
 
 export function useAdjudicate() {
   const queryClient = useQueryClient();
+  const api = useApi();
   return useMutation({
     mutationFn: async ({ inventoryId, unitId, data }: { inventoryId: string, unitId: string; data: any }) => {
       const res = await api.post(`/inventory/${inventoryId}/work-units/${unitId}/adjudicate`, data);
@@ -115,6 +136,7 @@ export function useAdjudicate() {
 
 export function useFinalizeInventory() {
   const queryClient = useQueryClient();
+  const api = useApi();
   return useMutation({
     mutationFn: async (inventoryId: string) => {
       const res = await api.post(`/inventory/${inventoryId}/finalize`);
@@ -127,3 +149,75 @@ export function useFinalizeInventory() {
     },
   });
 }
+
+export function useDeleteInventory() {
+  const queryClient = useQueryClient();
+  const api = useApi();
+  return useMutation({
+    mutationFn: async (inventoryId: string) => {
+      const res = await api.delete(`/inventory/${inventoryId}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventories'] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
+    },
+  });
+}
+
+export function useAssignThirdUser() {
+  const queryClient = useQueryClient();
+  const api = useApi();
+  return useMutation({
+    mutationFn: async ({
+      inventoryId,
+      unitId,
+      thirdUserId,
+      notes,
+    }: {
+      inventoryId: string;
+      unitId: string;
+      thirdUserId: string;
+      notes?: string;
+    }) => {
+      const res = await api.post(`/inventory/${inventoryId}/work-units/${unitId}/assign-third-user`, {
+        thirdUserId,
+        notes,
+      });
+      return res.data;
+    },
+    onSuccess: (_, { inventoryId, unitId }) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-preview', inventoryId] });
+      queryClient.invalidateQueries({ queryKey: ['inventories', inventoryId] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-adjudicate', unitId] });
+    },
+  });
+}
+
+export function useAssignThirdUserAll() {
+  const queryClient = useQueryClient();
+  const api = useApi();
+  return useMutation({
+    mutationFn: async ({
+      inventoryId,
+      thirdUserId,
+      notes,
+    }: {
+      inventoryId: string;
+      thirdUserId: string;
+      notes?: string;
+    }) => {
+      const res = await api.post(`/inventory/${inventoryId}/assign-third-user-all`, {
+        thirdUserId,
+        notes,
+      });
+      return res.data;
+    },
+    onSuccess: (_, { inventoryId }) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-preview', inventoryId] });
+      queryClient.invalidateQueries({ queryKey: ['inventories', inventoryId] });
+    },
+  });
+}
+
+

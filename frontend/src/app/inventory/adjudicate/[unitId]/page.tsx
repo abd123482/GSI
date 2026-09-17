@@ -61,21 +61,26 @@ export default function AdjudicatePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {unit?.attempts?.filter((a: any) => a.purpose === 'INITIAL').map((attempt: any, idx: number) => {
              const qty = attempt.orders.reduce((sum: number, o: any) => sum + (o.quantityCalculated || 0), 0);
-             const shelf = attempt.orders[0]?.shelfId || unit.shelf?.shelfName || 'Inconnu';
-             const notes = attempt.orders[0]?.notes || 'RAS';
+             const shelf = attempt.orders[0]?.shelf?.shelfName || unit.shelf?.shelfName || 'Étagère non définie';
+             const notes = attempt.orders[0]?.notes || 'Aucune observation';
              return (
             <div key={idx} className="p-4 border border-[#3f3a36] bg-[#2f2a26] rounded-[4px] space-y-3">
-              <h3 className="text-xs font-medium text-[#aea69c] uppercase tracking-wider">{attempt.assignedUserId}</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-medium text-[#f7f5f0]">
+                  Compteur : <span className="font-semibold text-[#10b981]">{attempt.assignedUser?.userName || attempt.assignedUser?.userEmail || attempt.assignedUserId}</span>
+                </h3>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#383330] text-[#aea69c]">Séquence {attempt.sequence}</span>
+              </div>
               <div className="space-y-1">
                 <p className="text-[10px] font-mono text-[#5c544d]">QUANTITÉ TROUVÉE</p>
-                <p className="text-xl font-medium">{qty}</p>
+                <p className="text-xl font-medium text-[#f7f5f0]">{qty} pcs</p>
               </div>
               <div className="space-y-1">
-                <p className="text-[10px] font-mono text-[#5c544d]">ÉTAGÈRE</p>
-                <p className="text-sm">{shelf}</p>
+                <p className="text-[10px] font-mono text-[#5c544d]">EMPLACEMENT</p>
+                <p className="text-sm text-[#dad2c1]">{shelf}</p>
               </div>
               <div className="space-y-1 pt-2 border-t border-[#3f3a36]">
-                <p className="text-[10px] font-mono text-[#5c544d]">NOTES</p>
+                <p className="text-[10px] font-mono text-[#5c544d]">NOTES DU COMPTEUR</p>
                 <p className="text-xs text-[#c9c0ad] italic">"{notes}"</p>
               </div>
             </div>
@@ -95,11 +100,11 @@ export default function AdjudicatePage() {
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-mono text-[#aea69c]">QUANTITÉ RETENUE</label>
-                <input type="number" value={quantity} onChange={e => setQuantity(parseInt(e.target.value))} className="w-full h-9 bg-[#383330] border border-[#3f3a36] rounded-[2px] px-3 text-sm focus:outline-none" />
+                <input type="number" value={quantity} onChange={e => setQuantity(parseInt(e.target.value) || 0)} className="w-full h-9 bg-[#383330] border border-[#3f3a36] rounded-[2px] px-3 text-sm focus:outline-none text-[#f7f5f0]" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-mono text-[#aea69c]">JUSTIFICATION OBLIGATOIRE</label>
-                <input type="text" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ex: Vérification physique effectuée..." className="w-full h-9 bg-[#383330] border border-[#3f3a36] rounded-[2px] px-3 text-sm focus:outline-none" />
+                <input type="text" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ex: Vérification physique effectuée..." className="w-full h-9 bg-[#383330] border border-[#3f3a36] rounded-[2px] px-3 text-sm focus:outline-none text-[#f7f5f0]" />
               </div>
            </div>
 
@@ -109,13 +114,13 @@ export default function AdjudicatePage() {
                    if (!notes) return toast.error('Justification requise');
                    try {
                      await adjudicate({ inventoryId: unit.inventoryId, unitId, data: { quantity, notes } });
-                     toast.success('Adjudication validée');
-                     router.push('/inventory');
-                   } catch (e) {
-                     toast.error('Erreur');
+                     toast.success('Divergence arbitrée avec succès !');
+                     router.push(`/inventory/${unit.inventoryId}/report`);
+                   } catch (e: any) {
+                     toast.error(e?.response?.data?.message || 'Erreur lors de l\'adjudication');
                    }
                 }}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#f7f5f0] hover:bg-[#dad2c1] text-[#2b2622] text-xs font-medium rounded-[3px] transition-colors"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#f7f5f0] hover:bg-[#dad2c1] text-[#2b2622] text-xs font-medium rounded-[3px] transition-colors cursor-pointer"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Valider l'adjudication

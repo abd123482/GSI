@@ -6,7 +6,7 @@ export const createInventorySchema = z.object({
   users: z.array(z.object({
     userId: z.string(),
     responsibility: z.enum(["COUNT", "ADJUDICATE"])
-  })).min(1),
+  })).min(2, "Un inventaire doit comporter au moins 2 participants distincts"),
   equipmentIds: z.array(z.string()).optional(),
   shelfIds: z.array(z.string()).optional()
 });

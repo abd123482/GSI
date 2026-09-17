@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useAuth, SignInButton } from '@clerk/nextjs';
 import Link from 'next/link';
 import {
@@ -7,18 +8,25 @@ import {
   Loader2,
   Plus,
   PlayCircle,
-  Settings2
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
-import { useInventories, useLaunchInventory } from '@/hooks/use-inventory';
+import { useInventories, useLaunchInventory, useDeleteInventory } from '@/hooks/use-inventory';
+import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from 'sonner';
 
 export default function InventoryPage() {
   const { isSignedIn, isLoaded } = useAuth();
+  const { hasPermission, isAdmin, canDeleteInventory, isLoading: isPermissionsLoading } = usePermissions();
   
-  const { data: inventories, isLoading } = useInventories();
+  const { data, isLoading } = useInventories();
   const { mutateAsync: launchInventory } = useLaunchInventory();
+  const { mutateAsync: deleteInventory, isPending: isDeleting } = useDeleteInventory();
+  const [inventoryToDelete, setInventoryToDelete] = useState<any | null>(null);
 
-  if (!isLoaded || isLoading) {
+  const inventoriesList = data?.inventories || [];
+
+  if (!isLoaded || isLoading || isPermissionsLoading) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-[#2b2622] text-[#f7f5f0]">
         <div className="flex items-center gap-2 text-xs font-mono text-[#aea69c]">
@@ -92,18 +100,20 @@ export default function InventoryPage() {
               <span>Mes Tâches</span>
             </Link>
 
-            <Link
-              href="/inventory/create"
-              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-[#f7f5f0] hover:bg-[#dad2c1] text-[#2b2622] text-xs font-medium rounded-[3px] shadow-xs transition-colors cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Nouvel Inventaire</span>
-            </Link>
+            {hasPermission('inventory.create') && (
+              <Link
+                href="/inventory/create"
+                className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-[#f7f5f0] hover:bg-[#dad2c1] text-[#2b2622] text-xs font-medium rounded-[3px] shadow-xs transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Nouvel Inventaire</span>
+              </Link>
+            )}
           </div>
         </div>
 
         {/* Empty State / List */}
-        {!inventories || inventories.length === 0 ? (
+        {inventoriesList.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 border border-dashed border-[#3f3a36] rounded-[4px] bg-[#2f2a26]">
             <ClipboardList className="w-8 h-8 text-[#5c544d] mb-3" />
             <p className="text-sm text-[#aea69c]">Aucun inventaire trouvé.</p>
@@ -113,7 +123,7 @@ export default function InventoryPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-             {inventories.map((inv: any) => (
+             {inventoriesList.map((inv: any) => (
                 <div key={inv.inventoryId} className="p-4 rounded-[4px] border border-[#3f3a36] bg-[#2f2a26] flex flex-col justify-between hover:border-[#aea69c] transition-colors">
                    <div className="space-y-2">
                       <div className="flex justify-between items-start">
@@ -123,33 +133,115 @@ export default function InventoryPage() {
                       <p className="text-xs text-[#c9c0ad]">Type: {inv.typeInventory}</p>
                    </div>
                    
-                   <div className="mt-4 pt-4 border-t border-[#3f3a36] flex justify-end gap-2">
-                      {inv.status === 'DRAFT' && (
-                         <button 
-                           onClick={async () => {
-                             try {
-                               await launchInventory(inv.inventoryId);
-                               toast.success('Inventaire lancé!');
-                             } catch (e) {
-                               toast.error('Erreur lancement');
-                             }
-                           }}
-                           className="text-xs bg-[#f7f5f0] text-[#2b2622] px-3 py-1.5 rounded-[3px] font-medium"
-                         >
-                           Lancer
-                         </button>
-                      )}
-                      {inv.status === 'IN_PROGRESS' && (
-                         <Link href={`/inventory/${inv.inventoryId}/report`} className="text-xs border border-[#3f3a36] text-[#c9c0ad] px-3 py-1.5 rounded-[3px] font-medium hover:text-[#f7f5f0] hover:bg-[#383330]">
-                           Voir l'avancement
-                         </Link>
-                      )}
+                   <div className="mt-4 pt-4 border-t border-[#3f3a36] flex items-center justify-between gap-2">
+                      <div>
+                        {(isAdmin || canDeleteInventory) && (
+                          <button
+                            type="button"
+                            onClick={() => setInventoryToDelete(inv)}
+                            className="p-1.5 rounded-[3px] text-[#aea69c] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all cursor-pointer"
+                            title="Supprimer l'inventaire"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {inv.status === 'DRAFT' && (
+                           <button 
+                             onClick={async () => {
+                               try {
+                                 await launchInventory(inv.inventoryId);
+                                 toast.success('Inventaire lancé!');
+                               } catch (e) {
+                                 toast.error('Erreur lancement');
+                               }
+                             }}
+                             className="text-xs bg-[#f7f5f0] text-[#2b2622] px-3 py-1.5 rounded-[3px] font-medium hover:bg-[#dad2c1] transition-colors cursor-pointer"
+                           >
+                             Lancer
+                           </button>
+                        )}
+                        {inv.status === 'IN_PROGRESS' && (
+                           <Link href={`/inventory/${inv.inventoryId}/report`} className="text-xs border border-[#3f3a36] text-[#c9c0ad] px-3 py-1.5 rounded-[3px] font-medium hover:text-[#f7f5f0] hover:bg-[#383330] transition-colors">
+                             Voir l'avancement
+                           </Link>
+                        )}
+                        {inv.status === 'FINALIZED' && (
+                           <Link href={`/inventory/${inv.inventoryId}/report`} className="text-xs border border-[#3f3a36] text-[#10b981] px-3 py-1.5 rounded-[3px] font-medium hover:bg-[#383330] transition-colors">
+                             Rapport final
+                           </Link>
+                        )}
+                      </div>
                    </div>
                 </div>
              ))}
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {inventoryToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-[#383330] border border-[#3f3a36] rounded-[4px] p-6 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-[3px] bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 shrink-0">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-sm font-medium text-[#f7f5f0]">
+                  Supprimer l'inventaire ?
+                </h2>
+                <p className="text-xs text-[#c9c0ad] leading-relaxed">
+                  Êtes-vous sûr de vouloir supprimer définitivement{' '}
+                  <strong className="text-[#f7f5f0]">
+                    "{inventoryToDelete.title || 'Inventaire sans titre'}"
+                  </strong>{' '}
+                  ? Cette action est irréversible et supprimera tous les comptages, tâches et réconciliations liés.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-[#3f3a36]">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setInventoryToDelete(null)}
+                className="px-3 py-1.5 rounded-[3px] border border-[#3f3a36] bg-[#2b2622] hover:bg-[#3f3a36] text-[#f7f5f0] text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={async () => {
+                  try {
+                    await deleteInventory(inventoryToDelete.inventoryId);
+                    toast.success('Inventaire supprimé avec succès');
+                    setInventoryToDelete(null);
+                  } catch (err: any) {
+                    toast.error(err?.response?.data?.message || 'Erreur lors de la suppression');
+                  }
+                }}
+                className="px-3 py-1.5 rounded-[3px] bg-red-600 hover:bg-red-700 text-white text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Suppression en cours...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Supprimer définitivement</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
