@@ -55,13 +55,14 @@ export class InventoryController {
     return this.inventory['prisma'].inventoryCountAttempt.findMany({ include: { unit: true }});
   }
 
-  @RequirePermissions('inventory.count')
+  @RequirePermissions('inventory.count', 'inventory.adjudicate')
   @Get('my-tasks')
   async getMyTasksCurrent(@CurrentUser() user: AuthenticatedUser) {
     return this.inventory.getMyTasks(user.userId);
   }
 
-  @RequirePermissions('inventory.count')
+
+  @RequirePermissions('inventory.count', 'inventory.adjudicate')
   @Get('my-tasks/:userId')
   async getMyTasks(
     @Param('userId') userId: string,
@@ -71,13 +72,13 @@ export class InventoryController {
     return this.inventory.getMyTasks(targetUserId);
   }
 
-  @RequirePermissions('inventory.count')
+  @RequirePermissions('inventory.count', 'inventory.adjudicate')
   @Get('tasks/:taskId')
   async getTask(@Param('taskId') taskId: string) {
     return this.inventory.getTask(taskId);
   }
 
-  @RequirePermissions('inventory.count')
+  @RequirePermissions('inventory.count', 'inventory.adjudicate')
   @Post('tasks/:taskId/submit')
   async submitTask(
     @Param('taskId') taskId: string,
@@ -87,13 +88,13 @@ export class InventoryController {
     return this.inventory.submitCountAttempt(taskId, user.userId, data);
   }
 
-  @RequirePermissions('inventory.adjudicate')
+  @RequirePermissions('inventory.adjudicate', 'inventory.count')
   @Get('adjudicate/:unitId')
   async getAdjudicationUnit(@Param('unitId') unitId: string) {
     return this.inventory.getAdjudicationUnit(unitId);
   }
 
-  @RequirePermissions('inventory.adjudicate')
+  @RequirePermissions('inventory.adjudicate', 'inventory.count')
   @Post(':id/work-units/:unitId/adjudicate')
   async adjudicate(
     @Param('unitId') unitId: string,
@@ -102,6 +103,7 @@ export class InventoryController {
   ) {
     return this.inventory.manualAdjudicate(unitId, user.userId, data);
   }
+
 
   @RequirePermissions('inventory.launch', 'inventory.adjudicate')
   @Post(':id/work-units/:unitId/assign-third-user')

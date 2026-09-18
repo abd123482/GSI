@@ -308,14 +308,35 @@ export class InventoryService {
     const unit = await this.prisma.inventoryWorkUnit.findUnique({
       where: { unitId },
       include: {
-        inventory: true,
+        inventory: {
+          include: {
+            Inventory_User: {
+              include: {
+                User: {
+                  select: {
+                    userId: true,
+                    userName: true,
+                    userEmail: true,
+                  },
+                },
+              },
+            },
+          },
+        },
         attempts: {
           include: {
-            assignedUser: true,
+            assignedUser: {
+              select: {
+                userId: true,
+                userName: true,
+                userEmail: true,
+              },
+            },
             orders: {
               include: {
                 shelf: true,
                 equipment: true,
+                serialNumber: true,
               },
             },
           },
@@ -328,6 +349,18 @@ export class InventoryService {
     if (unit.equipmentId) {
       equipment = await this.prisma.equipment.findUnique({
         where: { equipmentId: unit.equipmentId },
+        include: {
+          equipmentShelfs: {
+            include: {
+              shelf: true,
+            },
+          },
+          serialNumbers: {
+            include: {
+              shelf: true,
+            },
+          },
+        },
       });
     }
 
@@ -335,12 +368,45 @@ export class InventoryService {
     if (unit.shelfId) {
       shelf = await this.prisma.shelf.findUnique({
         where: { shelfId: unit.shelfId },
+        include: {
+          equipmentShelfs: {
+            include: {
+              equipment: true,
+            },
+          },
+          serialNumbers: {
+            include: {
+              equipment: true,
+            },
+          },
+        },
       });
     }
 
+    // Format equipment nicely with shelves and serialNumbers
+    const formattedEquipment = equipment
+      ? {
+          ...equipment,
+          shelves:
+            equipment.equipmentShelfs?.map((es) => ({
+              shelfId: es.shelfId ?? '',
+              shelfName: es.shelf?.shelfName ?? 'Étagère non définie',
+              quantity: es.equipmentQuantity ?? 0,
+            })) || [],
+          serialNumbers:
+            equipment.serialNumbers?.map((sn) => ({
+              serialNumberId: sn.serialNumberId,
+              serialNumberCode: sn.serialNumberCode ?? '',
+              serialNumberStatus: sn.serialNumberStatus ?? '',
+              shelfId: sn.shelfId,
+              shelfName: sn.shelf?.shelfName ?? null,
+            })) || [],
+        }
+      : null;
+
     return {
       ...unit,
-      equipment,
+      equipment: formattedEquipment,
       shelf,
     };
   }
@@ -845,7 +911,7 @@ export class InventoryService {
           );
           if (adjudicators.length > 0) {
             const adjudicator = adjudicators[0];
-            await tx.inventoryCountAttempt.create({
+            const createdAttempt = await tx.inventoryCountAttempt.create({
               data: {
                 unitId: unit.unitId,
                 assignedUserId: adjudicator.userId,
@@ -865,6 +931,8 @@ export class InventoryService {
                 recipientId: adjudicator.userId,
                 eventType: 'INVENTORY_ADJUDICATION_REQUIRED',
                 payload: JSON.stringify({
+                  title: "Arbitrage d'inventaire requis",
+                  taskId: createdAttempt.attemptId,
                   inventoryId: unit.inventoryId,
                   unitId: unit.unitId,
                   message: "Une divergence est survenue entre les deux compteurs. Votre comptage d'arbitrage est requis.",
@@ -873,6 +941,7 @@ export class InventoryService {
               },
             });
           }
+
 
           return { status: 'DISCREPANCY_CREATED' };
         }
@@ -914,7 +983,7 @@ export class InventoryService {
    * Called by a manager/adjudicator to resolve a discrepancy manually
    */
   async manualAdjudicate(unitId: string, adjudicatorId: string, data: AdjudicateDTO) {
-    const { quantity, notes } = data;
+    const { quantity, notes, shelfId, serialNumberIds, observations } = data;
 
     return this.prisma.$transaction(async (tx) => {
       const unit = await tx.inventoryWorkUnit.findUnique({
@@ -946,7 +1015,7 @@ export class InventoryService {
       }
 
       // Determine shelfId if missing
-      let targetShelfId = unit.shelfId;
+      let targetShelfId = shelfId || unit.shelfId;
       if (!targetShelfId && unit.equipmentId) {
         const priorOrder = await tx.order.findFirst({
           where: { attempt: { unitId }, shelfId: { not: null } },
@@ -976,38 +1045,113 @@ export class InventoryService {
         });
       }
 
-      await tx.inventoryCountAttempt.create({
-        data: {
-          unitId,
-          assignedUserId: adjudicatorId,
-          sequence: 999,
-          purpose: 'ADJUDICATION_FINAL',
-          status: 'SUBMITTED',
-          submittedAt: new Date(),
-          orders: {
-            create: {
+      // Check if there is an existing available attempt for this adjudicator on this unit
+      const existingAdjudicatorAttempt = unit.attempts.find(
+        (a) => a.assignedUserId === adjudicatorId && (a.purpose === 'ADJUDICATION' || a.sequence > 0),
+      );
+
+      let finalAttemptId = existingAdjudicatorAttempt?.attemptId;
+
+      if (!finalAttemptId) {
+        const createdAttempt = await tx.inventoryCountAttempt.create({
+          data: {
+            unitId,
+            assignedUserId: adjudicatorId,
+            sequence: 999,
+            purpose: 'ADJUDICATION_FINAL',
+            status: 'SUBMITTED',
+            submittedAt: new Date(),
+          },
+        });
+        finalAttemptId = createdAttempt.attemptId;
+      } else {
+        await tx.inventoryCountAttempt.update({
+          where: { attemptId: finalAttemptId },
+          data: {
+            status: 'SUBMITTED',
+            submittedAt: new Date(),
+            purpose: 'ADJUDICATION_FINAL',
+          },
+        });
+        // Delete any draft orders on this attempt if any
+        await tx.order.deleteMany({
+          where: { attemptId: finalAttemptId },
+        });
+      }
+
+      // Create orders for final adjudication
+      if (observations && observations.length > 0) {
+        for (const obs of observations) {
+          await tx.order.create({
+            data: {
+              attemptId: finalAttemptId,
               inventoryId: unit.inventoryId,
               userId: adjudicatorId,
-              quantityCalculated: quantity,
-              notes,
+              equipmentId: unit.equipmentId,
+              shelfId: obs.shelfId || targetShelfId,
+              serialNumberId: obs.serialNumberId,
+              quantityCalculated: obs.quantityCalculated ?? 1,
+              notes: obs.notes || notes,
+            },
+          });
+        }
+      } else if (serialNumberIds && serialNumberIds.length > 0) {
+        for (const snId of serialNumberIds) {
+          await tx.order.create({
+            data: {
+              attemptId: finalAttemptId,
+              inventoryId: unit.inventoryId,
+              userId: adjudicatorId,
               equipmentId: unit.equipmentId,
               shelfId: targetShelfId,
+              serialNumberId: snId,
+              quantityCalculated: 1,
+              notes,
             },
+          });
+        }
+      } else {
+        await tx.order.create({
+          data: {
+            attemptId: finalAttemptId,
+            inventoryId: unit.inventoryId,
+            userId: adjudicatorId,
+            equipmentId: unit.equipmentId,
+            shelfId: targetShelfId,
+            quantityCalculated: quantity,
+            notes,
           },
-        },
-      });
+        });
+      }
+
+      const finalQuantity =
+        observations && observations.length > 0
+          ? observations.reduce((s, o) => s + (o.quantityCalculated ?? 1), 0)
+          : serialNumberIds && serialNumberIds.length > 0
+            ? serialNumberIds.length
+            : quantity;
 
       await tx.inventoryWorkUnit.update({
         where: { unitId },
         data: {
           discrepancyState: 'RESOLVED',
           discrepancyActorId: adjudicatorId,
-          discrepancyAfterData: JSON.stringify({ resolvedQuantity: quantity, notes }),
+          discrepancyAfterData: JSON.stringify({
+            resolvedQuantity: finalQuantity,
+            notes,
+            serialNumbersCount: serialNumberIds?.length || observations?.length || 0,
+            adjudicatedAt: new Date().toISOString(),
+          }),
           status: 'RESOLVED',
         },
       });
 
-      return { success: true };
+      return {
+        success: true,
+        unitId,
+        status: 'RESOLVED',
+        resolvedQuantity: finalQuantity,
+      };
     });
   }
 
@@ -1135,8 +1279,10 @@ export class InventoryService {
           recipientId: thirdUserId,
           eventType: 'INVENTORY_ADJUDICATION_ASSIGNED',
           payload: JSON.stringify({
-            inventoryId,
+            title: "Arbitrage d'inventaire assigné",
+            taskId: attemptId,
             unitId,
+            inventoryId,
             targetName,
             assignerId,
             message: `Vous avez été désigné comme 3ème contrôleur pour départager une divergence sur "${targetName}".`,
@@ -1144,6 +1290,7 @@ export class InventoryService {
           }),
         },
       });
+
 
       return {
         success: true,

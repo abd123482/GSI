@@ -59,17 +59,35 @@ export function useNotifications() {
           const title = n.payload?.title || 'Nouvelle tâche d’inventaire';
           const msg = n.payload?.message || 'Une nouvelle notification vous est parvenue.';
           const taskId = n.payload?.taskId;
+          const unitId = n.payload?.unitId;
+          const inventoryId = n.payload?.inventoryId;
+
+          const isAdjudication =
+            n.eventType === 'INVENTORY_ADJUDICATION_ASSIGNED' ||
+            n.eventType === 'INVENTORY_ADJUDICATION_REQUIRED';
+
+          const destination =
+            isAdjudication && unitId
+              ? `/inventory/adjudicate/${unitId}`
+              : taskId
+              ? `/inventory/tasks/${taskId}`
+              : unitId
+              ? `/inventory/adjudicate/${unitId}`
+              : inventoryId
+              ? `/inventory/${inventoryId}/report`
+              : null;
 
           toast.info(title, {
             description: msg,
             duration: 8000,
-            action: taskId
+            action: destination
               ? {
                   label: 'Ouvrir la tâche',
-                  onClick: () => router.push(`/inventory/tasks/${taskId}`),
+                  onClick: () => router.push(destination),
                 }
               : undefined,
           });
+
         }
       }
     }

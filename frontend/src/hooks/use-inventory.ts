@@ -123,13 +123,15 @@ export function useAdjudicate() {
   const queryClient = useQueryClient();
   const api = useApi();
   return useMutation({
-    mutationFn: async ({ inventoryId, unitId, data }: { inventoryId: string, unitId: string; data: any }) => {
+    mutationFn: async ({ inventoryId, unitId, data }: { inventoryId: string; unitId: string; data: any }) => {
       const res = await api.post(`/inventory/${inventoryId}/work-units/${unitId}/adjudicate`, data);
       return res.data;
     },
     onSuccess: (_, { inventoryId, unitId }) => {
       queryClient.invalidateQueries({ queryKey: ['inventory-adjudicate', unitId] });
       queryClient.invalidateQueries({ queryKey: ['inventories', inventoryId] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['inventories'] });
     },
   });
 }

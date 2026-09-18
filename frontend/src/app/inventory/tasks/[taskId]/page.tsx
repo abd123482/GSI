@@ -412,6 +412,30 @@ export default function InventoryTaskPage() {
     );
   }
 
+  if (!attempt) {
+    return (
+      <div className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-[#f7f5f0] flex flex-col items-center justify-center p-6 space-y-4">
+        <div className="p-6 rounded-[4px] bg-[#2f2a26] border border-[#3f3a36] max-w-md text-center space-y-3 shadow-lg">
+          <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto" />
+          <h2 className="text-sm font-semibold text-[#f7f5f0]">Tâche introuvable ou déjà complétée</h2>
+          <p className="text-xs text-[#aea69c] leading-relaxed">
+            Cette tâche de comptage n'est pas accessible ou a déjà été soumise.
+          </p>
+          <div className="pt-2 flex justify-center gap-2">
+            <Link
+              href="/inventory/tasks"
+              className="inline-flex items-center gap-1.5 text-xs bg-[#f7f5f0] hover:bg-[#dad2c1] text-[#2b2622] font-semibold px-3 py-1.5 rounded-[3px] transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Voir mes tâches disponibles</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+
   const targetEquipmentName =
     currentEquipment?.equipmentName ||
     attempt?.unit?.equipment?.equipmentName ||

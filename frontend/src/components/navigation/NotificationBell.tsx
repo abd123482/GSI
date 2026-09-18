@@ -39,12 +39,23 @@ export function NotificationBell() {
 
     setOpen(false);
 
-    if (notif.payload?.taskId) {
+    const isAdjudication =
+      notif.eventType === 'INVENTORY_ADJUDICATION_ASSIGNED' ||
+      notif.eventType === 'INVENTORY_ADJUDICATION_REQUIRED';
+
+    if (isAdjudication && notif.payload?.unitId) {
+      router.push(`/inventory/adjudicate/${notif.payload.unitId}`);
+    } else if (notif.payload?.taskId) {
       router.push(`/inventory/tasks/${notif.payload.taskId}`);
+    } else if (notif.payload?.unitId) {
+      router.push(`/inventory/adjudicate/${notif.payload.unitId}`);
     } else if (notif.payload?.inventoryId) {
-      router.push(`/inventory/${notif.payload.inventoryId}`);
+      router.push(`/inventory/${notif.payload.inventoryId}/report`);
+    } else {
+      router.push('/inventory/tasks');
     }
   };
+
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
