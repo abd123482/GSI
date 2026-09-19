@@ -87,7 +87,7 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
     if (!canCreateShelf) {
       const err = new InsufficientPermissionException(
         REQUIRED_CREATE_PERMISSION,
-        `Action interdite : Votre rôle (${roleName ?? 'Utilisateur'}) ne dispose pas de la permission '${REQUIRED_CREATE_PERMISSION}' requise pour insérer une nouvelle étagère.`,
+        `Action interdite : Votre rôle (${roleName ?? 'Utilisateur'}) ne dispose pas de la permission '${REQUIRED_CREATE_PERMISSION}' requise pour insérer un nouvel emplacement.`,
       );
       setServerError(err.message);
       throw err;
@@ -100,7 +100,7 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
       if (onSuccess) onSuccess();
     } catch (err: unknown) {
       console.error('[CreateShelfModal] Failed to submit shelf:', err);
-      setServerError(getErrorMessage(err, 'Échec de la création de l’étagère'));
+      setServerError(getErrorMessage(err, 'Échec de la création de l’emplacement'));
     }
   };
 
@@ -121,11 +121,8 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
             </div>
             <div>
               <h2 id="modal-title" className="text-lg font-semibold text-white tracking-tight">
-                Nouvelle étagère
+                Nouvel emplacement
               </h2>
-              <p className="text-xs text-white/80">
-                Création d’un tuple d’emplacement physique pour SQL Server (SSMS)
-              </p>
             </div>
           </div>
 
@@ -173,8 +170,8 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
               htmlFor="shelfName"
               className="flex items-center justify-between text-xs font-medium text-white"
             >
-              <span>Nom de l’étagère <span className="text-rose-300">*</span></span>
-              <span className="text-[11px] text-white/70">ex: Rayon A-01, Étagère Nord</span>
+              <span>Nom de l’emplacement <span className="text-rose-300">*</span></span>
+              <span className="text-[11px] text-white/70">ex: Emplacement A-01, Zone Nord</span>
             </label>
             <div className="relative">
               <input
@@ -246,7 +243,7 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
                 Stock initial (Quantité : 0)
               </span>
               <p className="text-[11px] text-white/75">
-                Chaque nouvelle étagère est initialisée à 0. Les stocks sont alimentés exclusivement via les mouvements d&apos;entrée.
+                Chaque nouvel emplacement est initialisé à 0. Les stocks sont alimentés exclusivement via les mouvements d&apos;entrée.
               </p>
             </div>
           </div>
@@ -270,21 +267,6 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
             />
           </div>
 
-          {/* Live Tuple Preview matching SQL Server format */}
-          <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg space-y-1 text-xs text-white">
-            <div className="flex items-center justify-between text-white/80">
-              <span className="font-medium flex items-center gap-1.5 text-white">
-                <Database className="w-3.5 h-3.5 text-white" />
-                Aperçu du tuple SQL Server (SSMS)
-              </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2b2622] text-white border border-[#3f3a36] font-mono">
-                dbo.Shelf
-              </span>
-            </div>
-            <p className="text-[11px] text-white/80 font-mono truncate">
-              INSERT INTO Shelf (shelfId, shelfName, shelfQuantity, stockId) VALUES (NEWID(), ..., &apos;606d4178-e0a8-48b9-be6d-9538fa61135a&apos;)
-            </p>
-          </div>
 
           {/* Action Buttons */}
           <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-[#3f3a36]">
@@ -310,7 +292,7 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
               ) : (
                 <>
                   <Plus className="w-4 h-4" />
-                  <span>Créer l’étagère</span>
+                  <span>Créer l’emplacement</span>
                 </>
               )}
             </button>

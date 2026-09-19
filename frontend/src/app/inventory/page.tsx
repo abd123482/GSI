@@ -82,9 +82,6 @@ export default function InventoryPage() {
               <h1 className="text-xl sm:text-2xl font-normal tracking-tight text-[#f7f5f0]">
                 Inventaires & Réconciliations
               </h1>
-              <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-[2px] bg-[#383330] text-[#dad2c1] border border-[#3f3a36]">
-                dbo.Inventory
-              </span>
             </div>
             <p className="text-xs text-[#c9c0ad]">
               Workflow d'inventaire complet avec comptage en double aveugle et adjudication.

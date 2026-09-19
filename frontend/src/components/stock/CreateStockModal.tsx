@@ -183,21 +183,6 @@ export function CreateStockModal({ isOpen, onClose, onSuccess }: CreateStockModa
             </select>
           </div>
 
-          {/* SQL Server Table Preview */}
-          <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg space-y-1 text-xs text-white">
-            <div className="flex items-center justify-between text-white/80">
-              <span className="font-medium flex items-center gap-1.5 text-white">
-                <Database className="w-3.5 h-3.5 text-white" />
-                Modèle SQL Server
-              </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2b2622] text-white border border-[#3f3a36] font-mono">
-                dbo.Stock
-              </span>
-            </div>
-            <p className="text-[11px] text-white/80 font-mono truncate">
-              INSERT INTO Stock (stockId, stockName, stockStatusId) VALUES (NEWID(), ...)
-            </p>
-          </div>
 
           {/* Action Buttons */}
           <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-[#3f3a36]">

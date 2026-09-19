@@ -43,6 +43,7 @@ export const ALL_SYSTEM_PERMISSIONS: string[] = [
   'stock.delete',
   'user.manage',
   'role.manage',
+  'dashboard.read',
   'inventory.read',
   'inventory.create',
   'inventory.count',
@@ -97,14 +98,17 @@ export function usePermissions() {
     };
   }, [permissions, isAdmin]);
 
+  const canReadShelf = isAdmin || hasPermission('shelf.read');
   const canCreateShelf = isAdmin || hasPermission(REQUIRED_CREATE_PERMISSION);
   const canUpdateShelf = isAdmin || hasPermission(REQUIRED_UPDATE_PERMISSION);
   const canDeleteShelf = isAdmin || hasPermission(REQUIRED_DELETE_PERMISSION);
 
+  const canReadStock = isAdmin || hasPermission('stock.read');
   const canCreateStock = isAdmin || hasPermission('stock.create');
   const canUpdateStock = isAdmin || hasPermission('stock.update');
   const canDeleteStock = isAdmin || hasPermission('stock.delete');
 
+  const canReadEquipment = isAdmin || hasPermission('equipment.read');
   const canCreateEquipment =
     isAdmin ||
     hasPermission('equipment.create') ||
@@ -117,6 +121,7 @@ export function usePermissions() {
 
   const canManageUsers = isAdmin || hasPermission('user.manage');
   const canManageRoles = isAdmin || hasPermission('role.manage');
+  const canReadDashboard = isAdmin || hasPermission('dashboard.read');
 
   const canReadInventory = isAdmin || hasPermission('inventory.read');
   const canCreateInventory = isAdmin || hasPermission('inventory.create');
@@ -133,6 +138,10 @@ export function usePermissions() {
       permissions,
       roleName: authUser?.roleName ?? null,
       isAdmin,
+      canReadDashboard,
+      canReadEquipment,
+      canReadShelf,
+      canReadStock,
       canCreateShelf,
       canUpdateShelf,
       canDeleteShelf,
@@ -163,6 +172,10 @@ export function usePermissions() {
       authUser,
       permissions,
       isAdmin,
+      canReadDashboard,
+      canReadEquipment,
+      canReadShelf,
+      canReadStock,
       canCreateShelf,
       canUpdateShelf,
       canDeleteShelf,

@@ -21,13 +21,13 @@ const PERMISSION_GROUPS: {
 }[] = [
   {
     id: 'equipment',
-    title: 'Équipements & Mouvements',
+    title: 'Articles & Mouvements',
     icon: '⚡',
     permissions: [
-      { name: 'equipment.read', label: 'Consulter les équipements' },
-      { name: 'equipment.create', label: 'Créer de nouveaux équipements' },
-      { name: 'equipment.update', label: 'Modifier les équipements' },
-      { name: 'equipment.delete', label: 'Supprimer des équipements' },
+      { name: 'equipment.read', label: 'Consulter les articles' },
+      { name: 'equipment.create', label: 'Créer de nouveaux articles' },
+      { name: 'equipment.update', label: 'Modifier les articles' },
+      { name: 'equipment.delete', label: 'Supprimer des articles' },
       { name: 'movement.read', label: 'Consulter l’historique des mouvements' },
       { name: 'movement.create', label: 'Effectuer des transferts/mouvements' },
     ],
@@ -45,13 +45,13 @@ const PERMISSION_GROUPS: {
   },
   {
     id: 'shelves',
-    title: 'Étagères & Rangement',
+    title: 'Emplacements & Rangement',
     icon: '🗄️',
     permissions: [
-      { name: 'shelf.read', label: 'Consulter les étagères' },
-      { name: 'shelf.create', label: 'Créer de nouvelles étagères' },
-      { name: 'shelf.update', label: 'Modifier les étagères' },
-      { name: 'shelf.delete', label: 'Supprimer des étagères' },
+      { name: 'shelf.read', label: 'Consulter les emplacements' },
+      { name: 'shelf.create', label: 'Créer de nouveaux emplacements' },
+      { name: 'shelf.update', label: 'Modifier les emplacements' },
+      { name: 'shelf.delete', label: 'Supprimer des emplacements' },
     ],
   },
   {
@@ -73,8 +73,7 @@ const PERMISSION_GROUPS: {
       { name: 'inventory.read', label: 'Consulter les inventaires et rapports' },
       { name: 'inventory.create', label: 'Créer de nouveaux projets d’inventaire' },
       { name: 'inventory.launch', label: 'Lancer et démarrer un inventaire' },
-      { name: 'inventory.count', label: 'Comptage physique & mes tâches' },
-      { name: 'inventory.adjudicate', label: 'Arbitrer les écarts et réconciliations' },
+      { name: 'inventory.count', label: 'Contrôleur d’inventaire (Comptage initial et arbitrage en cas de divergence)' },
       { name: 'inventory.finalize', label: 'Clôturer et ajuster le stock final' },
       { name: 'inventory.delete', label: 'Supprimer un inventaire' },
     ],
@@ -84,6 +83,7 @@ const PERMISSION_GROUPS: {
     title: 'Administration Système',
     icon: '🛡️',
     permissions: [
+      { name: 'dashboard.read', label: 'Consulter le tableau de bord exécutif (Dashboard)' },
       { name: 'user.manage', label: 'Gérer les comptes utilisateurs et statuts' },
       { name: 'role.manage', label: 'Créer des rôles et assigner des permissions' },
     ],
@@ -106,8 +106,9 @@ export function EditRoleModal({
     const knownPerms = new Set(
       PERMISSION_GROUPS.flatMap((g) => g.permissions.map((p) => p.name)),
     );
+    // Exclude inventory.adjudicate as it is internally bundled with inventory.count (Contrôleur)
     const extraPerms = (availablePermissions || []).filter(
-      (p) => !knownPerms.has(p),
+      (p) => !knownPerms.has(p) && p !== 'inventory.adjudicate',
     );
 
     if (extraPerms.length === 0) {
@@ -131,7 +132,11 @@ export function EditRoleModal({
   useEffect(() => {
     if (isOpen && roleToEdit) {
       setRoleName(roleToEdit.roleName);
-      setSelectedPermissions(roleToEdit.permissions.map(p => p.permissionName));
+      setSelectedPermissions(
+        roleToEdit.permissions
+          .map((p) => p.permissionName)
+          .filter((p) => p !== 'inventory.adjudicate'),
+      );
       setValidationError(null);
     }
   }, [isOpen, roleToEdit]);
@@ -183,10 +188,17 @@ export function EditRoleModal({
     }
 
     try {
+      const finalPermissions = new Set(selectedPermissions);
+      if (finalPermissions.has('inventory.count')) {
+        finalPermissions.add('inventory.adjudicate');
+      } else {
+        finalPermissions.delete('inventory.adjudicate');
+      }
+
       await onSubmitRole({
         roleId: roleToEdit.roleId,
         roleName: trimmed.toUpperCase(),
-        permissions: selectedPermissions,
+        permissions: Array.from(finalPermissions),
       });
       onClose();
     } catch {

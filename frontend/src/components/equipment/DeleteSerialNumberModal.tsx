@@ -73,7 +73,7 @@ export function DeleteSerialNumberModal({
             <div className="space-y-1">
               <p className="font-semibold">Ajustement automatique du stock</p>
               <p className="text-[11px] leading-relaxed text-rose-200/90">
-                La suppression de ce numéro de série décrémentera automatiquement de 1 la quantité en stock de cet équipement.
+                La suppression de ce numéro de série décrémentera automatiquement de 1 la quantité en stock de cet article.
               </p>
             </div>
           </div>

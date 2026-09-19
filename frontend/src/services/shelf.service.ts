@@ -40,7 +40,7 @@ export class ShelfService {
     if (userPermissions && !userPermissions.includes(REQUIRED_CREATE_PERMISSION)) {
       throw new InsufficientPermissionException(
         REQUIRED_CREATE_PERMISSION,
-        `Permission refusée : Vous n'avez pas l'autorisation '${REQUIRED_CREATE_PERMISSION}' pour créer une étagère.`,
+        `Permission refusée : Vous n'avez pas l'autorisation '${REQUIRED_CREATE_PERMISSION}' pour créer un emplacement.`,
       );
     }
 
@@ -54,7 +54,7 @@ export class ShelfService {
         fieldErrors[field].push(err.message);
       });
       throw new ShelfValidationException(
-        'Erreur de validation des données d’étagère',
+        'Erreur de validation des données d’emplacement',
         fieldErrors,
       );
     }
@@ -83,7 +83,7 @@ export class ShelfService {
         // Backend 400 Bad Request (e.g. Duplicate shelfName)
         if (error.response?.status === 400) {
           const backendMsg =
-            error.response.data?.message || 'Données d’étagère invalides ou étagère déjà existante.';
+            error.response.data?.message || 'Données d’emplacement invalides ou emplacement déjà existant.';
           throw new ShelfServiceException(
             Array.isArray(backendMsg) ? backendMsg.join(', ') : backendMsg,
             400,
@@ -100,7 +100,7 @@ export class ShelfService {
         }
 
         throw new ShelfServiceException(
-          error.response?.data?.message || error.message || 'Erreur réseau lors de la création de l’étagère.',
+          error.response?.data?.message || error.message || 'Erreur réseau lors de la création de l’emplacement.',
           error.response?.status,
         );
       }
@@ -110,7 +110,7 @@ export class ShelfService {
       }
 
       throw new ShelfServiceException(
-        error instanceof Error ? error.message : 'Erreur inconnue lors de la création de l’étagère.',
+        error instanceof Error ? error.message : 'Erreur inconnue lors de la création de l’emplacement.',
       );
     }
   }
@@ -163,11 +163,11 @@ export class ShelfService {
       if (isAxiosError(error) && error.response?.status === 403) {
         throw new InsufficientPermissionException(
           REQUIRED_READ_PERMISSION,
-          'Permission refusée pour la consultation des étagères.',
+          'Permission refusée pour la consultation des emplacements.',
         );
       }
       throw new ShelfServiceException(
-        'Impossible de récupérer la liste des étagères.',
+        'Impossible de récupérer la liste des emplacements.',
       );
     }
   }
@@ -186,11 +186,11 @@ export class ShelfService {
       if (isAxiosError(error) && error.response?.status === 403) {
         throw new InsufficientPermissionException(
           REQUIRED_READ_PERMISSION,
-          'Permission refusée pour la consultation de cette étagère.',
+          'Permission refusée pour la consultation de cet emplacement.',
         );
       }
       throw new ShelfServiceException(
-        `Étagère avec l'ID '${id}' introuvable ou inaccessible.`,
+        `Emplacement avec l'ID '${id}' introuvable ou inaccessible.`,
       );
     }
   }
@@ -245,10 +245,10 @@ export class ShelfService {
       if (isAxiosError(error) && error.response?.status === 403) {
         throw new InsufficientPermissionException(
           REQUIRED_READ_PERMISSION,
-          'Permission refusée pour la recherche d’étagères.',
+          'Permission refusée pour la recherche d’emplacements.',
         );
       }
-      throw new ShelfServiceException('Échec de la recherche d’étagères.');
+      throw new ShelfServiceException('Échec de la recherche d’emplacements.');
     }
   }
 
@@ -264,7 +264,7 @@ export class ShelfService {
     if (userPermissions && !userPermissions.includes(REQUIRED_UPDATE_PERMISSION)) {
       throw new InsufficientPermissionException(
         REQUIRED_UPDATE_PERMISSION,
-        `Permission refusée : Vous n'avez pas le droit '${REQUIRED_UPDATE_PERMISSION}' pour modifier cette étagère.`,
+        `Permission refusée : Vous n'avez pas le droit '${REQUIRED_UPDATE_PERMISSION}' pour modifier cet emplacement.`,
       );
     }
 
@@ -298,7 +298,7 @@ export class ShelfService {
           error.response?.data?.message ||
           error.response?.data?.error ||
           error.message ||
-          'Erreur lors de la mise à jour de l’étagère.';
+          'Erreur lors de la mise à jour de l’emplacement.';
 
         throw new ShelfServiceException(
           Array.isArray(backendMsg) ? backendMsg.join(', ') : backendMsg,
@@ -312,7 +312,7 @@ export class ShelfService {
       }
 
       throw new ShelfServiceException(
-        error instanceof Error ? error.message : 'Erreur inconnue lors de la mise à jour de l’étagère.',
+        error instanceof Error ? error.message : 'Erreur inconnue lors de la mise à jour de l’emplacement.',
       );
     }
   }
@@ -328,7 +328,7 @@ export class ShelfService {
     if (userPermissions && !userPermissions.includes(REQUIRED_DELETE_PERMISSION)) {
       throw new InsufficientPermissionException(
         REQUIRED_DELETE_PERMISSION,
-        `Permission refusée : Vous n'avez pas le droit '${REQUIRED_DELETE_PERMISSION}' pour supprimer cette étagère.`,
+        `Permission refusée : Vous n'avez pas le droit '${REQUIRED_DELETE_PERMISSION}' pour supprimer cet emplacement.`,
       );
     }
 
@@ -357,7 +357,7 @@ export class ShelfService {
           error.response?.data?.message ||
           error.response?.data?.error ||
           error.message ||
-          'Erreur lors de la suppression de l’étagère.';
+          'Erreur lors de la suppression de l’emplacement.';
 
         throw new ShelfServiceException(
           Array.isArray(backendMsg) ? backendMsg.join(', ') : backendMsg,
@@ -371,7 +371,7 @@ export class ShelfService {
       }
 
       throw new ShelfServiceException(
-        error instanceof Error ? error.message : 'Erreur inconnue lors de la suppression de l’étagère.',
+        error instanceof Error ? error.message : 'Erreur inconnue lors de la suppression de l’emplacement.',
       );
     }
   }

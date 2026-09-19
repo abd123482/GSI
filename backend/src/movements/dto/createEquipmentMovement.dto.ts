@@ -19,3 +19,9 @@ export const createEquipmentMovementSchema = z
 
 export type CreateEquipmentMovementDTO = z.infer<typeof createEquipmentMovementSchema>;
 
+export const createBatchEquipmentMovementSchema = z.object({
+  items: z.array(createEquipmentMovementSchema).min(1, 'At least one movement item is required'),
+});
+
+export type CreateBatchEquipmentMovementDTO = z.infer<typeof createBatchEquipmentMovementSchema>;
+

@@ -102,7 +102,7 @@ function UpdateShelfModalContent({
     if (!canUpdateShelf) {
       const err = new InsufficientPermissionException(
         REQUIRED_UPDATE_PERMISSION,
-        `Action interdite : Votre rôle (${roleName ?? 'Utilisateur'}) ne possède pas la permission '${REQUIRED_UPDATE_PERMISSION}' pour modifier cette étagère.`,
+        `Action interdite : Votre rôle (${roleName ?? 'Utilisateur'}) ne possède pas la permission '${REQUIRED_UPDATE_PERMISSION}' pour modifier cet emplacement.`,
       );
       setServerError(err.message);
       throw err;
@@ -117,12 +117,12 @@ function UpdateShelfModalContent({
       if (onSuccess) onSuccess();
     } catch (err: unknown) {
       console.error('[UpdateShelfModal] Update failed:', err);
-      setServerError(getErrorMessage(err, 'Échec de la modification de l’étagère.'));
+      setServerError(getErrorMessage(err, 'Échec de la modification de l’emplacement.'));
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
       {/* Modal Surface (#6b7b97 Theme) */}
       <div
         className="w-full max-w-lg bg-[#383330] border border-[#3f3a36] text-white rounded-xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-150"
@@ -138,11 +138,8 @@ function UpdateShelfModalContent({
             </div>
             <div>
               <h2 id="update-shelf-title" className="text-lg font-semibold text-white tracking-tight">
-                Modifier l’étagère
+                Modifier l’emplacement
               </h2>
-              <p className="text-xs text-white/80">
-                Mise à jour du tuple SQL Server (PATCH /shelves/:id)
-              </p>
             </div>
           </div>
 
@@ -163,7 +160,7 @@ function UpdateShelfModalContent({
             <div className="text-xs text-amber-200 space-y-1">
               <p className="font-semibold">Autorisation requise : {REQUIRED_UPDATE_PERMISSION}</p>
               <p>
-                Votre rôle ne dispose pas de la permission nécessaire pour exécuter la méthode PATCH sur cette étagère.
+                Votre rôle ne dispose pas de la permission nécessaire pour exécuter la méthode PATCH sur cet emplacement.
               </p>
             </div>
           </div>
@@ -187,7 +184,7 @@ function UpdateShelfModalContent({
             <div className="flex items-center justify-between text-white/85">
               <span className="font-medium flex items-center gap-1.5">
                 <Database className="w-3.5 h-3.5 text-white" />
-                Enregistrement SQL Server (shelfId)
+                Identifiant
               </span>
               <span className="font-mono text-[11px] text-white truncate max-w-[200px]">
                 {shelf.shelfId}
@@ -201,7 +198,7 @@ function UpdateShelfModalContent({
               htmlFor="edit-shelfName"
               className="flex items-center justify-between text-xs font-medium text-white"
             >
-              <span>Nom de l’étagère</span>
+              <span>Nom de l’emplacement</span>
               <span className="text-[11px] text-white/70">1 à 100 caractères</span>
             </label>
             <input
@@ -233,7 +230,6 @@ function UpdateShelfModalContent({
                 <Warehouse className="w-3.5 h-3.5 text-[#f7f5f0]" />
                 Stock / Entrepôt de rattachement
               </span>
-              <span className="text-[11px] text-white/70">dbo.Stock</span>
             </label>
             <div className="relative">
               <select

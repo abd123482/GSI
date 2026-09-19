@@ -47,7 +47,7 @@ export default function MyTasksPage() {
               Mes Tâches d'Inventaire
             </h1>
             <p className="text-xs text-[#c9c0ad]">
-              Liste des comptages et adjudications qui vous sont assignés avec leurs équipements et étagères.
+              Liste des comptages et adjudications qui vous sont assignés avec leurs articles et emplacements.
             </p>
           </div>
         </div>
@@ -64,6 +64,11 @@ export default function MyTasksPage() {
               const equipment = task.unit?.equipment;
               const shelf = task.unit?.shelf;
               const eqShelves = equipment?.equipmentShelfs || [];
+              const totalShelfUnits = (shelf?.equipmentShelfs || []).reduce(
+                (sum: number, es: any) => sum + (Number(es.equipmentQuantity) || 0),
+                0
+              );
+              const displayShelfQty = totalShelfUnits > 0 ? totalShelfUnits : (shelf?.shelfQuantity ?? 0);
 
               return (
                 <div
@@ -78,7 +83,7 @@ export default function MyTasksPage() {
                           {task.unit?.inventory?.title || 'Inventaire sans titre'}
                         </h3>
                         <span className="text-[10px] font-mono text-[#aea69c]">
-                          {isByEquipment ? 'Mode: Par Équipement' : 'Mode: Par Étagère'}
+                          {isByEquipment ? 'Mode: Par Article' : 'Mode: Par Emplacement'}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -107,7 +112,7 @@ export default function MyTasksPage() {
                         <div className="space-y-1 pt-1 border-t border-[#3f3a36]/60">
                           <span className="text-[10px] font-mono text-[#aea69c] uppercase flex items-center gap-1">
                             <MapPin className="w-3 h-3 text-[#10b981]" />
-                            Étagères attribuées ({eqShelves.length}) :
+                            Emplacements attribués ({eqShelves.length}) :
                           </span>
                           {eqShelves.length > 0 ? (
                             <div className="flex flex-wrap gap-1.5 pt-0.5">
@@ -116,14 +121,14 @@ export default function MyTasksPage() {
                                   key={es.equipmentShelfId || es.shelfId}
                                   className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#383330] border border-[#3f3a36] text-[#f7f5f0] flex items-center gap-1"
                                 >
-                                  <span>{es.shelf?.shelfName || 'Étagère'}</span>
+                                  <span>{es.shelf?.shelfName || 'Emplacement'}</span>
                                   <span className="text-[#10b981]">({es.equipmentQuantity} pcs)</span>
                                 </span>
                               ))}
                             </div>
                           ) : (
                             <p className="text-[10px] text-[#8c827a] italic">
-                              Stock global non encore réparti sur étagère spécifique.
+                              Stock global non encore réparti sur emplacement spécifique.
                             </p>
                           )}
                         </div>
@@ -137,18 +142,18 @@ export default function MyTasksPage() {
                           <div className="flex items-center gap-2">
                             <Layers className="w-3.5 h-3.5 text-[#10b981] shrink-0" />
                             <span className="text-xs font-medium text-[#f7f5f0]">
-                              Étagère : {shelf.shelfName}
+                              Emplacement : {shelf.shelfName}
                             </span>
                           </div>
                           <span className="text-[11px] font-mono text-[#aea69c]">
-                            Capacité : {shelf.shelfQuantity ?? 'N/A'}
+                            Stock théorique : {displayShelfQty} pcs
                           </span>
                         </div>
 
                         {shelf.equipmentShelfs && shelf.equipmentShelfs.length > 0 && (
                           <div className="space-y-1 pt-1 border-t border-[#3f3a36]/60">
                             <span className="text-[10px] font-mono text-[#aea69c] uppercase">
-                              Matériels sur cette étagère ({shelf.equipmentShelfs.length}) :
+                              Articles sur cet emplacement ({shelf.equipmentShelfs.length}) :
                             </span>
                             <div className="flex flex-wrap gap-1.5 pt-0.5">
                               {shelf.equipmentShelfs.map((es: any) => (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useApi } from './use-api';
 import { usePermissions } from './use-permissions';
@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 
 interface UseEquipmentsOptions extends EquipmentPaginationQuery {
   initialSearch?: string;
+  enabled?: boolean;
 }
 
 export function useEquipments(options?: UseEquipmentsOptions) {
@@ -45,6 +46,7 @@ export function useEquipments(options?: UseEquipmentsOptions) {
       }
       return EquipmentService.getAllEquipments(api, { page, limit });
     },
+    enabled: options?.enabled ?? true,
     placeholderData: keepPreviousData,
     staleTime: 30 * 1000,
   });
@@ -80,13 +82,13 @@ export function useEquipments(options?: UseEquipmentsOptions) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['equipments'] });
       queryClient.invalidateQueries({ queryKey: ['shelves'] });
-      toast.success('Équipement mis à jour', {
-        description: `L'équipement "${data.equipmentName}" a été actualisé.`,
+      toast.success('Article mis à jour', {
+        description: `L'article "${data.equipmentName}" a été actualisé.`,
       });
     },
     onError: (error) => {
       toast.error('Erreur de mise à jour', {
-        description: error?.message || 'Impossible de modifier cet équipement.',
+        description: error?.message || 'Impossible de modifier cet article.',
       });
     },
   });
@@ -99,13 +101,13 @@ export function useEquipments(options?: UseEquipmentsOptions) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['equipments'] });
       queryClient.invalidateQueries({ queryKey: ['shelves'] });
-      toast.success('Équipement supprimé', {
-        description: 'L’équipement et ses éléments associés ont été supprimés.',
+      toast.success('Article supprimé', {
+        description: 'L’article et ses éléments associés ont été supprimés.',
       });
     },
     onError: (error) => {
       toast.error('Erreur de suppression', {
-        description: error?.message || 'Impossible de supprimer cet équipement.',
+        description: error?.message || 'Impossible de supprimer cet article.',
       });
     },
   });
@@ -161,13 +163,13 @@ export function useEquipments(options?: UseEquipmentsOptions) {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['equipments'] });
       queryClient.invalidateQueries({ queryKey: ['shelves'] });
-      toast.success('Équipement créé avec succès !', {
-        description: `L'équipement "${data.equipmentName}" a été ajouté au stock.`,
+      toast.success('Article créé avec succès !', {
+        description: `L'article "${data.equipmentName}" a été ajouté au stock.`,
       });
     },
     onError: (error) => {
       toast.error('Erreur lors de la création', {
-        description: error?.message || 'Impossible de créer l’équipement.',
+        description: error?.message || 'Impossible de créer l’article.',
       });
     },
   });
@@ -200,10 +202,31 @@ export function useEquipments(options?: UseEquipmentsOptions) {
     },
   });
 
-  const handleSearchChange = (query: string) => {
+  // Mutation: Create batch movements
+  const createBatchMovementsMutation = useMutation({
+    mutationFn: async (items: CreateEquipmentMovementInput[]) => {
+      return MovementService.createBatchMovements(api, items, permissions);
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['equipments'] });
+      queryClient.invalidateQueries({ queryKey: ['shelves'] });
+      queryClient.invalidateQueries({ queryKey: ['movements'] });
+      queryClient.invalidateQueries({ queryKey: ['equipment-movements'] });
+      toast.success('Mouvements enregistrés avec succès !', {
+        description: `${data.length} mouvement(s) validé(s).`,
+      });
+    },
+    onError: (error) => {
+      toast.error('Erreur lors de l’enregistrement des mouvements', {
+        description: error?.message || 'Impossible d’enregistrer les mouvements.',
+      });
+    },
+  });
+
+  const handleSearchChange = useCallback((query: string) => {
     setSearchTerm(query);
     setPage(1);
-  };
+  }, []);
 
   return {
     equipments: equipmentsQuery.data?.equipments ?? [],
@@ -234,6 +257,8 @@ export function useEquipments(options?: UseEquipmentsOptions) {
     isUpdatingSerialNumber: updateSerialNumberMutation.isPending,
     createMovement: createMovementMutation.mutateAsync,
     isCreatingMovement: createMovementMutation.isPending,
+    createBatchMovements: createBatchMovementsMutation.mutateAsync,
+    isCreatingBatchMovements: createBatchMovementsMutation.isPending,
     getEquipmentMovements: fetchEquipmentMovements,
     deleteSerialNumber: deleteSerialNumberMutation.mutateAsync,
     isDeletingSerialNumber: deleteSerialNumberMutation.isPending,

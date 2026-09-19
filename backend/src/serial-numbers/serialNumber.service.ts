@@ -96,13 +96,22 @@ export class SerialNumberService {
 
     const count = validated.serialNumberCodes.length;
 
+    if (validated.shelfId) {
+      const shelf = await this.prisma.shelf.findUnique({
+        where: { shelfId: validated.shelfId },
+      });
+      if (!shelf) {
+        throw new NotFoundException(`Emplacement avec l'identifiant '${validated.shelfId}' introuvable.`);
+      }
+    }
+
     return await this.prisma.$transaction(async (tx) => {
-      // Bulk insert serial numbers without shelf (shelf assignments are managed via movements)
+      // Bulk insert serial numbers (with shelfId if provided)
       await tx.serialNumber.createMany({
         data: validated.serialNumberCodes.map((code) => ({
           serialNumberCode: code,
           equipmentId: validated.equipmentId,
-          shelfId: null,
+          shelfId: validated.shelfId ?? null,
           serialNumberStatus: validated.serialNumberStatus ?? 'AVAILABLE',
         })),
       });
@@ -115,11 +124,69 @@ export class SerialNumberService {
         },
       });
 
+      // If shelfId is provided, place in shelf, increment shelfQuantity and create initial IN movements
+      if (validated.shelfId) {
+        const createdSerials = await tx.serialNumber.findMany({
+          where: {
+            equipmentId: validated.equipmentId,
+            serialNumberCode: { in: validated.serialNumberCodes },
+          },
+          select: { serialNumberId: true },
+        });
+
+        // Increment destination shelf quantity
+        await tx.shelf.update({
+          where: { shelfId: validated.shelfId },
+          data: {
+            shelfQuantity: { increment: count },
+          },
+        });
+
+        // Upsert equipmentShelfs record
+        const destEs = await tx.equipmentShelfs.findFirst({
+          where: {
+            equipmentId: validated.equipmentId,
+            shelfId: validated.shelfId,
+          },
+        });
+
+        if (destEs) {
+          await tx.equipmentShelfs.update({
+            where: { equipmentShelfId: destEs.equipmentShelfId },
+            data: {
+              equipmentQuantity: destEs.equipmentQuantity === null
+                ? count
+                : { increment: count },
+            },
+          });
+        } else {
+          await tx.equipmentShelfs.create({
+            data: {
+              equipmentId: validated.equipmentId,
+              shelfId: validated.shelfId,
+              equipmentQuantity: count,
+            },
+          });
+        }
+
+        // Create initial IN audit movements for each serial number
+        await tx.mouvement.createMany({
+          data: createdSerials.map((sn) => ({
+            equipmentId: validated.equipmentId,
+            serialNumberId: sn.serialNumberId,
+            sourceShelfId: null,
+            destinationShelfId: validated.shelfId,
+            mouvementQuantity: 1,
+            mouvementStatus: 'IN',
+          })),
+        });
+      }
+
       return {
         success: true,
         count,
         equipmentId: validated.equipmentId,
-        shelfId: null,
+        shelfId: validated.shelfId ?? null,
       };
     });
   }

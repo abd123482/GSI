@@ -152,6 +152,23 @@ export function useFinalizeInventory() {
   });
 }
 
+export function useAutoCompleteCounts() {
+  const queryClient = useQueryClient();
+  const api = useApi();
+  return useMutation({
+    mutationFn: async (inventoryId: string) => {
+      const res = await api.post(`/inventory/${inventoryId}/auto-complete-counts`);
+      return res.data;
+    },
+    onSuccess: (_, inventoryId) => {
+      queryClient.invalidateQueries({ queryKey: ['inventories'] });
+      queryClient.invalidateQueries({ queryKey: ['inventories', inventoryId] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-preview', inventoryId] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
+    },
+  });
+}
+
 export function useDeleteInventory() {
   const queryClient = useQueryClient();
   const api = useApi();
@@ -221,5 +238,42 @@ export function useAssignThirdUserAll() {
     },
   });
 }
+
+export function useNotifyPendingController() {
+  const queryClient = useQueryClient();
+  const api = useApi();
+  return useMutation({
+    mutationFn: async ({
+      inventoryId,
+      unitId,
+    }: {
+      inventoryId: string;
+      unitId: string;
+    }) => {
+      const res = await api.post(`/inventory/${inventoryId}/work-units/${unitId}/notify-pending`);
+      return res.data;
+    },
+    onSuccess: (_, { inventoryId }) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-preview', inventoryId] });
+      queryClient.invalidateQueries({ queryKey: ['inventories', inventoryId] });
+    },
+  });
+}
+
+export function useNotifyAllPendingControllers() {
+  const queryClient = useQueryClient();
+  const api = useApi();
+  return useMutation({
+    mutationFn: async (inventoryId: string) => {
+      const res = await api.post(`/inventory/${inventoryId}/notify-all-pending`);
+      return res.data;
+    },
+    onSuccess: (_, inventoryId) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-preview', inventoryId] });
+      queryClient.invalidateQueries({ queryKey: ['inventories', inventoryId] });
+    },
+  });
+}
+
 
 

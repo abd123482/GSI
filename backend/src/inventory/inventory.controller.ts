@@ -137,6 +137,34 @@ export class InventoryController {
     );
   }
 
+  @RequirePermissions('inventory.launch', 'inventory.finalize')
+  @Post(':id/auto-complete-counts')
+  async autoCompleteCounts(
+    @Param('id') inventoryId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.inventory.autoCompleteCounts(inventoryId, user.userId);
+  }
+
+  @RequirePermissions('inventory.launch', 'inventory.count', 'inventory.adjudicate')
+  @Post(':id/work-units/:unitId/notify-pending')
+  async notifyPendingControllerForUnit(
+    @Param('id') inventoryId: string,
+    @Param('unitId') unitId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.inventory.notifyPendingControllerForUnit(inventoryId, unitId, user?.userId);
+  }
+
+  @RequirePermissions('inventory.launch', 'inventory.count', 'inventory.adjudicate')
+  @Post(':id/notify-all-pending')
+  async notifyAllPendingControllers(
+    @Param('id') inventoryId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.inventory.notifyAllPendingControllers(inventoryId, user?.userId);
+  }
+
   @RequirePermissions('inventory.finalize')
   @Get(':id/adjustments/preview')
   async previewAdjustments(@Param('id') inventoryId: string) {

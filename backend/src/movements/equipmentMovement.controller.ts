@@ -26,6 +26,12 @@ export class EquipmentMovementController {
   ) { }
 
   @RequirePermissions('movement.create')
+  @Post('batch')
+  async createBatchEquipmentMovements(@Body() dto: { items: CreateEquipmentMovementDTO[] }) {
+    return this.equipmentMovementService.createBatchEquipmentMovements(dto.items);
+  }
+
+  @RequirePermissions('movement.create')
   @Post()
   async createEquipmentMovement(@Body() dto: CreateEquipmentMovementDTO) {
     return this.equipmentMovementService.createEquipmentMovement(dto);

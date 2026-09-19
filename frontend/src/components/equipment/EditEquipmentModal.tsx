@@ -183,7 +183,7 @@ function EditEquipmentModalContent({
         });
 
         toast.success('Conversion réussie', {
-          description: `Équipement converti en sérialisé avec ${trimmed.length} numéro(s) de série.`,
+          description: `Article converti en sérialisé avec ${trimmed.length} numéro(s) de série.`,
         });
       } else if (isConvertingToStandard) {
         // Converting serialized -> standard: deletes serial numbers and sets scalar quantity
@@ -195,7 +195,7 @@ function EditEquipmentModalContent({
         });
 
         toast.success('Conversion réussie', {
-          description: 'Équipement converti en mode standard (sans numéros de série).',
+          description: 'Article converti en mode standard (sans numéros de série).',
         });
       } else {
         // Preserving same mode
@@ -235,7 +235,7 @@ function EditEquipmentModalContent({
             </div>
             <div>
               <span className="text-xs font-semibold uppercase tracking-wider text-white">
-                Modifier l’équipement
+                Modifier l’article
               </span>
               <p className="text-[11px] text-white/70">{equipment.equipmentName}</p>
             </div>
@@ -257,7 +257,7 @@ function EditEquipmentModalContent({
               <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <div>
                 <span className="font-semibold">Permission manquante :</span> Vous ne détenez pas le droit{' '}
-                <code className="bg-black/30 px-1 py-0.5 rounded text-xs">equipment.update</code> pour modifier cet équipement.
+                <code className="bg-black/30 px-1 py-0.5 rounded text-xs">equipment.update</code> pour modifier cet article.
               </div>
             </div>
           )}
@@ -314,7 +314,7 @@ function EditEquipmentModalContent({
             {/* Equipment Name */}
             <div>
               <label className="block text-xs font-medium text-white mb-1">
-                Nom de l’équipement <span className="text-rose-300">*</span>
+                Nom de l’article <span className="text-rose-300">*</span>
               </label>
               <input
                 type="text"
@@ -334,7 +334,7 @@ function EditEquipmentModalContent({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-white flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    Conversion en équipement sérialisé
+                    Conversion en article sérialisé
                   </span>
                   <span className="text-[11px] text-[#f7f5f0] bg-[#2b2622] px-2 py-0.5 rounded font-medium border border-[#38bdf8]/30">
                     {serialList.length} code(s) requis
@@ -399,7 +399,7 @@ function EditEquipmentModalContent({
               <div className="rounded-xl border border-amber-500/40 bg-amber-950/40 p-4 space-y-3 animate-in fade-in">
                 <div className="flex items-center gap-2 text-xs font-semibold text-amber-200">
                   <AlertTriangle className="w-4 h-4 text-amber-400" />
-                  <span>Confirmation : Conversion en équipement standard</span>
+                  <span>Confirmation : Conversion en article standard</span>
                 </div>
                 <p className="text-xs text-amber-100/90 leading-relaxed">
                   Attention : les <strong>{equipment.serialNumbers?.length ?? equipment.equipmentQuantity}</strong> numéros de série existants seront <strong>définitivement supprimés</strong> de la base de données.
@@ -431,7 +431,7 @@ function EditEquipmentModalContent({
                   </span>
                 </div>
                 <p className="text-[11px] text-white/70 leading-relaxed">
-                  La quantité d’un équipement sérialisé correspond au nombre de numéros de série actifs enregistrés ({equipment.serialNumbers?.length ?? 0}). Les unités individuelles peuvent être gérées depuis la fiche détaillée de l&apos;équipement.
+                  La quantité d’un article sérialisé correspond au nombre de numéros de série actifs enregistrés ({equipment.serialNumbers?.length ?? 0}). Les unités individuelles peuvent être gérées depuis la fiche détaillée de l&apos;article.
                 </p>
               </div>
             )}

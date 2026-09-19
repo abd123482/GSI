@@ -13,7 +13,7 @@ export const paginationSchema = z.object({
         .number()
         .int()
         .min(1)
-        .max(100)
+        .max(500)
         .default(20),
 });
 

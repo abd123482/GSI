@@ -45,17 +45,17 @@ export class MovementService {
 
     // Client-side payload validation
     if (!input.equipmentId) {
-      throw new MovementServiceException('Identifiant d’équipement requis.', 400);
+      throw new MovementServiceException('Identifiant d’article requis.', 400);
     }
     if (!input.sourceShelfId && !input.destinationShelfId) {
       throw new MovementServiceException(
-        'Au moins une étagère (source ou destination) doit être spécifiée.',
+        'Au moins un emplacement (source ou destination) doit être spécifié.',
         400,
       );
     }
     if (input.sourceShelfId && input.destinationShelfId && input.sourceShelfId === input.destinationShelfId) {
       throw new MovementServiceException(
-        'L’étagère source et l’étagère destination ne peuvent pas être identiques.',
+        'L’emplacement source et l’emplacement destination ne peuvent pas être identiques.',
         400,
       );
     }
@@ -90,8 +90,58 @@ export class MovementService {
           error.response?.status,
         );
       }
+      throw new MovementServiceException('Erreur inattendue lors de la création du mouvement.');
+    }
+  }
+
+  /**
+   * Create multiple equipment movements in a single transaction (POST /equipment-movement/batch)
+   */
+  static async createBatchMovements(
+    client: AxiosInstance,
+    items: CreateEquipmentMovementInput[],
+    userPermissions?: string[],
+  ): Promise<Movement[]> {
+    if (userPermissions && !userPermissions.includes(REQUIRED_MOVEMENT_CREATE_PERMISSION)) {
+      throw new InsufficientPermissionException(
+        REQUIRED_MOVEMENT_CREATE_PERMISSION,
+        `Permission refusée : Vous n'avez pas le droit '${REQUIRED_MOVEMENT_CREATE_PERMISSION}' pour enregistrer un mouvement.`,
+      );
+    }
+
+    if (!items || !items.length) {
+      throw new MovementServiceException('Au moins un mouvement doit être spécifié.', 400);
+    }
+
+    try {
+      const payload = {
+        items: items.map((input) => ({
+          equipmentId: input.equipmentId,
+          serialNumberId: input.serialNumberId || undefined,
+          sourceShelfId: input.sourceShelfId || undefined,
+          destinationShelfId: input.destinationShelfId || undefined,
+          movementQuantity: Number(input.movementQuantity),
+          movementType: input.movementType,
+        })),
+      };
+      const response = await client.post<Movement[]>('/equipment-movement/batch', payload);
+      return response.data;
+    } catch (error: unknown) {
+      if (isAxiosError(error)) {
+        if (error.response?.status === 403) {
+          throw new InsufficientPermissionException(
+            REQUIRED_MOVEMENT_CREATE_PERMISSION,
+            error.response.data?.message || `Permission '${REQUIRED_MOVEMENT_CREATE_PERMISSION}' requise.`,
+          );
+        }
+        const msg = error.response?.data?.message || error.message || 'Erreur lors de la création des mouvements.';
+        throw new MovementServiceException(
+          Array.isArray(msg) ? msg.join(', ') : msg,
+          error.response?.status,
+        );
+      }
       throw new MovementServiceException(
-        error instanceof Error ? error.message : 'Erreur inconnue lors du mouvement.',
+        error instanceof Error ? error.message : 'Erreur inconnue lors des mouvements.',
       );
     }
   }

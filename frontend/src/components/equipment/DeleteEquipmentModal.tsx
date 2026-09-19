@@ -45,7 +45,7 @@ export function DeleteEquipmentModal({
 
     if (!canDeleteEquipment) {
       setError(
-        `Action interdite : Votre rôle (${roleName ?? 'Utilisateur'}) ne possède pas la permission 'equipment.delete' pour supprimer cet équipement.`,
+        `Action interdite : Votre rôle (${roleName ?? 'Utilisateur'}) ne possède pas la permission 'equipment.delete' pour supprimer cet article.`,
       );
       return;
     }
@@ -56,9 +56,11 @@ export function DeleteEquipmentModal({
       if (onSuccess) onSuccess();
     } catch (err: unknown) {
       console.error('[DeleteEquipmentModal] Delete failed:', err);
-      setError(getErrorMessage(err, 'Impossible de supprimer cet équipement.'));
+      setError(getErrorMessage(err, 'Impossible de supprimer cet article.'));
     }
   };
+
+  const displayQty = equipment.hasSerialNumber ? (equipment.serialNumbers?.length ?? equipment.equipmentQuantity) : equipment.equipmentQuantity;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
@@ -76,7 +78,7 @@ export function DeleteEquipmentModal({
             </div>
             <div>
               <h3 id="delete-equipment-title" className="text-sm font-semibold text-white">
-                Supprimer l’équipement
+                Supprimer l’article
               </h3>
               <p className="text-[11px] text-white/70">Confirmation de suppression définitive</p>
             </div>
@@ -106,7 +108,7 @@ export function DeleteEquipmentModal({
             <div className="text-xs text-rose-100 space-y-1">
               <p className="font-semibold">Attention : Cette action est irréversible.</p>
               <p className="text-[11px] leading-relaxed text-rose-200/90">
-                L’équipement <span className="font-bold text-white">&quot;{equipment.equipmentName}&quot;</span> sera définitivement supprimé de la base de données SQL Server.
+                L’article <span className="font-bold text-white">&quot;{equipment.equipmentName}&quot;</span> sera définitivement supprimé du système.
               </p>
             </div>
           </div>
@@ -116,7 +118,7 @@ export function DeleteEquipmentModal({
             <div className="flex items-center justify-between text-white/80">
               <span className="flex items-center gap-1.5 font-medium text-white/90">
                 <Cpu className="w-3.5 h-3.5 text-white/70" />
-                Nom de l’équipement :
+                Nom de l’article :
               </span>
               <span className="font-semibold text-white">{equipment.equipmentName}</span>
             </div>
@@ -125,7 +127,7 @@ export function DeleteEquipmentModal({
                 <Layers className="w-3.5 h-3.5 text-white/70" />
                 Quantité en stock :
               </span>
-              <span className="font-semibold text-white">{equipment.equipmentQuantity} unité(s)</span>
+              <span className="font-semibold text-white">{displayQty} unité(s)</span>
             </div>
             {equipment.hasSerialNumber && (
               <div className="flex items-center justify-between text-white/80">

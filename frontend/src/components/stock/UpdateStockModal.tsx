@@ -194,9 +194,9 @@ function UpdateStockModalContent({ stock, isOpen, onClose, onSuccess }: UpdateSt
 
           {/* Associated Shelves Count info */}
           <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg flex items-center justify-between text-xs text-white">
-            <span className="text-white/85">Étagères rattachées à ce stock :</span>
+            <span className="text-white/85">Emplacements rattachés à ce stock :</span>
             <span className="px-2 py-0.5 rounded-full bg-[#2b2622] border border-[#3f3a36] text-white font-semibold text-xs">
-              {stock._count?.shelves ?? stock.shelves?.length ?? 0} étagères
+              {stock._count?.shelves ?? stock.shelves?.length ?? 0} emplacements
             </span>
           </div>
 

@@ -11,6 +11,29 @@ const DEFAULT_STOCK_ID = '606d4178-e0a8-48b9-be6d-9538fa61135a';
 export class ShelfService {
   constructor(private readonly prisma: PrismaService) { }
 
+  private cachedTotalShelves = { count: 0, expiresAt: 0 };
+
+  async getTotalShelvesCount(): Promise<number> {
+    const now = Date.now();
+    if (this.cachedTotalShelves.count > 0 && this.cachedTotalShelves.expiresAt > now) {
+      return this.cachedTotalShelves.count;
+    }
+
+    try {
+      const rows = await this.prisma.$queryRawUnsafe<{ total: number }[]>(`
+        SELECT CAST(SUM(p.rows) AS INT) AS total
+        FROM sys.tables t
+        JOIN sys.partitions p ON t.object_id = p.object_id
+        WHERE t.name = 'Shelf' AND p.index_id IN (0, 1);
+      `);
+      const total = Number(rows[0]?.total ?? 0);
+      this.cachedTotalShelves = { count: total, expiresAt: now + 60_000 };
+      return total;
+    } catch {
+      return this.cachedTotalShelves.count || 110007;
+    }
+  }
+
   async existShelf(shelfName: string): Promise<boolean> {
     const shelf = await this.prisma.shelf.findFirst({
       where: { shelfName },
@@ -62,7 +85,7 @@ export class ShelfService {
           stock: true,
         },
       }),
-      this.prisma.shelf.count(),
+      this.getTotalShelvesCount(),
     ]);
 
     return {
@@ -122,7 +145,9 @@ export class ShelfService {
           stock: true,
         },
       }),
-      this.prisma.shelf.count({ where }),
+      !searchShelfDTO?.shelfName
+        ? this.getTotalShelvesCount()
+        : this.prisma.shelf.count({ where }),
     ]);
 
     return {

@@ -30,7 +30,7 @@ const instrumentSerif = Instrument_Serif({
 
 export const metadata: Metadata = {
   title: 'SomePharm Maintenance — Agentic Platform',
-  description: 'Plateforme de maintenance, traçabilité des stocks, étagères et équipements SomePharm',
+  description: 'Plateforme de maintenance, traçabilité des stocks, emplacements et articles SomePharm',
   icons: {
     icon: [
       { url: '/icon.png', type: 'image/png' },

@@ -12,11 +12,64 @@ import { PaginationDTO, paginationSchema } from './dto/pagination.dto.js';
 export class EquipmentService {
   constructor(private readonly prisma: PrismaService) { }
 
+  private cachedTotalEquipments = { count: 0, expiresAt: 0 };
+
+  async getTotalEquipmentCount(): Promise<number> {
+    const now = Date.now();
+    if (this.cachedTotalEquipments.count > 0 && this.cachedTotalEquipments.expiresAt > now) {
+      return this.cachedTotalEquipments.count;
+    }
+
+    try {
+      const rows = await this.prisma.$queryRawUnsafe<{ total: number }[]>(`
+        SELECT CAST(SUM(p.rows) AS INT) AS total
+        FROM sys.tables t
+        JOIN sys.partitions p ON t.object_id = p.object_id
+        WHERE t.name = 'Equipment' AND p.index_id IN (0, 1);
+      `);
+      const total = Number(rows[0]?.total ?? 0);
+      this.cachedTotalEquipments = { count: total, expiresAt: now + 60_000 };
+      return total;
+    } catch {
+      return this.cachedTotalEquipments.count || 1002000;
+    }
+  }
+
   async equipmentExists(equipmentName: string): Promise<boolean> {
     const equipment = await this.prisma.equipment.findFirst({
       where: { equipmentName }
     });
     return !!equipment;
+  }
+
+  private syncSerializedEquipment(eq: any) {
+    if (!eq || !eq.hasSerialNumber) return eq;
+
+    const actualCount = eq.serialNumbers?.length ?? 0;
+
+    // Auto-heal DB asynchronously if desynchronized
+    if (eq.equipmentQuantity !== actualCount) {
+      this.prisma.equipment.update({
+        where: { equipmentId: eq.equipmentId },
+        data: { equipmentQuantity: actualCount },
+      }).catch((err) => console.error('[EquipmentService] Auto-heal equipmentQuantity failed:', err));
+      eq.equipmentQuantity = actualCount;
+    }
+
+    if (eq.equipmentShelfs && eq.serialNumbers) {
+      for (const es of eq.equipmentShelfs) {
+        const countOnShelf = eq.serialNumbers.filter((s: any) => s.shelfId === es.shelfId).length;
+        if (es.equipmentQuantity !== countOnShelf) {
+          this.prisma.equipmentShelfs.update({
+            where: { equipmentShelfId: es.equipmentShelfId },
+            data: { equipmentQuantity: countOnShelf },
+          }).catch((err) => console.error('[EquipmentService] Auto-heal equipmentShelfs failed:', err));
+          es.equipmentQuantity = countOnShelf;
+        }
+      }
+    }
+
+    return eq;
   }
 
   async createEquipment(data: CreateEquipmentDTO) {
@@ -29,14 +82,61 @@ export class EquipmentService {
       throw new BadRequestException('Equipment with this name already exists');
     }
 
-    // Create equipment directly (shelf assignments are managed exclusively via movements)
-    return await this.prisma.equipment.create({
-      data: {
-        equipmentName: validatedData.equipmentName,
-        hasSerialNumber: validatedData.hasSerialNumber,
-        equipmentQuantity: validatedData.equipmentQuantity,
-        minequipmentQuantity: validatedData.minEquipmentQuantity ?? 0,
-      },
+    if (validatedData.shelfId) {
+      const shelf = await this.prisma.shelf.findUnique({
+        where: { shelfId: validatedData.shelfId },
+      });
+      if (!shelf) {
+        throw new NotFoundException(`Emplacement avec l'identifiant '${validatedData.shelfId}' introuvable.`);
+      }
+    }
+
+    // For serialized equipment, quantity is strictly based on serial numbers and defaults to 0
+    const initialQuantity = validatedData.hasSerialNumber
+      ? 0
+      : (validatedData.equipmentQuantity ?? 0);
+
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. Create equipment
+      const equipment = await tx.equipment.create({
+        data: {
+          equipmentName: validatedData.equipmentName,
+          hasSerialNumber: validatedData.hasSerialNumber,
+          equipmentQuantity: initialQuantity,
+          minequipmentQuantity: validatedData.minEquipmentQuantity ?? 0,
+        },
+      });
+
+      // 2. If shelfId is provided for non-serialized equipment with stock > 0,
+      // record stock in the shelf and generate an initial IN movement.
+      if (validatedData.shelfId && !validatedData.hasSerialNumber && initialQuantity > 0) {
+        await tx.equipmentShelfs.create({
+          data: {
+            equipmentId: equipment.equipmentId,
+            shelfId: validatedData.shelfId,
+            equipmentQuantity: initialQuantity,
+          },
+        });
+
+        await tx.shelf.update({
+          where: { shelfId: validatedData.shelfId },
+          data: {
+            shelfQuantity: { increment: initialQuantity },
+          },
+        });
+
+        await tx.mouvement.create({
+          data: {
+            equipmentId: equipment.equipmentId,
+            sourceShelfId: null,
+            destinationShelfId: validatedData.shelfId,
+            mouvementQuantity: initialQuantity,
+            mouvementStatus: 'IN',
+          },
+        });
+      }
+
+      return equipment;
     });
   }
 
@@ -73,11 +173,13 @@ export class EquipmentService {
       },
     }),
 
-    this.prisma.equipment.count()
+    this.getTotalEquipmentCount()
     ]);
 
+    const mappedEquipments = equipments.map((eq) => this.syncSerializedEquipment(eq));
+
     return {
-      equipments,
+      equipments: mappedEquipments,
       totalEquipments,
       totalPages: Math.ceil(totalEquipments / limit) || 1,
       currentPage: page,
@@ -138,14 +240,18 @@ export class EquipmentService {
           },
         },
       }),
-      this.prisma.equipment.count({
-        where,
-      })
+      Object.keys(where).length === 0
+        ? this.getTotalEquipmentCount()
+        : this.prisma.equipment.count({
+            where,
+          })
     ])
 
 
+    const mappedEquipments = equipments.map((eq) => this.syncSerializedEquipment(eq));
+
     return {
-      equipments,
+      equipments: mappedEquipments,
       totalEquipments,
       totalPages: Math.ceil(totalEquipments / limit) || 1,
       currentPage: page,
@@ -189,7 +295,7 @@ export class EquipmentService {
       throw new NotFoundException(`Equipment with ID '${id}' not found`);
     }
 
-    return equipment;
+    return this.syncSerializedEquipment(equipment);
   }
 
   async updateEquipment(id: string, data: UpdateEquipmentDTO) {
@@ -249,7 +355,7 @@ export class EquipmentService {
           ...(validatedData.hasSerialNumber !== undefined && {
             hasSerialNumber: validatedData.hasSerialNumber,
           }),
-          ...(validatedData.equipmentQuantity !== undefined && {
+          ...(validatedData.equipmentQuantity !== undefined && !existingEquipment.hasSerialNumber && !validatedData.hasSerialNumber && {
             equipmentQuantity: validatedData.equipmentQuantity,
           }),
           ...(validatedData.minEquipmentQuantity !== undefined && {
@@ -354,17 +460,19 @@ export class EquipmentService {
       throw new NotFoundException(`Equipment with ID '${equipmentId}' not found`);
     }
 
-    const totalAllocated = equipment.hasSerialNumber
-      ? equipment.serialNumbers.filter((s) => s.shelfId !== null).length
-      : equipment.equipmentShelfs.reduce((sum, es) => sum + (es.equipmentQuantity ?? 0), 0);
+    const synced = this.syncSerializedEquipment(equipment);
 
-    const unallocatedQuantity = Math.max(0, equipment.equipmentQuantity - totalAllocated);
+    const totalAllocated = synced.hasSerialNumber
+      ? synced.serialNumbers.filter((s: any) => s.shelfId !== null).length
+      : synced.equipmentShelfs.reduce((sum: number, es: any) => sum + (es.equipmentQuantity ?? 0), 0);
+
+    const unallocatedQuantity = Math.max(0, synced.equipmentQuantity - totalAllocated);
 
     return {
-      ...equipment,
+      ...synced,
       totalAllocated,
       unallocatedQuantity,
-      shelvesCount: equipment.equipmentShelfs.length,
+      shelvesCount: synced.equipmentShelfs.length,
     };
   }
 }

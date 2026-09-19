@@ -1,34 +1,28 @@
 'use client';
 
-import { getErrorMessage } from '@/lib/error-message';
-
 import React, { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  PackagePlus,
+  X,
+  Barcode,
+  Sparkles,
+  Copy,
+  Check,
+  AlertCircle,
+  MapPin,
+  Plus,
+  Trash2,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import {
   createDirectEquipmentSchema,
   CreateDirectEquipmentFormValues,
 } from '@/schemas/equipment.schema';
 import { useEquipments } from '@/hooks/use-equipments';
 import { usePermissions } from '@/hooks/use-permissions';
-import {
-  PackagePlus,
-  X,
-  Sparkles,
-  Barcode,
-  Layers,
-  AlertCircle,
-  Copy,
-  Check,
-  RefreshCw,
-} from 'lucide-react';
-import { toast } from 'sonner';
-
-interface CreateEquipmentModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess?: () => void;
-}
+import { useShelves } from '@/hooks/use-shelves';
 
 /**
  * Generates a random 32-bit hexadecimal string (8 hex chars).
@@ -53,6 +47,12 @@ function generateSerialCodes(count: number): string[] {
   return Array.from(codes);
 }
 
+interface CreateEquipmentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess?: () => void;
+}
+
 export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
   isOpen,
   onClose,
@@ -60,9 +60,10 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
 }) => {
   const { createEquipment, isCreatingEquipment } = useEquipments();
   const { canCreateEquipment } = usePermissions();
+  const { shelves } = useShelves({ limit: 100 });
 
-  const [serialGenMode, setSerialGenMode] = useState<'auto' | 'manual'>('auto');
   const [serialList, setSerialList] = useState<string[]>([]);
+  const [customGenCount, setCustomGenCount] = useState<number>(1);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -78,33 +79,38 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
     defaultValues: {
       equipmentName: '',
       hasSerialNumber: false,
-      equipmentQuantity: 1,
+      equipmentQuantity: 0,
       minEquipmentQuantity: 0,
       serialNumbers: [],
+      shelfId: '',
     },
     mode: 'onChange',
   });
 
   const hasSerialNumber = useWatch({ control, name: 'hasSerialNumber' });
-  const quantity = useWatch({ control, name: 'equipmentQuantity' }) || 1;
+  const selectedShelfId = useWatch({ control, name: 'shelfId' });
 
-  // Auto-generate serial codes on demand or when quantity changes
+  // Auto-generate serial codes on demand
   const handleAutoGenerateSerials = (count: number) => {
-    const arr = generateSerialCodes(count);
-    setSerialList(arr);
-    setValue('serialNumbers', arr, { shouldValidate: true });
-    toast.success(`${count} code(s) 32-bit généré(s) aléatoirement !`);
+    const validCount = Math.max(1, Math.min(200, count || 1));
+    const newCodes = generateSerialCodes(validCount);
+    const updated = [...serialList, ...newCodes];
+    setSerialList(updated);
+    setValue('serialNumbers', updated, { shouldValidate: true });
+    toast.success(`${validCount} code(s) généré(s)`);
   };
 
-  const syncSerialCount = (count: number) => {
-    const targetCount = Math.max(1, Number(count) || 1);
-    if (serialList.length === targetCount) return;
-
-    const updated = serialGenMode === 'auto'
-      ? generateSerialCodes(targetCount)
-      : [...serialList, ...Array(Math.max(0, targetCount - serialList.length)).fill('')].slice(0, targetCount);
+  const handleAddManualSerial = () => {
+    const newCode = `SN-${generate32BitRandomCode()}`;
+    const updated = [...serialList, newCode];
     setSerialList(updated);
-    setValue('serialNumbers', updated, { shouldValidate: serialGenMode === 'auto' });
+    setValue('serialNumbers', updated, { shouldValidate: true });
+  };
+
+  const handleRemoveSerial = (index: number) => {
+    const updated = serialList.filter((_, idx) => idx !== index);
+    setSerialList(updated);
+    setValue('serialNumbers', updated, { shouldValidate: true });
   };
 
   if (!isOpen) return null;
@@ -114,22 +120,6 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
     updated[index] = value.toUpperCase();
     setSerialList(updated);
     setValue('serialNumbers', updated, { shouldValidate: true });
-  };
-
-  const handleSwitchToManual = () => {
-    setSerialGenMode('manual');
-    const targetCount = Math.max(1, Number(quantity));
-    const updated = [...serialList];
-    while (updated.length < targetCount) {
-      updated.push(`SN-${generate32BitRandomCode()}`);
-    }
-    setSerialList(updated.slice(0, targetCount));
-    setValue('serialNumbers', updated.slice(0, targetCount), { shouldValidate: true });
-  };
-
-  const handleSwitchToAuto = () => {
-    setSerialGenMode('auto');
-    handleAutoGenerateSerials(Math.max(1, Number(quantity)));
   };
 
   const handleCopySerial = (index: number, code: string) => {
@@ -142,23 +132,33 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
     setServerError(null);
 
     if (!canCreateEquipment) {
-      setServerError("Action interdite : Vous n'avez pas le droit de créer un équipement.");
+      setServerError("Action interdite : Vous n'avez pas le droit de créer un article.");
       return;
     }
 
     try {
       const serialsToSubmit = values.hasSerialNumber
-        ? values.serialNumbers && values.serialNumbers.length > 0
-          ? values.serialNumbers.map((s) => s.trim().toUpperCase())
-          : serialList.map((s) => s.trim().toUpperCase())
+        ? (values.serialNumbers && values.serialNumbers.length > 0
+            ? values.serialNumbers
+            : serialList
+          )
+            .map((s) => s.trim().toUpperCase())
+            .filter(Boolean)
         : undefined;
+
+      const finalQuantity = values.hasSerialNumber
+        ? (serialsToSubmit?.length || 0)
+        : Number(values.equipmentQuantity || 0);
+
+      const chosenShelfId = values.shelfId && values.shelfId.trim() !== '' ? values.shelfId.trim() : undefined;
 
       await createEquipment({
         equipmentName: values.equipmentName.trim(),
         hasSerialNumber: Boolean(values.hasSerialNumber),
-        equipmentQuantity: Number(values.equipmentQuantity),
+        equipmentQuantity: finalQuantity,
         minEquipmentQuantity: Number(values.minEquipmentQuantity ?? 0),
-        serialNumbers: serialsToSubmit,
+        serialNumbers: serialsToSubmit && serialsToSubmit.length > 0 ? serialsToSubmit : undefined,
+        shelfId: chosenShelfId,
       });
 
       reset();
@@ -167,7 +167,8 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
       if (onSuccess) onSuccess();
     } catch (err: unknown) {
       console.error('[CreateEquipmentModal] Submit failed:', err);
-      setServerError(getErrorMessage(err, 'Échec de la création de l’équipement.'));
+      const msg = err instanceof Error ? err.message : 'Échec de la création de l’article.';
+      setServerError(msg);
     }
   };
 
@@ -186,11 +187,8 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-semibold text-white">
-                Créer un équipement
+                Créer un article
               </h2>
-              <p className="text-xs text-white/80">
-                Enregistrement direct au stock (assignation aux étagères gérée via les mouvements)
-              </p>
             </div>
           </div>
           <button
@@ -211,16 +209,15 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
             </div>
           )}
 
-          {/* Equipment Name */}
+          {/* Article Name */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-white flex items-center justify-between">
-              <span>Nom de l’équipement *</span>
-              <span className="text-[11px] text-white/70 font-normal">Identifiant unique du modèle</span>
+            <label className="text-xs font-semibold text-white">
+              Nom de l’article *
             </label>
             <input
               type="text"
               {...register('equipmentName')}
-              placeholder="Ex: Tensiomètre Électronique Omron M3"
+              placeholder="Ex: Barcode Scanner Acer M0139"
               className={`w-full h-9 px-3 bg-[#2b2622] border rounded-lg text-xs text-white placeholder-white/50 focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 focus:outline-none transition-colors ${
                 errors.equipmentName
                   ? 'border-rose-400 focus:border-rose-400'
@@ -238,30 +235,30 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
               <label className="text-xs font-semibold text-white">
                 Quantité en stock *
               </label>
-              <input
-                type="number"
-                min={hasSerialNumber ? '1' : '0'}
-                {...register('equipmentQuantity', {
-                  valueAsNumber: true,
-                  onChange: (event) => {
-                    if (hasSerialNumber) syncSerialCount(Number(event.target.value));
-                  },
-                })}
-                className={`w-full h-9 px-3 bg-[#2b2622] border rounded-lg text-xs font-mono text-white focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 focus:outline-none transition-colors ${
-                  errors.equipmentQuantity
-                    ? 'border-rose-400 focus:border-rose-400'
-                    : 'border-[#3f3a36]'
-                }`}
-              />
+              {hasSerialNumber ? (
+                <div className="w-full h-9 px-3 bg-[#26221f] border border-[#3f3a36] rounded-lg text-xs font-mono text-white flex items-center justify-between">
+                  <span className="text-emerald-300 font-semibold">{serialList.length} unité(s)</span>
+                </div>
+              ) : (
+                <input
+                  type="number"
+                  min="0"
+                  {...register('equipmentQuantity', { valueAsNumber: true })}
+                  className={`w-full h-9 px-3 bg-[#2b2622] border rounded-lg text-xs font-mono text-white focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 focus:outline-none transition-colors ${
+                    errors.equipmentQuantity
+                      ? 'border-rose-400 focus:border-rose-400'
+                      : 'border-[#3f3a36]'
+                  }`}
+                />
+              )}
               {errors.equipmentQuantity && (
                 <p className="text-[11px] text-rose-300">{errors.equipmentQuantity.message}</p>
               )}
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-white flex items-center justify-between">
-                <span>Quantité minimale</span>
-                <span className="text-[11px] text-white/70 font-normal">Seuil d’alerte</span>
+              <label className="text-xs font-semibold text-white">
+                Quantité minimale
               </label>
               <input
                 type="number"
@@ -272,19 +269,38 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
             </div>
           </div>
 
+          {/* Initial Emplacement Selector */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-white flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-[#aea69c]" />
+              <span>Emplacement initial (Optionnel)</span>
+            </label>
+            <select
+              {...register('shelfId')}
+              className={`w-full h-9 px-3 bg-[#2b2622] border rounded-lg text-xs text-white focus:bg-[#383330] focus:border-white focus:ring-2 focus:ring-white/20 focus:outline-none transition-colors cursor-pointer ${
+                errors.shelfId ? 'border-rose-400 focus:border-rose-400' : 'border-[#3f3a36]'
+              }`}
+            >
+              <option value="">-- Aucun (Stock non assigné) --</option>
+              {shelves.map((sh) => (
+                <option key={sh.shelfId} value={sh.shelfId}>
+                  {sh.shelfName} ({sh.shelfQuantity ?? 0} en stock)
+                </option>
+              ))}
+            </select>
+            {errors.shelfId && (
+              <p className="text-[11px] text-rose-300">{errors.shelfId.message}</p>
+            )}
+          </div>
+
           {/* Serialized Mode Toggle Card */}
           <div className="p-4 bg-[#2b2622]/60 border border-[#3f3a36] rounded-xl space-y-4 text-white">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Barcode className="w-4 h-4 text-white" />
-                <div>
-                  <h3 className="text-xs font-semibold text-white">
-                    Cet équipement possède des numéros de série
-                  </h3>
-                  <p className="text-[11px] text-white/80">
-                    Traçabilité unitaire de chaque exemplaire ({quantity} requis)
-                  </p>
-                </div>
+                <h3 className="text-xs font-semibold text-white">
+                  Cet article possède des numéros de série
+                </h3>
               </div>
 
               <label className="relative inline-flex items-center cursor-pointer">
@@ -292,7 +308,15 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
                   type="checkbox"
                   {...register('hasSerialNumber', {
                     onChange: (event) => {
-                      if (event.target.checked) syncSerialCount(Number(quantity));
+                      if (event.target.checked) {
+                        setValue('equipmentQuantity', 0);
+                        setSerialList([]);
+                        setValue('serialNumbers', []);
+                      } else {
+                        setValue('equipmentQuantity', 1);
+                        setSerialList([]);
+                        setValue('serialNumbers', []);
+                      }
                     },
                   })}
                   className="sr-only peer"
@@ -302,85 +326,89 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
             </div>
 
             {/* Serialized Configuration Area */}
-            {hasSerialNumber ? (
-              <div className="pt-3 border-t border-[#3f3a36] space-y-4 animate-in fade-in duration-150">
-                {/* Mode Selector Pill Tabs */}
+            {hasSerialNumber && (
+              <div className="pt-3 border-t border-[#3f3a36] space-y-3 animate-in fade-in duration-150">
+                {/* Controls: Count generator + Manual add */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-xs font-semibold text-white">
-                    Génération des numéros :
-                  </span>
-                  <div className="inline-flex p-0.5 bg-[#2b2622] border border-[#3f3a36] rounded-lg text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-white">
+                      Numéros de série ({serialList.length}) :
+                    </span>
+                    {serialList.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSerialList([]);
+                          setValue('serialNumbers', []);
+                        }}
+                        className="text-[11px] text-rose-400 hover:underline cursor-pointer"
+                      >
+                        Effacer tout
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Count input + Generate button */}
+                    <div className="flex items-center bg-[#2b2622] border border-[#3f3a36] rounded-lg p-0.5">
+                      <input
+                        type="number"
+                        min="1"
+                        max="200"
+                        value={customGenCount}
+                        onChange={(e) => setCustomGenCount(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-12 h-7 bg-transparent text-center font-mono text-xs text-white outline-none"
+                        title="Nombre de codes à générer"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAutoGenerateSerials(customGenCount)}
+                        className="px-2.5 py-1 bg-[#383330] hover:bg-[#453f3a] text-xs text-white font-medium rounded-md flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                      >
+                        <Sparkles className="w-3 h-3 text-emerald-300" />
+                        <span>Générer</span>
+                      </button>
+                    </div>
+
+                    {/* Manual add button */}
                     <button
                       type="button"
-                      onClick={handleSwitchToAuto}
-                      className={`px-3 py-1.5 rounded-md font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
-                        serialGenMode === 'auto'
-                          ? 'bg-[#2b2622] text-white border border-[#3f3a36] shadow-xs'
-                          : 'text-white/80 hover:text-white'
-                      }`}
+                      onClick={handleAddManualSerial}
+                      className="px-2.5 py-1.5 bg-[#2b2622] border border-[#3f3a36] hover:border-white/30 rounded-lg text-xs text-white font-medium flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-[#f7f5f0]" />
-                      <span>Auto-générer (32-bit aléatoire)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSwitchToManual}
-                      className={`px-3 py-1.5 rounded-md font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
-                        serialGenMode === 'manual'
-                          ? 'bg-[#2b2622] text-white border border-[#3f3a36] shadow-xs'
-                          : 'text-white/80 hover:text-white'
-                      }`}
-                    >
-                      <Barcode className="w-3.5 h-3.5 text-[#f7f5f0]" />
-                      <span>Saisie manuelle</span>
+                      <Plus className="w-3 h-3 text-white" />
+                      <span>Ajouter</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Auto Generation Banner */}
-                {serialGenMode === 'auto' && (
-                  <div className="p-3 bg-[#2b2622] border border-[#3f3a36] rounded-lg flex items-center justify-between gap-3 text-xs text-white">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-[#f7f5f0] shrink-0" />
-                      <span>
-                        Génération cryptographique de {quantity} code(s) 32-bit uniques (8 hexadécimaux).
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleAutoGenerateSerials(Math.max(1, Number(quantity)))}
-                      className="px-2.5 py-1 bg-white/15 hover:bg-white/25 border border-white/30 rounded-md text-xs font-medium text-white transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      <span>Régénérer</span>
-                    </button>
+                {/* List of serial numbers */}
+                {serialList.length === 0 ? (
+                  <div className="py-3 px-3 bg-[#26221f] border border-[#3f3a36] rounded-lg text-center text-xs text-white/60">
+                    Aucun numéro de série ajouté (quantité = 0).
                   </div>
-                )}
-
-                {/* Serial Numbers Input / Review List */}
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {Array.from({ length: Math.max(1, Number(quantity)) }).map((_, idx) => {
-                    const currentVal = serialList[idx] || '';
-                    return (
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {serialList.map((currentVal, idx) => (
                       <div
                         key={`sn-input-${idx}`}
-                        className="flex items-center gap-2 p-2 bg-[#2b2622] border border-[#3f3a36] rounded-lg text-xs text-white"
+                        className="flex items-center gap-2 p-1.5 bg-[#2b2622] border border-[#3f3a36] rounded-lg text-xs text-white"
                       >
-                        <span className="w-8 font-mono font-semibold text-white/70 text-center">
+                        <span className="w-8 font-mono font-semibold text-white/60 text-center text-[11px]">
                           #{String(idx + 1).padStart(2, '0')}
                         </span>
                         <input
                           type="text"
                           value={currentVal}
                           onChange={(e) => handleManualSerialChange(idx, e.target.value)}
-                          placeholder={`Code 32-bit ex. SN-${generate32BitRandomCode()}`}
-                          className="flex-1 h-8 px-2.5 bg-transparent font-mono text-xs text-white outline-none border-b border-transparent focus:border-white"
+                          placeholder="Code de série..."
+                          className="flex-1 h-7 px-2 bg-transparent font-mono text-xs text-white outline-none border-b border-transparent focus:border-white/50"
                         />
                         {currentVal && (
                           <button
                             type="button"
                             onClick={() => handleCopySerial(idx, currentVal)}
-                            className="p-1 text-white/80 hover:text-white rounded transition-colors cursor-pointer"
+                            className="p-1 text-white/70 hover:text-white rounded transition-colors cursor-pointer"
                             title="Copier le code"
                           >
                             {copiedIndex === idx ? (
@@ -390,34 +418,24 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
                             )}
                           </button>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSerial(idx)}
+                          className="p-1 text-rose-400/80 hover:text-rose-300 rounded transition-colors cursor-pointer"
+                          title="Supprimer ce code"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                    );
-                  })}
-                </div>
-
-                <div className="p-2.5 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg flex items-center gap-2 text-[11px] text-white/90">
-                  <Layers className="w-3.5 h-3.5 text-white shrink-0" />
-                  <span>Les numéros de série seront créés sans étagère. L&apos;affectation aux étagères s&apos;effectue via les mouvements.</span>
-                </div>
+                    ))}
+                  </div>
+                )}
 
                 {errors.serialNumbers && (
                   <p className="text-[11px] text-rose-300 font-medium">
                     {errors.serialNumbers.message}
                   </p>
                 )}
-              </div>
-            ) : (
-              /* Non-Serialized Informative Box */
-              <div className="pt-3 border-t border-[#3f3a36]">
-                <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg flex items-start gap-2.5 text-xs text-white/90">
-                  <Layers className="w-4 h-4 text-white shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-semibold text-white">Stock initial non assigné</span>
-                    <p className="text-[11px] text-white/70 mt-0.5">
-                      L&apos;équipement sera créé avec une quantité de <strong>{quantity}</strong>. Pour affecter ou distribuer ce stock sur une ou plusieurs étagères, effectuez un <strong>Mouvement d&apos;Entrée (IN)</strong>.
-                    </p>
-                  </div>
-                </div>
               </div>
             )}
           </div>
@@ -445,7 +463,7 @@ export const CreateEquipmentModal: React.FC<CreateEquipmentModalProps> = ({
               ) : (
                 <>
                   <PackagePlus className="w-4 h-4" />
-                  <span>Créer l’équipement</span>
+                  <span>Créer l’article</span>
                 </>
               )}
             </button>

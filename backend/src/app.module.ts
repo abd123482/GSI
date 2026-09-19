@@ -13,6 +13,7 @@ import { UsersModule } from './users/users.module.js';
 import { OrdersModule } from './orders/orders.module.js';
 import { InventoryModule } from './inventory/inventory.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
+import { DashboardModule } from './dashboard/dashboard.module.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
     OrdersModule,
     InventoryModule,
     NotificationsModule,
+    DashboardModule,
   ],
 
   controllers: [

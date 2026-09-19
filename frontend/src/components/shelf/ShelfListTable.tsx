@@ -104,7 +104,7 @@ export function ShelfListTable({
               type="text"
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Rechercher par nom d'étagère..."
+              placeholder="Rechercher par nom d'emplacement..."
               className="w-full h-8 pl-8 pr-7 bg-[#2b2622] text-xs font-mono text-[#f7f5f0] border border-[#3f3a36] rounded-[3px] outline-none focus:border-[#f7f5f0] placeholder:text-[#aea69c] transition-colors"
             />
             {searchTerm && (
@@ -138,7 +138,7 @@ export function ShelfListTable({
             type="submit"
             disabled={!idLookupInput.trim() || isLoading}
             className="h-8 px-2.5 bg-[#2b2622] hover:bg-[#383330] text-[#f7f5f0] border border-[#3f3a36] text-xs font-medium rounded-[3px] transition-colors cursor-pointer disabled:opacity-40 flex items-center gap-1"
-            title="Consulter l'étagère par UUID (GET /shelves/:id)"
+            title="Consulter l'emplacement par UUID (GET /shelves/:id)"
           >
             <span>Ouvrir</span>
             <ArrowRight className="w-3 h-3" />
@@ -197,7 +197,7 @@ export function ShelfListTable({
             onClick={onRefresh}
             disabled={isLoading}
             className="h-8 px-2.5 bg-[#2b2622] hover:bg-[#383330] text-[#c9c0ad] hover:text-[#f7f5f0] border border-[#3f3a36] rounded-[3px] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40"
-            title="Rafraîchir depuis SQL Server"
+            title="Actualiser"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#f7f5f0]' : ''}`} />
             <span className="hidden sm:inline">Actualiser</span>
@@ -212,9 +212,9 @@ export function ShelfListTable({
             <thead>
               <tr className="border-b border-[#3f3a36] bg-[#2b2622] text-[11px] font-mono text-[#aea69c] tracking-wider uppercase">
                 <th className="py-2.5 px-4 w-16 text-center">Index</th>
-                <th className="py-2.5 px-4">Étagère & Emplacement</th>
+                <th className="py-2.5 px-4">Emplacement</th>
                 <th className="py-2.5 px-4 text-center">Quantité Stockée</th>
-                <th className="py-2.5 px-4">UUID (dbo.Shelf)</th>
+                <th className="py-2.5 px-4">Identifiant</th>
                 <th className="py-2.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -224,7 +224,7 @@ export function ShelfListTable({
                   <td colSpan={5} className="py-16 text-center text-[#aea69c]">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <RefreshCw className="w-5 h-5 animate-spin text-[#f7f5f0]" />
-                      <p className="text-xs font-mono">Chargement des étagères...</p>
+                      <p className="text-xs font-mono">Chargement des emplacements...</p>
                     </div>
                   </td>
                 </tr>
@@ -236,11 +236,11 @@ export function ShelfListTable({
                         <Archive className="w-5 h-5" />
                       </div>
                       <div className="space-y-1">
-                        <p className="text-sm font-medium text-[#f7f5f0]">Aucune étagère trouvée</p>
+                        <p className="text-sm font-medium text-[#f7f5f0]">Aucun emplacement trouvé</p>
                         <p className="text-xs text-[#c9c0ad] max-w-sm">
                           {searchTerm
-                            ? `Aucune étagère ne correspond à "${searchTerm}".`
-                            : 'Aucun tuple d’étagère présent dans SQL Server pour le moment.'}
+                            ? `Aucun emplacement ne correspond à "${searchTerm}".`
+                            : 'Aucun emplacement enregistré pour le moment.'}
                         </p>
                       </div>
                       {canCreateShelf && !searchTerm && (
@@ -250,7 +250,7 @@ export function ShelfListTable({
                           className="mt-1 px-3.5 py-1.5 bg-[#f7f5f0] hover:bg-[#dad2c1] text-[#2b2622] rounded-[3px] text-xs font-medium cursor-pointer transition-colors inline-flex items-center gap-1.5"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          <span>Créer une étagère</span>
+                          <span>Créer un emplacement</span>
                         </button>
                       )}
                     </div>
@@ -279,7 +279,7 @@ export function ShelfListTable({
                         <div className="flex items-center gap-2.5">
                           <div className="min-w-0">
                             <p className="font-medium text-xs text-[#f7f5f0] truncate max-w-xs group-hover:text-white transition-colors">
-                              {shelf.shelfName ?? 'Étagère sans nom'}
+                              {shelf.shelfName ?? 'Emplacement sans nom'}
                             </p>
                             <span className="text-[11px] font-mono text-[#aea69c] flex items-center gap-1">
                               <span>Emplacement</span>
@@ -325,7 +325,7 @@ export function ShelfListTable({
                             type="button"
                             onClick={(e) => handleCopyId(e, shelf.shelfId)}
                             className="p-1 text-[#aea69c] hover:text-[#f7f5f0] rounded-[2px] hover:bg-[#2b2622] transition-colors cursor-pointer"
-                            title="Copier le GUID SQL Server"
+                            title="Copier l'identifiant"
                           >
                             {copiedId === shelf.shelfId ? (
                               <Check className="w-3.5 h-3.5 text-[#10b981]" />
@@ -353,7 +353,7 @@ export function ShelfListTable({
                             onClick={() => onOpenUpdate && onOpenUpdate(shelf)}
                             disabled={!canUpdateShelf}
                             className="p-1.5 rounded-[2px] text-[#aea69c] hover:text-[#f7f5f0] hover:bg-[#2b2622] transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={canUpdateShelf ? "Modifier l'étagère" : "Permission manquante"}
+                            title={canUpdateShelf ? "Modifier l'emplacement" : "Permission manquante"}
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
@@ -363,7 +363,7 @@ export function ShelfListTable({
                             onClick={() => onOpenDelete && onOpenDelete(shelf)}
                             disabled={!canDeleteShelf}
                             className="p-1.5 rounded-[2px] text-[#ef4444] hover:bg-[#2d1616] transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={canDeleteShelf ? "Supprimer l'étagère" : "Permission manquante"}
+                            title={canDeleteShelf ? "Supprimer l'emplacement" : "Permission manquante"}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -382,12 +382,12 @@ export function ShelfListTable({
           {isLoading && shelves.length === 0 ? (
             <div className="py-14 text-center text-[#aea69c] flex flex-col items-center justify-center gap-2">
               <RefreshCw className="w-5 h-5 animate-spin text-[#f7f5f0]" />
-              <p className="text-xs font-mono">Chargement des cartes étagères...</p>
+              <p className="text-xs font-mono">Chargement des cartes emplacements...</p>
             </div>
           ) : shelves.length === 0 ? (
             <div className="py-14 text-center text-[#aea69c] flex flex-col items-center justify-center gap-2">
               <Archive className="w-8 h-8 text-[#aea69c]" />
-              <p className="text-sm font-medium text-[#f7f5f0]">Aucune étagère disponible</p>
+              <p className="text-sm font-medium text-[#f7f5f0]">Aucun emplacement disponible</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -406,16 +406,13 @@ export function ShelfListTable({
                       <span className="px-1.5 py-0.5 rounded-[2px] bg-[#2b2622] border border-[#3f3a36] text-[10px] font-mono text-[#dad2c1]">
                         INDEX #{formattedIndex}
                       </span>
-                      <span className="text-[10px] font-mono text-[#aea69c]">
-                        dbo.Shelf
-                      </span>
                     </div>
 
                     {/* Title */}
                     <div className="flex items-start gap-3">
                       <div className="min-w-0 flex-1">
                         <h3 className="font-medium text-xs text-[#f7f5f0] truncate group-hover:text-white transition-colors">
-                          {shelf.shelfName ?? 'Étagère sans nom'}
+                          {shelf.shelfName ?? 'Emplacement sans nom'}
                         </h3>
                       </div>
                     </div>
@@ -500,7 +497,7 @@ export function ShelfListTable({
         <div className="px-4 py-2.5 bg-[#2b2622] border-t border-[#3f3a36] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#aea69c] font-mono">
           <div>
             Page <span className="text-[#f7f5f0]">{currentPage}</span> /{' '}
-            <span className="text-[#f7f5f0]">{totalPages}</span> ({totalShelves} étagères)
+            <span className="text-[#f7f5f0]">{totalPages}</span> ({totalShelves} emplacements)
           </div>
 
           <div className="flex items-center gap-1">

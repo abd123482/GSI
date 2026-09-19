@@ -44,8 +44,6 @@ export function ShelfDetailModal({
   isLoading = false,
 }: ShelfDetailModalProps) {
   const [copiedId, setCopiedId] = useState(false);
-  const [copiedJson, setCopiedJson] = useState(false);
-  const [showRawJson, setShowRawJson] = useState(false);
 
   if (!isOpen || !shelf) return null;
 
@@ -55,15 +53,8 @@ export function ShelfDetailModal({
   const handleCopyId = () => {
     navigator.clipboard.writeText(shelf.shelfId);
     setCopiedId(true);
-    toast.success('UUID SQL Server copié dans le presse-papier !');
+    toast.success('Identifiant copié dans le presse-papier !');
     setTimeout(() => setCopiedId(false), 2000);
-  };
-
-  const handleCopyJson = () => {
-    navigator.clipboard.writeText(JSON.stringify(shelf, null, 2));
-    setCopiedJson(true);
-    toast.success('Tuple JSON copié dans le presse-papier !');
-    setTimeout(() => setCopiedJson(false), 2000);
   };
 
   return (
@@ -118,17 +109,15 @@ export function ShelfDetailModal({
                 id="shelf-detail-title"
                 className="text-2xl font-semibold text-white tracking-tight"
               >
-                {shelf.shelfName ?? 'Étagère sans nom'}
+                {shelf.shelfName ?? 'Emplacement sans nom'}
               </h2>
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/40 text-emerald-200 border border-emerald-400/40">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Tuple Actif
               </span>
             </div>
-            <p className="text-xs text-white/80 flex items-center gap-2">
-              <span>{visualTheme.label}</span>
-              <span>•</span>
-              <span className="font-mono text-white font-semibold">dbo.Shelf</span>
+            <p className="text-xs text-white/80">
+              {visualTheme.label}
             </p>
           </div>
 
@@ -138,7 +127,7 @@ export function ShelfDetailModal({
             <div className="p-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-white/85 w-36 shrink-0">
                 <Database className="w-3.5 h-3.5 text-white" />
-                <span className="font-medium">shelfId (GUID)</span>
+                <span className="font-medium">Identifiant</span>
               </div>
               <div className="flex items-center gap-2 font-mono text-[11px] text-white min-w-0">
                 <span className="truncate">{shelf.shelfId}</span>
@@ -146,7 +135,7 @@ export function ShelfDetailModal({
                   type="button"
                   onClick={handleCopyId}
                   className="p-1 hover:bg-white/20 text-white/80 hover:text-white rounded transition-colors cursor-pointer shrink-0"
-                  title="Copier l'UUID"
+                  title="Copier l'identifiant"
                 >
                   {copiedId ? (
                     <Check className="w-3.5 h-3.5 text-emerald-300" />
@@ -161,7 +150,7 @@ export function ShelfDetailModal({
             <div className="p-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-white/85 w-36 shrink-0">
                 <Layers className="w-3.5 h-3.5 text-white" />
-                <span className="font-medium">Nom de l&apos;étagère</span>
+                <span className="font-medium">Nom de l&apos;emplacement</span>
               </div>
               <div className="text-sm font-semibold text-white text-right">
                 {shelf.shelfName ?? 'Non défini'}
@@ -218,36 +207,6 @@ export function ShelfDetailModal({
             </div>
           </div>
 
-          {/* Raw JSON Tuple Toggle */}
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() => setShowRawJson(!showRawJson)}
-              className="text-xs text-white hover:text-white/80 flex items-center gap-1 font-medium cursor-pointer"
-            >
-              <Code className="w-3.5 h-3.5" />
-              <span>{showRawJson ? 'Masquer le JSON brut' : 'Afficher le tuple SQL Server en JSON'}</span>
-            </button>
-
-            {showRawJson && (
-              <div className="relative bg-[#2b2622] border border-[#3f3a36] text-[#f6f5f4] rounded-lg p-3 font-mono text-[11px] overflow-x-auto shadow-inner">
-                <pre>{JSON.stringify(shelf, null, 2)}</pre>
-                <button
-                  type="button"
-                  onClick={handleCopyJson}
-                  className="absolute top-2 right-2 px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
-                >
-                  {copiedJson ? (
-                    <Check className="w-3 h-3 text-emerald-300" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
-                  )}
-                  <span>Copier</span>
-                </button>
-              </div>
-            )}
-          </div>
-
           {/* Modal Footer */}
           <div className="pt-3 border-t border-[#3f3a36] flex flex-wrap items-center justify-between gap-2.5">
             <button
@@ -256,7 +215,7 @@ export function ShelfDetailModal({
               className="inline-flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 text-white border border-white/30 text-xs font-medium rounded-lg transition-colors cursor-pointer"
             >
               <Copy className="w-3.5 h-3.5 text-white" />
-              <span>Copier GUID</span>
+              <span>Copier l'identifiant</span>
             </button>
 
             <div className="flex items-center gap-2">
@@ -268,7 +227,7 @@ export function ShelfDetailModal({
                 }}
                 disabled={!canUpdateShelf}
                 className="inline-flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 text-white border border-white/30 text-xs font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                title={canUpdateShelf ? "Modifier cette étagère (shelf.update)" : "Permission 'shelf.update' manquante"}
+                title={canUpdateShelf ? "Modifier cet emplacement (shelf.update)" : "Permission 'shelf.update' manquante"}
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Modifier</span>
@@ -282,7 +241,7 @@ export function ShelfDetailModal({
                 }}
                 disabled={!canDeleteShelf}
                 className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-600/90 hover:bg-red-600 text-white border border-red-400/40 text-xs font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                title={canDeleteShelf ? "Supprimer cette étagère (shelf.delete)" : "Permission 'shelf.delete' manquante"}
+                title={canDeleteShelf ? "Supprimer cet emplacement (shelf.delete)" : "Permission 'shelf.delete' manquante"}
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Supprimer</span>

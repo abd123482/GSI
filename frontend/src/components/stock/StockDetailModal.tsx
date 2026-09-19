@@ -103,7 +103,7 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-4 rounded-lg bg-[#2b2622]/60 border border-[#3f3a36] space-y-1 text-white">
                   <div className="flex items-center justify-between text-xs text-white/85">
-                    <span>Étagères associées</span>
+                    <span>Emplacements associés</span>
                     <Layers className="w-4 h-4 text-white" />
                   </div>
                   <div className="text-2xl font-bold text-white">
@@ -116,16 +116,13 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
 
                 <div className="p-4 rounded-lg bg-[#2b2622]/60 border border-[#3f3a36] space-y-1 text-white">
                   <div className="flex items-center justify-between text-xs text-white/85">
-                    <span>Statut SQL Server</span>
+                    <span>Statut</span>
                     <Database className="w-4 h-4 text-white" />
                   </div>
                   <div className="text-sm font-semibold text-white flex items-center gap-1.5 pt-1">
                     <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <span>Table StockStatus: {statusName}</span>
+                    <span>{statusName}</span>
                   </div>
-                  <p className="text-[11px] text-white/80 font-mono">
-                    ID: {stock.stockStatusId ?? 'N/A'}
-                  </p>
                 </div>
               </div>
 
@@ -134,35 +131,35 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-white flex items-center gap-1.5">
                     <Layers className="w-3.5 h-3.5 text-white" />
-                    Étagères contenues dans ce stock ({stock.shelves?.length ?? 0})
+                    Emplacements contenus dans ce stock ({stock.shelves?.length ?? 0})
                   </h3>
                   <Link
                     href="/shelves"
                     className="text-xs text-white hover:text-white/80 underline flex items-center gap-1 font-medium"
                   >
-                    <span>Voir toutes les étagères</span>
+                    <span>Voir tous les emplacements</span>
                     <ArrowUpRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
 
                 {(!stock.shelves || stock.shelves.length === 0) ? (
                   <div className="p-6 text-center border border-dashed border-[#3f3a36] rounded-lg text-xs text-white/80 bg-[#2b2622]/30">
-                    Aucune étagère rattachée pour le moment à cet entrepôt.
+                    Aucun emplacement rattaché pour le moment à cet entrepôt.
                   </div>
                 ) : (
                   <div className="border border-[#3f3a36] rounded-lg overflow-hidden max-h-60 overflow-y-auto bg-[#2b2622]/60">
                     <table className="w-full text-xs text-left">
                       <thead className="bg-[#2b2622] text-white font-medium border-b border-[#3f3a36]">
                         <tr>
-                          <th className="px-3 py-2">Nom de l&apos;étagère</th>
-                          <th className="px-3 py-2 text-right">Quantité d&apos;équipements</th>
+                          <th className="px-3 py-2">Nom de l&apos;emplacement</th>
+                          <th className="px-3 py-2 text-right">Quantité d&apos;articles</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#455268]">
                         {stock.shelves.map((sh) => (
                           <tr key={sh.shelfId} className="hover:bg-white/10 transition-colors">
                             <td className="px-3 py-2.5 font-medium text-white">
-                              {sh.shelfName || 'Étagère sans nom'}
+                              {sh.shelfName || 'Emplacement sans nom'}
                             </td>
                             <td className="px-3 py-2.5 text-right font-mono text-white/90">
                               <span className="px-2 py-0.5 rounded-full bg-[#2b2622] border border-[#3f3a36] text-white">

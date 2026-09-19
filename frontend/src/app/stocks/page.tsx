@@ -166,7 +166,7 @@ export default function StocksPage() {
               <div className="text-[11px] text-[#c9c0ad] mt-0.5">Opérationnels en temps réel</div>
             </div>
             <div className="p-4 bg-[#383330] border border-[#3f3a36] rounded-[4px]">
-              <div className="text-[11px] font-mono uppercase tracking-wider text-[#aea69c]">Étagères Associées</div>
+              <div className="text-[11px] font-mono uppercase tracking-wider text-[#aea69c]">Emplacements Associés</div>
               <div className="text-2xl font-normal tracking-tight text-[#f7f5f0] mt-1">
                 {totalShelvesCount.toLocaleString()}
               </div>
@@ -249,7 +249,7 @@ export default function StocksPage() {
                   <tr>
                     <th className="px-4 py-3">Nom du Stock</th>
                     <th className="px-4 py-3">Statut</th>
-                    <th className="px-4 py-3">Étagères associées</th>
+                    <th className="px-4 py-3">Emplacements associés</th>
                     <th className="px-4 py-3">Identifiant (UUID)</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
@@ -307,7 +307,7 @@ export default function StocksPage() {
                             <span className="text-[#f7f5f0]">
                               {shelfCount.toLocaleString()}
                             </span>
-                            <span>{shelfCount > 1 ? 'étagères' : 'étagère'}</span>
+                            <span>{shelfCount > 1 ? 'emplacements' : 'emplacement'}</span>
                           </div>
                         </td>
 

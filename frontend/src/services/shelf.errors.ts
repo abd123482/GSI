@@ -40,7 +40,7 @@ export class ShelfValidationException extends ShelfServiceException {
   public readonly validationErrors?: Record<string, string[]>;
 
   constructor(
-    message: string = 'Données d’étagère non valides',
+    message: string = 'Données d’emplacement non valides',
     validationErrors?: Record<string, string[]>,
   ) {
     super(message, 400, validationErrors);

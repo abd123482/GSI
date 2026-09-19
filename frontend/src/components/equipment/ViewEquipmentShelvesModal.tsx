@@ -59,11 +59,13 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const totalStock = data?.equipmentQuantity ?? equipment.equipmentQuantity ?? 0;
   const isSerialized = data?.hasSerialNumber ?? equipment.hasSerialNumber;
-
   const tuples = data?.equipmentShelfs ?? equipment.equipmentShelfs ?? [];
   const serials = data?.serialNumbers ?? equipment.serialNumbers ?? [];
+
+  const totalStock = isSerialized
+    ? serials.length
+    : (data?.equipmentQuantity ?? equipment.equipmentQuantity ?? 0);
 
   // Calculate metrics
   const totalAllocated = isSerialized
@@ -93,14 +95,14 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-semibold text-white">
-                  Étagères associées
+                  Emplacements associés
                 </h2>
                 <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-black/30 border border-white/20 text-white/90">
                   {isSerialized ? 'Sérialisé' : 'Standard'}
                 </span>
               </div>
               <p className="text-xs text-white/70 truncate max-w-md">
-                {equipment.equipmentName ?? 'Équipement sans nom'}
+                {equipment.equipmentName ?? 'Article sans nom'}
               </p>
             </div>
           </div>
@@ -110,7 +112,7 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
               onClick={() => refetch()}
               disabled={isLoading}
               className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
-              title="Actualiser les étagères"
+              title="Actualiser les emplacements"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
@@ -127,17 +129,6 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-5">
-          {/* Informational Callout */}
-          <div className="p-3.5 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg text-xs text-white flex items-start gap-2.5">
-            <Info className="w-4 h-4 text-[#f7f5f0] shrink-0 mt-0.5" />
-            <div className="leading-relaxed">
-              <p className="font-semibold text-white mb-0.5">
-                Architecture de stockage multi-étagères
-              </p>
-              Cet équipement peut être réparti sur plusieurs étagères. Chaque emplacement et quantité est stocké sous forme de tuple dans la table SQL <code className="font-mono bg-black/30 px-1 py-0.5 rounded text-[11px] text-emerald-300">EquipmentShelfs</code>. L&apos;ajout ou le transfert d&apos;unités est géré par les mouvements de stock.
-            </div>
-          </div>
-
           {/* Metric Cards Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg">
@@ -153,7 +144,7 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
             <div className="p-3 bg-[#2b2622]/70 border border-emerald-400/40 rounded-lg">
               <span className="text-[11px] font-medium text-emerald-300 flex items-center gap-1 mb-1">
                 <Check className="w-3.5 h-3.5" />
-                Alloué en Rayons
+                Alloué en Emplacements
               </span>
               <p className="text-lg font-bold text-emerald-300">
                 {totalAllocated} <span className="text-xs font-normal text-emerald-300/80">unités</span>
@@ -181,10 +172,10 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
             <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg">
               <span className="text-[11px] font-medium text-white/70 flex items-center gap-1 mb-1">
                 <Layers className="w-3.5 h-3.5 text-white" />
-                Étagères
+                Emplacements
               </span>
               <p className="text-lg font-bold text-white">
-                {distinctShelvesCount} <span className="text-xs font-normal text-white/70">rayons</span>
+                {distinctShelvesCount} <span className="text-xs font-normal text-white/70">emplacements</span>
               </p>
             </div>
           </div>
@@ -193,23 +184,23 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
           <div>
             <div className="flex items-center justify-between mb-2.5">
               <h3 className="text-xs font-semibold text-white uppercase tracking-wider">
-                Emplacements par Étagère
+                Emplacements de l&apos;Article
               </h3>
               <span className="text-[11px] text-white/70">
-                {tuples.length} tuple{tuples.length > 1 ? 's' : ''} dans EquipmentShelfs
+                {tuples.length} emplacement{tuples.length > 1 ? 's' : ''} enregistré{tuples.length > 1 ? 's' : ''}
               </span>
             </div>
 
             {tuples.length > 0 ? (
               <div className="border border-[#3f3a36] rounded-lg overflow-hidden divide-y divide-[#8191ad]/50 bg-[#2b2622]/60">
                 <div className="bg-[#2b2622] px-4 py-2 text-[11px] font-semibold text-white/90 grid grid-cols-12 gap-2">
-                  <span className="col-span-5">Étagère</span>
+                  <span className="col-span-5">Emplacement</span>
                   <span className="col-span-3 text-center">Quantité Allouée</span>
                   <span className="col-span-4 text-right">Part du Stock</span>
                 </div>
 
                 {tuples.map((t) => {
-                  const shelfName = t.shelf?.shelfName ?? 'Étagère inconnue';
+                  const shelfName = t.shelf?.shelfName ?? 'Emplacement inconnu';
                   const qty = t.equipmentQuantity || 0;
                   const percent = totalStock > 0 ? Math.round((qty / totalStock) * 100) : 0;
                   return (
@@ -230,9 +221,9 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
                           </span>
                           <button
                             type="button"
-                            onClick={(e) => handleCopy(e, t.shelfId, "ID d'étagère")}
+                            onClick={(e) => handleCopy(e, t.shelfId, "ID d'emplacement")}
                             className="text-white/60 hover:text-white transition-colors cursor-pointer"
-                            title="Copier le GUID de l'étagère"
+                            title="Copier le GUID de l'emplacement"
                           >
                             {copiedId === t.shelfId ? (
                               <Check className="w-3 h-3 text-emerald-400" />
@@ -271,10 +262,10 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
               <div className="text-center py-8 border border-dashed border-[#3f3a36] rounded-lg bg-[#2b2622]/40 px-4">
                 <Layers className="w-8 h-8 text-white/50 mx-auto mb-2" />
                 <p className="text-xs font-semibold text-white mb-1">
-                  Aucun tuple dans EquipmentShelfs
+                  Aucun emplacement assigné
                 </p>
                 <p className="text-[11px] text-white/70 max-w-sm mx-auto">
-                  Cet équipement n&apos;a pas encore d&apos;unités réparties dans des étagères. Enregistrez un mouvement d&apos;entrée ou de transfert pour assigner des étagères.
+                  Cet article n&apos;a pas encore d&apos;unités réparties dans des emplacements. Enregistrez un mouvement d&apos;entrée ou de transfert pour assigner des emplacements.
                 </p>
               </div>
             )}
@@ -285,7 +276,7 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
             <div>
               <div className="flex items-center justify-between mb-2.5">
                 <h3 className="text-xs font-semibold text-white uppercase tracking-wider">
-                  Numéros de Série & Étagères Associées
+                  Numéros de Série & Emplacements Associés
                 </h3>
                 <span className="text-[11px] text-white/70">
                   {serials.length} numéro{serials.length > 1 ? 's' : ''} de série
@@ -322,7 +313,7 @@ export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps>
                 </div>
               ) : (
                 <p className="text-xs text-white/70 italic">
-                  Aucun numéro de série enregistré pour cet équipement.
+                  Aucun numéro de série enregistré pour cet article.
                 </p>
               )}
             </div>

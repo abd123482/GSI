@@ -32,6 +32,7 @@ export const ALL_SYSTEM_PERMISSIONS = [
   'stock.delete',
   'user.manage',
   'role.manage',
+  'dashboard.read',
   ...INVENTORY_PERMISSIONS,
 ] as const;
 

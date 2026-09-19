@@ -86,10 +86,10 @@ export class EquipmentService {
       if (isAxiosError(error) && error.response?.status === 403) {
         throw new InsufficientPermissionException(
           REQUIRED_EQUIPMENT_READ_PERMISSION,
-          'Permission refusée pour la consultation des équipements.',
+          'Permission refusée pour la consultation des articles.',
         );
       }
-      throw new EquipmentServiceException('Échec du chargement des équipements.');
+      throw new EquipmentServiceException('Échec du chargement des articles.');
     }
   }
 
@@ -133,10 +133,10 @@ export class EquipmentService {
       if (isAxiosError(error) && error.response?.status === 403) {
         throw new InsufficientPermissionException(
           REQUIRED_EQUIPMENT_READ_PERMISSION,
-          'Permission refusée pour la recherche d’équipements.',
+          'Permission refusée pour la recherche d’articles.',
         );
       }
-      throw new EquipmentServiceException('Échec de la recherche d’équipements.');
+      throw new EquipmentServiceException('Échec de la recherche d’articles.');
     }
   }
 
@@ -152,14 +152,14 @@ export class EquipmentService {
         if (error.response?.status === 403) {
           throw new InsufficientPermissionException(
             REQUIRED_EQUIPMENT_READ_PERMISSION,
-            'Permission refusée pour consulter cet équipement.',
+            'Permission refusée pour consulter cet article.',
           );
         }
         if (error.response?.status === 404) {
-          throw new EquipmentServiceException(`L’équipement '${id}' est introuvable.`, 404);
+          throw new EquipmentServiceException(`L’article '${id}' est introuvable.`, 404);
         }
       }
-      throw new EquipmentServiceException('Échec de la récupération de l’équipement.');
+      throw new EquipmentServiceException('Échec de la récupération de l’article.');
     }
   }
 
@@ -175,7 +175,7 @@ export class EquipmentService {
     if (userPermissions && !userPermissions.includes(REQUIRED_EQUIPMENT_READ_PERMISSION)) {
       throw new InsufficientPermissionException(
         REQUIRED_EQUIPMENT_READ_PERMISSION,
-        `Permission '${REQUIRED_EQUIPMENT_READ_PERMISSION}' requise pour consulter les étagères de cet équipement.`,
+        `Permission '${REQUIRED_EQUIPMENT_READ_PERMISSION}' requise pour consulter les emplacements de cet article.`,
       );
     }
 
@@ -187,19 +187,19 @@ export class EquipmentService {
         if (error.response?.status === 403) {
           throw new InsufficientPermissionException(
             REQUIRED_EQUIPMENT_READ_PERMISSION,
-            'Permission refusée pour consulter les étagères de cet équipement.',
+            'Permission refusée pour consulter les emplacements de cet article.',
           );
         }
         if (error.response?.status === 404) {
-          throw new EquipmentServiceException(`L’équipement '${id}' est introuvable.`, 404);
+          throw new EquipmentServiceException(`L’article '${id}' est introuvable.`, 404);
         }
-        const msg = error.response?.data?.message || 'Échec de la récupération des étagères.';
+        const msg = error.response?.data?.message || 'Échec de la récupération des emplacements.';
         throw new EquipmentServiceException(
           Array.isArray(msg) ? msg.join(', ') : msg,
           error.response?.status,
         );
       }
-      throw new EquipmentServiceException('Échec de la récupération des étagères.');
+      throw new EquipmentServiceException('Échec de la récupération des emplacements.');
     }
   }
 
@@ -221,7 +221,7 @@ export class EquipmentService {
     if (userPermissions && !userPermissions.includes(perm)) {
       throw new InsufficientPermissionException(
         perm,
-        `Permission refusée : Vous n'avez pas le droit '${perm}' pour modifier cet équipement.`,
+        `Permission refusée : Vous n'avez pas le droit '${perm}' pour modifier cet article.`,
       );
     }
 
@@ -236,13 +236,13 @@ export class EquipmentService {
             error.response.data?.message || `Permission '${perm}' requise.`,
           );
         }
-        const msg = error.response?.data?.message || 'Erreur lors de la mise à jour de l’équipement.';
+        const msg = error.response?.data?.message || 'Erreur lors de la mise à jour de l’article.';
         throw new EquipmentServiceException(
           Array.isArray(msg) ? msg.join(', ') : msg,
           error.response?.status,
         );
       }
-      throw new EquipmentServiceException('Erreur inconnue lors de la mise à jour de l’équipement.');
+      throw new EquipmentServiceException('Erreur inconnue lors de la mise à jour de l’article.');
     }
   }
 
@@ -258,7 +258,7 @@ export class EquipmentService {
     if (userPermissions && !userPermissions.includes(perm)) {
       throw new InsufficientPermissionException(
         perm,
-        `Permission refusée : Vous n'avez pas le droit '${perm}' pour supprimer cet équipement.`,
+        `Permission refusée : Vous n'avez pas le droit '${perm}' pour supprimer cet article.`,
       );
     }
 
@@ -272,13 +272,13 @@ export class EquipmentService {
             error.response.data?.message || `Permission '${perm}' requise.`,
           );
         }
-        const msg = error.response?.data?.message || 'Erreur lors de la suppression de l’équipement.';
+        const msg = error.response?.data?.message || 'Erreur lors de la suppression de l’article.';
         throw new EquipmentServiceException(
           Array.isArray(msg) ? msg.join(', ') : msg,
           error.response?.status,
         );
       }
-      throw new EquipmentServiceException('Erreur inconnue lors de la suppression de l’équipement.');
+      throw new EquipmentServiceException('Erreur inconnue lors de la suppression de l’article.');
     }
   }
 
@@ -371,7 +371,7 @@ export class EquipmentService {
     if (userPermissions && !userPermissions.includes(REQUIRED_EQUIPMENT_CREATE_PERMISSION)) {
       throw new InsufficientPermissionException(
         REQUIRED_EQUIPMENT_CREATE_PERMISSION,
-        `Permission refusée : Vous n'avez pas le droit '${REQUIRED_EQUIPMENT_CREATE_PERMISSION}' pour créer un équipement.`,
+        `Permission refusée : Vous n'avez pas le droit '${REQUIRED_EQUIPMENT_CREATE_PERMISSION}' pour créer un article.`,
       );
     }
 
@@ -394,30 +394,34 @@ export class EquipmentService {
         errorDetails.push(`${err.message}`);
       });
       throw new EquipmentValidationException(
-        errorDetails.length > 0 ? `Données invalides : ${errorDetails.join(', ')}` : 'Données d’équipement invalides',
+        errorDetails.length > 0 ? `Données invalides : ${errorDetails.join(', ')}` : 'Données d’article invalides',
         fieldErrors,
       );
     }
 
     try {
-      // 2. Create equipment tuple
+      const selectedShelfId = input.shelfId && input.shelfId.trim() !== '' ? input.shelfId.trim() : undefined;
+
+      // 2. Create equipment tuple (initial IN movement created automatically if shelfId provided)
       const eqPayload = {
         equipmentName: input.equipmentName.trim(),
         hasSerialNumber: input.hasSerialNumber,
         equipmentQuantity: input.hasSerialNumber ? 0 : Number(input.equipmentQuantity),
         minEquipmentQuantity: Number(input.minEquipmentQuantity ?? 0),
+        shelfId: selectedShelfId,
       };
 
       const eqResponse = await client.post<Equipment>('/equipment', eqPayload);
       const createdEquipment = eqResponse.data;
 
       // 3. If serialized and serial codes provided, create in bulk via SerialNumberController
-      // (Shelf allocation is decoupled and handled exclusively via Movement logic)
+      // (If shelfId is provided, serial numbers are assigned to the shelf and initial IN movements created)
       if (input.hasSerialNumber && input.serialNumbers && input.serialNumbers.length > 0) {
         await client.post('/serial-number/batch', {
           equipmentId: createdEquipment.equipmentId,
           serialNumberCodes: input.serialNumbers,
           serialNumberStatus: 'AVAILABLE',
+          shelfId: selectedShelfId,
         });
       }
 
@@ -432,7 +436,7 @@ export class EquipmentService {
             error.response.data?.message || `Permission refusée.`,
           );
         }
-        const msg = error.response?.data?.message || 'Erreur lors de la création de l’équipement.';
+        const msg = error.response?.data?.message || 'Erreur lors de la création de l’article.';
         throw new EquipmentServiceException(
           Array.isArray(msg) ? msg.join(', ') : msg,
           error.response?.status,

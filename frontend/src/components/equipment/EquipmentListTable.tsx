@@ -156,7 +156,7 @@ export function EquipmentListTable({
               type="text"
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Rechercher par nom d'équipement..."
+              placeholder="Rechercher par nom d'article..."
               className="w-full h-8 pl-8 pr-7 bg-[#2b2622] text-xs font-mono text-[#f7f5f0] border border-[#3f3a36] rounded-[3px] outline-none focus:border-[#f7f5f0] placeholder:text-[#aea69c] transition-colors"
             />
             {searchTerm && (
@@ -190,7 +190,7 @@ export function EquipmentListTable({
             type="submit"
             disabled={!idLookupInput.trim() || isLoading}
             className="h-8 px-2.5 bg-[#2b2622] hover:bg-[#383330] text-[#f7f5f0] border border-[#3f3a36] text-xs font-medium rounded-[3px] transition-colors cursor-pointer disabled:opacity-40 flex items-center gap-1"
-            title="Consulter l'équipement par UUID"
+            title="Consulter l'article par UUID"
           >
             <span>Ouvrir</span>
             <ArrowRight className="w-3 h-3" />
@@ -249,7 +249,7 @@ export function EquipmentListTable({
             onClick={onRefresh}
             disabled={isLoading}
             className="h-8 px-2.5 bg-[#2b2622] hover:bg-[#383330] text-[#c9c0ad] hover:text-[#f7f5f0] border border-[#3f3a36] rounded-[3px] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40"
-            title="Rafraîchir les données SQL Server"
+            title="Actualiser"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#f7f5f0]' : ''}`} />
             <span className="hidden sm:inline">Actualiser</span>
@@ -265,11 +265,11 @@ export function EquipmentListTable({
               <tr className="border-b border-[#3f3a36] bg-[#2b2622] text-[11px] font-mono text-[#aea69c] tracking-wider uppercase">
                 <th className="py-2.5 px-3 w-10 text-center"></th>
                 <th className="py-2.5 px-3 w-16 text-center">INDEX</th>
-                <th className="py-2.5 px-4">ÉQUIPEMENT</th>
+                <th className="py-2.5 px-4">ARTICLE</th>
                 <th className="py-2.5 px-4 text-center">QUANTITÉ</th>
                 <th className="py-2.5 px-4 text-center">TRAÇABILITÉ S/N</th>
                 <th className="py-2.5 px-4">EMPLACEMENT(S)</th>
-                <th className="py-2.5 px-4">GUID SQL SERVER</th>
+                <th className="py-2.5 px-4">IDENTIFIANT</th>
                 <th className="py-2.5 px-4 text-right">ACTION</th>
               </tr>
             </thead>
@@ -279,7 +279,7 @@ export function EquipmentListTable({
                   <td colSpan={8} className="py-16 text-center text-[#aea69c]">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <RefreshCw className="w-5 h-5 animate-spin text-[#f7f5f0]" />
-                      <span className="text-xs font-mono">Chargement des équipements depuis SQL Server...</span>
+                      <span className="text-xs font-mono">Chargement des articles...</span>
                     </div>
                   </td>
                 </tr>
@@ -291,11 +291,11 @@ export function EquipmentListTable({
                         <Archive className="w-5 h-5" />
                       </div>
                       <div className="space-y-1">
-                        <p className="font-medium text-sm text-[#f7f5f0]">Aucun équipement trouvé</p>
+                        <p className="font-medium text-sm text-[#f7f5f0]">Aucun article trouvé</p>
                         <p className="text-xs text-[#c9c0ad] max-w-sm">
                           {searchTerm
                             ? `Aucun résultat pour la recherche "${searchTerm}".`
-                            : 'Aucun équipement n’est enregistré dans la table dbo.Equipment.'}
+                            : 'Aucun article n’est enregistré.'}
                         </p>
                       </div>
                       {canCreateMovement && (
@@ -305,7 +305,7 @@ export function EquipmentListTable({
                           className="mt-1 px-3.5 py-1.5 bg-[#f7f5f0] hover:bg-[#dad2c1] text-[#2b2622] rounded-[3px] text-xs font-medium cursor-pointer transition-colors inline-flex items-center gap-1.5"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          <span>Créer une première entrée</span>
+                          <span>Créer un nouvel article</span>
                         </button>
                       )}
                     </div>
@@ -317,6 +317,7 @@ export function EquipmentListTable({
                   const formattedIndex = String(globalIndex).padStart(2, '0');
                   const isExpanded = !!expandedEquipmentIds[equipment.equipmentId];
                   const serials = equipment.serialNumbers ?? [];
+                  const displayQty = equipment.hasSerialNumber ? (equipment.serialNumbers?.length ?? equipment.equipmentQuantity) : equipment.equipmentQuantity;
 
                   return (
                     <React.Fragment key={equipment.equipmentId}>
@@ -350,16 +351,16 @@ export function EquipmentListTable({
                           </span>
                         </td>
 
-                        {/* 2. Equipment Name */}
+                        {/* 2. Article Name */}
                         <td className="py-3 px-4 font-medium text-[#f7f5f0]">
                           <div className="flex items-center gap-2.5">
                             <div className="min-w-0">
                               <p className="font-medium text-xs text-[#f7f5f0] truncate max-w-xs group-hover:text-white transition-colors">
-                                {equipment.equipmentName ?? 'Équipement sans nom'}
+                                {equipment.equipmentName ?? 'Article sans nom'}
                               </p>
                               <div className="text-[11px] font-mono text-[#aea69c] flex items-center gap-1.5 flex-wrap">
                                 <span>Min alert : {equipment.minequipmentQuantity}</span>
-                                {equipment.equipmentQuantity <= equipment.minequipmentQuantity && (
+                                {displayQty <= equipment.minequipmentQuantity && (
                                   <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-[2px] bg-[#2d2212] text-[#f59e0b] border border-[#453316] text-[10px] font-mono">
                                     <AlertTriangle className="w-2.5 h-2.5" />
                                     Stock bas
@@ -374,14 +375,14 @@ export function EquipmentListTable({
                         <td className="py-3 px-4 text-center">
                           <span
                             className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[2px] font-mono text-[10px] border ${
-                              equipment.equipmentQuantity > 0
+                              displayQty > 0
                                 ? 'bg-[#162b22] text-[#10b981] border-[#1e3d30]'
                                 : 'bg-[#2d1616] text-[#ef4444] border-[#451e1e]'
                             }`}
                           >
                             <Hash className="w-3 h-3" />
                             <span>
-                              {equipment.equipmentQuantity} {equipment.equipmentQuantity > 1 ? 'unités' : 'unité'}
+                              {displayQty} {displayQty > 1 ? 'unités' : 'unité'}
                             </span>
                           </span>
                         </td>
@@ -408,13 +409,13 @@ export function EquipmentListTable({
                           )}
                         </td>
 
-                        {/* 5. Shelf Locations */}
+                        {/* 5. Emplacements */}
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5">
                             <span className="text-[11px] font-mono text-[#aea69c]">
                               {equipment.hasSerialNumber 
                                 ? serials.filter((s) => s.shelfId).length 
-                                : (equipment.equipmentShelfs?.reduce((sum, es) => sum + (es.equipmentQuantity || 0), 0) || 0)}/{equipment.hasSerialNumber ? serials.length : equipment.equipmentQuantity} en rayons
+                                : (equipment.equipmentShelfs?.reduce((sum, es) => sum + (es.equipmentQuantity || 0), 0) || 0)}/{displayQty} en emplacements
                             </span>
                             {onViewEquipmentShelves && (
                               <button
@@ -424,10 +425,10 @@ export function EquipmentListTable({
                                   onViewEquipmentShelves(equipment);
                                 }}
                                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[2px] text-[10px] font-mono bg-[#2b2622] hover:bg-[#383330] border border-[#3f3a36] text-[#dad2c1] transition-colors cursor-pointer"
-                                title="Voir les étagères de cet équipement"
+                                title="Voir les emplacements de cet article"
                               >
                                 <Layers className="w-2.5 h-2.5 text-[#aea69c]" />
-                                <span>Voir étagères</span>
+                                <span>Voir emplacements</span>
                               </button>
                             )}
                           </div>
@@ -469,21 +470,10 @@ export function EquipmentListTable({
                                 type="button"
                                 onClick={() => onOpenMovement(equipment)}
                                 className="inline-flex items-center gap-1 px-2 py-1 rounded-[2px] bg-[#2b2622] hover:bg-[#383330] border border-[#3f3a36] text-[11px] font-mono text-[#dad2c1] transition-colors cursor-pointer"
-                                title="Créer un mouvement de stock pour cet équipement"
+                                title="Créer un mouvement de stock pour cet article"
                               >
                                 <ArrowRightLeft className="w-3 h-3 text-[#aea69c]" />
                                 <span>Mouvement</span>
-                              </button>
-                            )}
-
-                            {onViewEquipmentShelves && (
-                              <button
-                                type="button"
-                                onClick={() => onViewEquipmentShelves(equipment)}
-                                className="p-1.5 rounded-[2px] text-[#aea69c] hover:text-[#f7f5f0] hover:bg-[#2b2622] transition-colors cursor-pointer"
-                                title="Voir toutes les étagères de cet équipement"
-                              >
-                                <Layers className="w-3.5 h-3.5" />
                               </button>
                             )}
 
@@ -492,7 +482,7 @@ export function EquipmentListTable({
                                 type="button"
                                 onClick={() => onEditEquipment(equipment)}
                                 className="p-1.5 rounded-[2px] text-[#aea69c] hover:text-[#f7f5f0] hover:bg-[#2b2622] transition-colors cursor-pointer"
-                                title="Modifier l’équipement"
+                                title="Modifier l’article"
                               >
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
@@ -503,7 +493,7 @@ export function EquipmentListTable({
                                 type="button"
                                 onClick={() => onDeleteEquipment(equipment)}
                                 className="p-1.5 rounded-[2px] text-[#ef4444] hover:bg-[#2d1616] transition-colors cursor-pointer"
-                                title="Supprimer l’équipement"
+                                title="Supprimer l’article"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -536,15 +526,12 @@ export function EquipmentListTable({
                                       <span>Convertir en standard</span>
                                     </button>
                                   )}
-                                  <span className="text-[11px] font-mono text-[#aea69c] hidden md:inline">
-                                    dbo.SerialNumber
-                                  </span>
                                 </div>
                               </div>
 
                               {serials.length === 0 ? (
                                 <p className="text-xs font-mono text-[#aea69c] py-1">
-                                  Aucun numéro de série rattaché à cet équipement.
+                                  Aucun numéro de série rattaché à cet article.
                                 </p>
                               ) : (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 pt-1">
@@ -567,7 +554,7 @@ export function EquipmentListTable({
                                         {sn.shelf?.shelfName ? (
                                           <span
                                             className="px-1.5 py-0.5 rounded-[2px] text-[9px] font-mono bg-[#2b2622] text-[#dad2c1] border border-[#3f3a36] flex items-center gap-1"
-                                            title={`Rayon : ${sn.shelf.shelfName}`}
+                                            title={`Emplacement : ${sn.shelf.shelfName}`}
                                           >
                                             <Layers className="w-2.5 h-2.5 text-[#aea69c]" />
                                             <span className="truncate max-w-[70px]">{sn.shelf.shelfName}</span>
@@ -575,7 +562,7 @@ export function EquipmentListTable({
                                         ) : (
                                           <span
                                             className="px-1.5 py-0.5 rounded-[2px] text-[9px] font-mono text-[#aea69c] bg-[#2b2622] border border-[#3f3a36] flex items-center gap-0.5"
-                                            title="Non assigné à une étagère"
+                                            title="Non assigné à un emplacement"
                                           >
                                             <span>Non assigné</span>
                                           </span>
@@ -600,7 +587,7 @@ export function EquipmentListTable({
                                             {copiedSn === sn.serialNumberCode ? (
                                               <Check className="w-3 h-3 text-[#10b981]" />
                                             ) : (
-                                              <Copy className="w-3 h-3 text-[#aea69c]" />
+                                              <Copy className="w-3.5 h-3.5 text-[#aea69c]" />
                                             )}
                                           </button>
                                         )}
@@ -652,12 +639,12 @@ export function EquipmentListTable({
           {isLoading && equipments.length === 0 ? (
             <div className="py-14 text-center text-[#aea69c] flex flex-col items-center justify-center gap-2">
               <RefreshCw className="w-5 h-5 animate-spin text-[#f7f5f0]" />
-              <p className="text-xs font-mono">Chargement des cartes équipements...</p>
+              <p className="text-xs font-mono">Chargement des cartes articles...</p>
             </div>
           ) : equipments.length === 0 ? (
             <div className="py-14 text-center text-[#aea69c] flex flex-col items-center justify-center gap-2">
               <Archive className="w-8 h-8 text-[#aea69c]" />
-              <p className="text-sm font-medium text-[#f7f5f0]">Aucun équipement disponible</p>
+              <p className="text-sm font-medium text-[#f7f5f0]">Aucun article disponible</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -666,6 +653,7 @@ export function EquipmentListTable({
                 const formattedIndex = String(globalIndex).padStart(2, '0');
                 const serials = equipment.serialNumbers ?? [];
                 const isExpanded = !!expandedEquipmentIds[equipment.equipmentId];
+                const displayQty = equipment.hasSerialNumber ? (equipment.serialNumbers?.length ?? equipment.equipmentQuantity) : equipment.equipmentQuantity;
 
                 return (
                   <div
@@ -681,20 +669,20 @@ export function EquipmentListTable({
                             #{formattedIndex}
                           </span>
                           <h3 className="font-medium text-xs text-[#f7f5f0] truncate max-w-[160px] group-hover:text-white transition-colors mt-0.5">
-                            {equipment.equipmentName ?? 'Équipement sans nom'}
+                            {equipment.equipmentName ?? 'Article sans nom'}
                           </h3>
                         </div>
                       </div>
 
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[2px] font-mono text-[10px] border ${
-                          equipment.equipmentQuantity > 0
+                          displayQty > 0
                             ? 'bg-[#162b22] text-[#10b981] border-[#1e3d30]'
                             : 'bg-[#2d1616] text-[#ef4444] border-[#451e1e]'
                         }`}
                       >
                         <Hash className="w-3 h-3" />
-                        <span>{equipment.equipmentQuantity} u.</span>
+                        <span>{displayQty} u.</span>
                       </span>
                     </div>
 
@@ -801,7 +789,7 @@ export function EquipmentListTable({
                             type="button"
                             onClick={() => onViewEquipmentShelves(equipment)}
                             className="p-1 hover:text-[#f7f5f0] rounded-[2px] transition-colors cursor-pointer"
-                            title="Voir les étagères associées"
+                            title="Voir les emplacements associés"
                           >
                             <Layers className="w-3.5 h-3.5" />
                           </button>
@@ -811,7 +799,7 @@ export function EquipmentListTable({
                             type="button"
                             onClick={() => onEditEquipment(equipment)}
                             className="p-1 hover:text-[#f7f5f0] rounded-[2px] transition-colors cursor-pointer"
-                            title="Modifier l’équipement"
+                            title="Modifier l’article"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
@@ -821,7 +809,7 @@ export function EquipmentListTable({
                             type="button"
                             onClick={() => onDeleteEquipment(equipment)}
                             className="p-1 text-[#ef4444] hover:bg-[#2d1616] rounded-[2px] transition-colors cursor-pointer"
-                            title="Supprimer l’équipement"
+                            title="Supprimer l’article"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -841,7 +829,7 @@ export function EquipmentListTable({
         <div className="px-4 py-2.5 bg-[#2b2622] border-t border-[#3f3a36] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#aea69c] font-mono">
           <div>
             Page <span className="text-[#f7f5f0]">{currentPage}</span> /{' '}
-            <span className="text-[#f7f5f0]">{totalPages}</span> ({totalEquipments} équipements)
+            <span className="text-[#f7f5f0]">{totalPages}</span> ({totalEquipments} articles)
           </div>
 
           <div className="flex items-center gap-1">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useApi } from './use-api';
 import { usePermissions } from './use-permissions';
@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 
 interface UseShelvesOptions extends ShelfPaginationQuery {
   initialSearch?: string;
+  enabled?: boolean;
 }
 
 /**
@@ -40,6 +41,7 @@ export function useShelves(options?: UseShelvesOptions) {
       }
       return ShelfService.getAllShelves(api, { page, limit });
     },
+    enabled: options?.enabled ?? true,
     placeholderData: keepPreviousData,
     staleTime: 30 * 1000,
   });
@@ -56,12 +58,12 @@ export function useShelves(options?: UseShelvesOptions) {
     },
     onSuccess: (newShelf) => {
       queryClient.invalidateQueries({ queryKey: ['shelves'] });
-      toast.success('Étagère créée avec succès !', {
-        description: `L'étagère "${newShelf.shelfName}" a été enregistrée dans la base de données SQL Server.`,
+      toast.success('Emplacement créé avec succès !', {
+        description: `L'emplacement "${newShelf.shelfName}" a été enregistré avec succès.`,
       });
     },
     onError: (error) => {
-      const msg = error?.message || 'Impossible de créer l’étagère.';
+      const msg = error?.message || 'Impossible de créer l’emplacement.';
       toast.error('Erreur lors de la création', {
         description: msg,
       });
@@ -76,12 +78,12 @@ export function useShelves(options?: UseShelvesOptions) {
     onSuccess: (updatedShelf) => {
       queryClient.invalidateQueries({ queryKey: ['shelves'] });
       queryClient.invalidateQueries({ queryKey: ['shelf', updatedShelf.shelfId] });
-      toast.success('Étagère modifiée avec succès !', {
-        description: `L'étagère "${updatedShelf.shelfName}" a été mise à jour dans SQL Server.`,
+      toast.success('Emplacement modifié avec succès !', {
+        description: `L'emplacement "${updatedShelf.shelfName}" a été mis à jour avec succès.`,
       });
     },
     onError: (error) => {
-      const msg = error?.message || 'Impossible de mettre à jour l’étagère.';
+      const msg = error?.message || 'Impossible de mettre à jour l’emplacement.';
       toast.error('Erreur lors de la modification', {
         description: msg,
       });
@@ -95,22 +97,22 @@ export function useShelves(options?: UseShelvesOptions) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shelves'] });
-      toast.success('Étagère supprimée avec succès !', {
-        description: 'Le tuple a été supprimé de la table dbo.Shelf.',
+      toast.success('Emplacement supprimé avec succès !', {
+        description: "L'emplacement a été supprimé définitivement.",
       });
     },
     onError: (error) => {
-      const msg = error?.message || 'Impossible de supprimer cette étagère.';
+      const msg = error?.message || 'Impossible de supprimer cet emplacement.';
       toast.error('Erreur lors de la suppression', {
         description: msg,
       });
     },
   });
 
-  const handleSearchChange = (query: string) => {
+  const handleSearchChange = useCallback((query: string) => {
     setSearchTerm(query);
     setPage(1); // Reset to page 1 whenever search query changes
-  };
+  }, []);
 
   const { canUpdateShelf, canDeleteShelf } = usePermissions();
 

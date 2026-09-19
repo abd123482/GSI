@@ -12,12 +12,20 @@ export const createEquipmentSchema = z.object({
   equipmentQuantity: z
     .number()
     .int('La quantité doit être un entier')
-    .nonnegative('La quantité ne peut pas être négative'),
+    .nonnegative('La quantité ne peut pas être négative')
+    .optional()
+    .default(0),
 
   minEquipmentQuantity: z
     .number()
     .int('La quantité minimale doit être un entier')
     .nonnegative('La quantité minimale ne peut pas être négative')
+    .optional(),
+
+  shelfId: z
+    .string()
+    .uuid('L’identifiant de l’emplacement doit être un UUID valide')
+    .nullable()
     .optional(),
 });
 

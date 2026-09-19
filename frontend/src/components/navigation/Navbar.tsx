@@ -96,13 +96,13 @@ export function Navbar() {
                 <DropdownMenuItem className="focus:bg-[#383330] focus:text-[#f7f5f0] cursor-pointer">
                   <Link href="/shelves" className="flex items-center gap-2 w-full">
                     <Layers className="w-3.5 h-3.5" />
-                    <span>Étagères</span>
+                    <span>Emplacements</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem className="focus:bg-[#383330] focus:text-[#f7f5f0] cursor-pointer">
                   <Link href="/equipment" className="flex items-center gap-2 w-full">
                     <Cpu className="w-3.5 h-3.5" />
-                    <span>Équipements</span>
+                    <span>Articles</span>
                   </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -209,7 +209,7 @@ export function Navbar() {
       {mobileMenuOpen && (
         <div className="sm:hidden border-t border-[#3f3a36] bg-[#2b2622] px-4 py-3 space-y-1.5">
           <div className="space-y-1">
-            <div className="p-2 text-[10px] font-mono text-[#5c544d] uppercase tracking-wider">Stocks & Matériel</div>
+            <div className="p-2 text-[10px] font-mono text-[#5c544d] uppercase tracking-wider">Stocks & Articles</div>
             
             <Link
               href="/stocks"
@@ -237,7 +237,7 @@ export function Navbar() {
             >
               <div className="flex items-center gap-2.5">
                 <Layers className="w-4 h-4 text-[#aea69c]" />
-                <span>Gestion des Étagères</span>
+                <span>Gestion des Emplacements</span>
               </div>
             </Link>
 
@@ -252,7 +252,7 @@ export function Navbar() {
             >
               <div className="flex items-center gap-2.5">
                 <Cpu className="w-4 h-4 text-[#aea69c]" />
-                <span>Équipements & Séries</span>
+                <span>Articles & Séries</span>
               </div>
             </Link>
           </div>

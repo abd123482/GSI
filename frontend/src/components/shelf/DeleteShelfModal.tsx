@@ -42,7 +42,7 @@ export function DeleteShelfModal({
     if (!canDeleteShelf) {
       const err = new InsufficientPermissionException(
         REQUIRED_DELETE_PERMISSION,
-        `Action interdite : Votre rôle (${roleName ?? 'Utilisateur'}) ne possède pas la permission '${REQUIRED_DELETE_PERMISSION}' pour supprimer cette étagère.`,
+        `Action interdite : Votre rôle (${roleName ?? 'Utilisateur'}) ne possède pas la permission '${REQUIRED_DELETE_PERMISSION}' pour supprimer cet emplacement.`,
       );
       setError(err.message);
       throw err;
@@ -54,12 +54,12 @@ export function DeleteShelfModal({
       if (onSuccess) onSuccess();
     } catch (err: unknown) {
       console.error('[DeleteShelfModal] Delete failed:', err);
-      setError(getErrorMessage(err, 'Impossible de supprimer cette étagère.'));
+      setError(getErrorMessage(err, 'Impossible de supprimer cet emplacement.'));
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
       {/* Danger Card Modal (#6b7b97 Theme) */}
       <div
         className="w-full max-w-md bg-[#383330] border border-[#3f3a36] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
@@ -75,11 +75,8 @@ export function DeleteShelfModal({
             </div>
             <div>
               <h2 id="delete-shelf-title" className="text-base font-semibold text-white">
-                Supprimer l’étagère
+                Supprimer l’emplacement
               </h2>
-              <p className="text-xs text-white/80">
-                Suppression du tuple SQL Server (DELETE /shelves/:id)
-              </p>
             </div>
           </div>
 
@@ -117,14 +114,14 @@ export function DeleteShelfModal({
 
           {/* Warning text */}
           <p className="text-xs text-white/90 leading-relaxed">
-            Êtes-vous sûr de vouloir supprimer définitivement l’étagère suivante ? Cette action retirera la ligne de la table <code className="bg-black/30 text-white px-1 py-0.5 rounded font-mono">dbo.Shelf</code>.
+            Êtes-vous sûr de vouloir supprimer définitivement cet emplacement ? Cette action est irréversible.
           </p>
 
           {/* Target Shelf Summary Box */}
           <div className="p-3.5 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg space-y-2 text-xs text-white">
             <div className="flex items-center justify-between font-medium">
               <span className="text-white text-sm font-semibold truncate">
-                {shelf.shelfName ?? 'Étagère sans nom'}
+                {shelf.shelfName ?? 'Emplacement sans nom'}
               </span>
               <span className="px-2 py-0.5 rounded bg-[#2b2622] border border-[#3f3a36] font-mono text-[11px] text-white">
                 {shelf.shelfQuantity} unités
@@ -160,7 +157,7 @@ export function DeleteShelfModal({
               ) : (
                 <>
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Supprimer définitivement</span>
+                  <span>Supprimer l’emplacement</span>
                 </>
               )}
             </button>

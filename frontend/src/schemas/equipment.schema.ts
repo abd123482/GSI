@@ -5,7 +5,7 @@ export const createDirectEquipmentSchema = z
   .object({
     equipmentName: z
       .string()
-      .min(1, 'Le nom de l’équipement est requis')
+      .min(1, 'Le nom de l’article est requis')
       .max(100, 'Le nom ne peut pas dépasser 100 caractères'),
     hasSerialNumber: z.boolean(),
     equipmentQuantity: z.coerce
@@ -21,23 +21,17 @@ export const createDirectEquipmentSchema = z
       .array(z.string().min(1, 'Le numéro de série est requis'))
       .nullable()
       .optional(),
+    shelfId: z
+      .string()
+      .uuid('Identifiant d’emplacement invalide')
+      .nullable()
+      .optional()
+      .or(z.literal('')),
   })
   .superRefine((data, ctx) => {
     if (data.hasSerialNumber) {
-      if (data.equipmentQuantity < 1) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'La quantité doit être supérieure ou égale à 1 pour un équipement avec numéros de série',
-          path: ['equipmentQuantity'],
-        });
-      }
-      if (!data.serialNumbers || data.serialNumbers.length !== data.equipmentQuantity) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Vous devez renseigner exactement ${data.equipmentQuantity} numéro(s) de série`,
-          path: ['serialNumbers'],
-        });
-      } else {
+      // Serial numbers are optional at creation (quantity defaults to 0). If provided, validate them.
+      if (data.serialNumbers && data.serialNumbers.length > 0) {
         const trimmed = data.serialNumbers.map((s) => s.trim());
         const hasEmpty = trimmed.some((s) => s.length === 0);
         if (hasEmpty) {
@@ -68,7 +62,7 @@ export type CreateDirectEquipmentFormValues = z.infer<
 export const updateEquipmentSchema = z.object({
   equipmentName: z
     .string()
-    .min(1, 'Le nom de l’équipement est requis')
+    .min(1, 'Le nom de l’article est requis')
     .max(100, 'Le nom ne peut pas dépasser 100 caractères')
     .optional(),
   equipmentQuantity: z.coerce

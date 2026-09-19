@@ -14,6 +14,8 @@ export const createBatchSerialNumberSchema = z.object({
     .array(z.string().min(1, 'Serial number code cannot be empty'))
     .min(1, 'At least one serial number code is required'),
   serialNumberStatus: z.string().min(1).optional().default('AVAILABLE'),
+  shelfId: z.string().uuid('L’identifiant de l’emplacement doit être un UUID valide').nullable().optional(),
 });
 
 export type CreateBatchSerialNumberDTO = z.infer<typeof createBatchSerialNumberSchema>;
+

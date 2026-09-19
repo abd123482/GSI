@@ -62,7 +62,7 @@ export function AuthStatusCard() {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-[#1a1a1a]">
-              Synchronisation SQL Server
+              Synchronisation du compte
             </h3>
             <p className="text-[11px] text-[#787670]">
               Statut de la session Clerk & identité locale NestJS
@@ -118,7 +118,7 @@ export function AuthStatusCard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div className="p-2.5 bg-white rounded-lg border border-[#e5e3df]">
               <span className="text-[10px] uppercase font-bold text-[#787670] tracking-wider block">
-                Statut Compte SQL
+                Statut du compte
               </span>
               <span className="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#eef6ec] text-[#2b7824]">
                 <CheckCircle2 className="w-3 h-3" />
@@ -139,7 +139,7 @@ export function AuthStatusCard() {
 
           <div className="p-2.5 bg-white rounded-lg border border-[#e5e3df] space-y-1 font-mono text-[11px]">
             <div className="flex justify-between items-center text-[#5d5b54]">
-              <span>SQL Server UUID:</span>
+              <span>Identifiant système:</span>
               <span className="text-[#1a1a1a] font-semibold select-all truncate max-w-[200px]" title={data.userId}>
                 {data.userId}
               </span>

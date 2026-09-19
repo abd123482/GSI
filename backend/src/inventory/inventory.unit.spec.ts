@@ -208,7 +208,7 @@ describe('Inventory Workflow', () => {
             assignedUserId: 'u2',
             sequence: 0,
             purpose: 'INITIAL',
-            status: 'AVAILABLE'
+            status: 'BLOCKED'
           }
         ]
       });

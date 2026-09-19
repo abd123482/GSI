@@ -158,6 +158,21 @@ export class EquipmentMovementService {
               shelfQuantity: { decrement: 1 },
             },
           });
+
+          const srcEs = await tx.equipmentShelfs.findFirst({
+            where: {
+              equipmentId: validatedData.equipmentId,
+              shelfId: validatedData.sourceShelfId,
+            },
+          });
+          if (srcEs && (srcEs.equipmentQuantity ?? 0) > 0) {
+            await tx.equipmentShelfs.update({
+              where: { equipmentShelfId: srcEs.equipmentShelfId },
+              data: {
+                equipmentQuantity: { decrement: 1 },
+              },
+            });
+          }
         }
 
         // Destination shelf: increment shelf quantity
@@ -168,6 +183,31 @@ export class EquipmentMovementService {
               shelfQuantity: { increment: 1 },
             },
           });
+
+          const destEs = await tx.equipmentShelfs.findFirst({
+            where: {
+              equipmentId: validatedData.equipmentId,
+              shelfId: validatedData.destinationShelfId,
+            },
+          });
+          if (destEs) {
+            await tx.equipmentShelfs.update({
+              where: { equipmentShelfId: destEs.equipmentShelfId },
+              data: {
+                equipmentQuantity: destEs.equipmentQuantity === null
+                  ? 1
+                  : { increment: 1 },
+              },
+            });
+          } else {
+            await tx.equipmentShelfs.create({
+              data: {
+                equipmentId: validatedData.equipmentId,
+                shelfId: validatedData.destinationShelfId,
+                equipmentQuantity: 1,
+              },
+            });
+          }
         }
 
         // Update serial number location
@@ -303,6 +343,134 @@ export class EquipmentMovementService {
       });
 
       return movement;
+    });
+  }
+
+  /**
+   * Creates batch equipment movements inside a single atomic transaction
+   */
+  async createBatchEquipmentMovements(items: CreateEquipmentMovementDTO[]) {
+    if (!items || !items.length) {
+      throw new BadRequestException('At least one movement item must be provided');
+    }
+
+    // 1. Validate all items first
+    for (const item of items) {
+      const validated = createEquipmentMovementSchema.parse(item);
+      const equipmentExists = await this.equipmentExists(validated.equipmentId);
+      if (!equipmentExists) {
+        throw new NotFoundException(`Equipment with ID '${validated.equipmentId}' not found`);
+      }
+      if (validated.serialNumberId) {
+        const snExists = await this.serialNumberExists(validated.serialNumberId);
+        if (!snExists) {
+          throw new NotFoundException(`Serial number with ID '${validated.serialNumberId}' not found`);
+        }
+      }
+      if (validated.sourceShelfId) {
+        const srcExists = await this.shelfExists(validated.sourceShelfId);
+        if (!srcExists) {
+          throw new NotFoundException(`Source shelf with ID '${validated.sourceShelfId}' not found`);
+        }
+      }
+      if (validated.destinationShelfId) {
+        const destExists = await this.shelfExists(validated.destinationShelfId);
+        if (!destExists) {
+          throw new NotFoundException(`Destination shelf with ID '${validated.destinationShelfId}' not found`);
+        }
+      }
+      await this.validateMovement(validated);
+    }
+
+    // 2. Execute all in transaction
+    return await this.prisma.$transaction(async (tx) => {
+      const movements = [];
+
+      for (const item of items) {
+        const validatedData = createEquipmentMovementSchema.parse(item);
+
+        if (validatedData.serialNumberId) {
+          // Source shelf decrement
+          if (validatedData.sourceShelfId) {
+            await tx.shelf.update({
+              where: { shelfId: validatedData.sourceShelfId },
+              data: { shelfQuantity: { decrement: 1 } },
+            });
+
+            const srcEs = await tx.equipmentShelfs.findFirst({
+              where: {
+                equipmentId: validatedData.equipmentId,
+                shelfId: validatedData.sourceShelfId,
+              },
+            });
+            if (srcEs && (srcEs.equipmentQuantity ?? 0) > 0) {
+              await tx.equipmentShelfs.update({
+                where: { equipmentShelfId: srcEs.equipmentShelfId },
+                data: { equipmentQuantity: { decrement: 1 } },
+              });
+            }
+          }
+
+          // Destination shelf increment
+          if (validatedData.destinationShelfId) {
+            await tx.shelf.update({
+              where: { shelfId: validatedData.destinationShelfId },
+              data: { shelfQuantity: { increment: 1 } },
+            });
+
+            const destEs = await tx.equipmentShelfs.findFirst({
+              where: {
+                equipmentId: validatedData.equipmentId,
+                shelfId: validatedData.destinationShelfId,
+              },
+            });
+            if (destEs) {
+              await tx.equipmentShelfs.update({
+                where: { equipmentShelfId: destEs.equipmentShelfId },
+                data: {
+                  equipmentQuantity: destEs.equipmentQuantity === null ? 1 : { increment: 1 },
+                },
+              });
+            } else {
+              await tx.equipmentShelfs.create({
+                data: {
+                  equipmentId: validatedData.equipmentId,
+                  shelfId: validatedData.destinationShelfId,
+                  equipmentQuantity: 1,
+                },
+              });
+            }
+          }
+
+          // Update serial number location
+          await tx.serialNumber.update({
+            where: { serialNumberId: validatedData.serialNumberId },
+            data: {
+              shelfId: validatedData.destinationShelfId ?? null,
+            },
+          });
+        }
+
+        const m = await tx.mouvement.create({
+          data: {
+            equipmentId: validatedData.equipmentId,
+            serialNumberId: validatedData.serialNumberId,
+            sourceShelfId: validatedData.sourceShelfId,
+            destinationShelfId: validatedData.destinationShelfId,
+            mouvementQuantity: validatedData.movementQuantity,
+            mouvementStatus: validatedData.movementType,
+          },
+          include: {
+            equipment: true,
+            serialNumber: true,
+            sourceShelf: true,
+            destinationShelf: true,
+          },
+        });
+        movements.push(m);
+      }
+
+      return movements;
     });
   }
 

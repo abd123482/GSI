@@ -43,12 +43,14 @@ export interface CreateEquipmentDirectInput {
   equipmentQuantity: number;
   minEquipmentQuantity?: number;
   serialNumbers?: string[];
+  shelfId?: string | null;
 }
 
 export interface CreateBatchSerialNumberInput {
   equipmentId: string;
   serialNumberCodes: string[];
   serialNumberStatus?: string;
+  shelfId?: string | null;
 }
 
 

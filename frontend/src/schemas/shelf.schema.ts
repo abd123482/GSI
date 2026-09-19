@@ -8,7 +8,7 @@ export const createShelfSchema = z.object({
   shelfName: z
     .string()
     .trim()
-    .min(1, 'Le nom de l’étagère est obligatoire')
+    .min(1, 'Le nom de l’emplacement est obligatoire')
     .max(100, 'Le nom ne peut pas dépasser 100 caractères'),
   shelfCode: z.string().trim().optional(),
   stockId: z.string().uuid('Identifiant de stock invalide').optional(),
