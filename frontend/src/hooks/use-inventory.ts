@@ -112,9 +112,14 @@ export function useSubmitTask() {
       const res = await api.post(`/inventory/tasks/${taskId}/submit`, data);
       return res.data;
     },
-    onSuccess: (_, { taskId }) => {
-      queryClient.invalidateQueries({ queryKey: ['inventory-tasks', taskId] });
-      queryClient.invalidateQueries({ queryKey: ['inventories'] }); // Potentially update counts
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['inventories'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-report'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-comparison'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-issues'] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
     },
   });
 }
@@ -275,5 +280,114 @@ export function useNotifyAllPendingControllers() {
   });
 }
 
+export function useInventoryProgress(inventoryId: string) {
+  const api = useApi();
+  return useQuery({
+    queryKey: ['inventory-progress', inventoryId],
+    queryFn: async () => {
+      const res = await api.get(`/inventory/${inventoryId}/progress`);
+      return res.data;
+    },
+    enabled: !!inventoryId,
+    refetchInterval: (query: any) => {
+      const status = query.state.data?.status;
+      // Keep polling every 2.5s if inventory is still in progress or waiting on counts
+      if (status === 'IN_PROGRESS' || status === 'THIRD_COUNT_REQUIRED') {
+        return 2500;
+      }
+      return false;
+    },
+  });
+}
 
+export function useInventoryComparison(inventoryId: string) {
+  const api = useApi();
+  return useQuery({
+    queryKey: ['inventory-comparison', inventoryId],
+    queryFn: async () => {
+      const res = await api.get(`/inventory/${inventoryId}/comparison`);
+      return res.data;
+    },
+    enabled: !!inventoryId,
+    refetchInterval: (query: any) => {
+      const status = query.state.data?.status;
+      if (status === 'IN_PROGRESS' || status === 'THIRD_COUNT_REQUIRED') {
+        return 2500;
+      }
+      return false;
+    },
+  });
+}
 
+export function useInventoryReport(inventoryId: string) {
+  const api = useApi();
+  return useQuery({
+    queryKey: ['inventory-report', inventoryId],
+    queryFn: async () => {
+      const res = await api.get(`/inventory/${inventoryId}/report`);
+      return res.data;
+    },
+    enabled: !!inventoryId,
+    refetchInterval: (query: any) => {
+      const status = query.state.data?.inventory?.status || query.state.data?.status;
+      if (status === 'IN_PROGRESS' || status === 'THIRD_COUNT_REQUIRED') {
+        return 2500;
+      }
+      return false;
+    },
+  });
+}
+
+export function useInventoryIssues(inventoryId: string) {
+  const api = useApi();
+  return useQuery({
+    queryKey: ['inventory-issues', inventoryId],
+    queryFn: async () => {
+      const res = await api.get(`/inventory/${inventoryId}/issues`);
+      return res.data;
+    },
+    enabled: !!inventoryId,
+  });
+}
+
+export function useResolveIssue() {
+  const queryClient = useQueryClient();
+  const api = useApi();
+  return useMutation({
+    mutationFn: async ({
+      inventoryId,
+      issueId,
+      data,
+    }: {
+      inventoryId: string;
+      issueId: string;
+      data: {
+        resolutionType: 'FOUND_IN_ANOTHER_LOCATION' | 'MOVED_WITHOUT_RECORDED_MOVEMENT' | 'LOST';
+        resolutionShelfId?: string;
+        notes?: string;
+      };
+    }) => {
+      const res = await api.post(`/inventory/${inventoryId}/issues/${issueId}/resolve`, data);
+      return res.data;
+    },
+    onSuccess: (_, { inventoryId }) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-issues', inventoryId] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-report', inventoryId] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-preview', inventoryId] });
+    },
+  });
+}
+
+export function useSaveDraft() {
+  const queryClient = useQueryClient();
+  const api = useApi();
+  return useMutation({
+    mutationFn: async ({ taskId, data }: { taskId: string; data: any }) => {
+      const res = await api.patch(`/inventory/tasks/${taskId}/draft`, data);
+      return res.data;
+    },
+    onSuccess: (_, { taskId }) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory-tasks', taskId] });
+    },
+  });
+}

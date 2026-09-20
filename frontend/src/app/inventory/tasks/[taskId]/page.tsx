@@ -29,7 +29,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useInventoryTask, useSubmitTask } from '@/hooks/use-inventory';
+import { useInventoryTask, useSubmitTask, useSaveDraft } from '@/hooks/use-inventory';
 import { toast } from 'sonner';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 
@@ -59,10 +59,13 @@ export default function InventoryTaskPage() {
 
   const { data: attempt, isLoading } = useInventoryTask(taskId);
   const { mutateAsync: submitTask } = useSubmitTask();
+  const { mutateAsync: saveDraft } = useSaveDraft();
 
   // Mode detection
-  const isByEquipment = attempt?.unit?.inventory?.typeInventory === 'ByEquipment';
-  const isByShelf = attempt?.unit?.inventory?.typeInventory === 'ByShelf';
+  const isByEquipment =
+    (attempt?.unit?.inventory?.typeInventory || attempt?.inventory?.typeInventory) === 'ByEquipment';
+  const isByShelf =
+    (attempt?.unit?.inventory?.typeInventory || attempt?.inventory?.typeInventory) === 'ByShelf';
   const scopeDetails = attempt?.scopeDetails;
 
   // Global Notes & Observations
@@ -71,12 +74,16 @@ export default function InventoryTaskPage() {
   // -------------------------------------------------------------
   // STATE FOR "PAR ARTICLE" (ByEquipment)
   // -------------------------------------------------------------
-  const [selectedShelfId, setSelectedShelfId] = useState<string>('');
   const [shelfCounts, setShelfCounts] = useState<{ [shelfId: string]: number }>({});
   const [countedSns, setCountedSns] = useState<
     Array<{ serialNumberId?: string; code: string; shelfId?: string; isNew?: boolean }>
   >([]);
-  const [scanInput, setScanInput] = useState<string>('');
+  const [byEqShelfInputs, setByEqShelfInputs] = useState<{ [shelfId: string]: string }>({});
+  const [extraArticleShelves, setExtraArticleShelves] = useState<Array<{ shelfId: string; shelfName: string }>>([]);
+  const [isAddShelfModalOpen, setIsAddShelfModalOpen] = useState<boolean>(false);
+  const [shelfModalSearch, setShelfModalSearch] = useState<string>('');
+  const byEqInputRefs = useRef<{ [shelfId: string]: HTMLInputElement | null }>({});
+  const [cameraTargetShelfId, setCameraTargetShelfId] = useState<string | null>(null);
   const [snFilterTab, setSnFilterTab] = useState<'ALL' | 'UNCOUNTED' | 'COUNTED'>('ALL');
   const [snListSearch, setSnListSearch] = useState<string>('');
   const [snReferenceSearch, setSnReferenceSearch] = useState<string>('');
@@ -111,9 +118,17 @@ export default function InventoryTaskPage() {
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
 
   // Verification: At least 2 distinct participants
-  const participants = attempt?.unit?.inventory?.Inventory_User || [];
-  const uniqueParticipantsCount = new Set(participants.map((p: any) => p.userId)).size;
-  const isMultiUserValid = uniqueParticipantsCount >= 2;
+  const participants =
+    attempt?.unit?.inventory?.Inventory_User ||
+    attempt?.inventory?.Inventory_User ||
+    attempt?.participants ||
+    [];
+  const uniqueParticipantsCount = new Set(
+    participants.map((p: any) => p.userId || p.user?.userId).filter(Boolean)
+  ).size;
+  const isMultiUserValid =
+    uniqueParticipantsCount >= 2 ||
+    (attempt?.inventory?.policyVersion === 2 && attempt?.inventory?.status !== 'DRAFT');
 
   // -------------------------------------------------------------
   // RESOLVED CURRENT ENTITIES
@@ -121,25 +136,42 @@ export default function InventoryTaskPage() {
   // ByEquipment: Current Equipment
   const currentEquipment = useMemo(() => {
     if (isByEquipment) {
+      const targetEqId =
+        attempt?.unit?.equipmentId ||
+        attempt?.equipmentId ||
+        attempt?.equipment?.equipmentId ||
+        attempt?.unit?.equipment?.equipmentId;
+
       const fromScope = scopeDetails?.equipments?.find(
-        (e: any) => e.equipmentId === attempt?.unit?.equipmentId
+        (e: any) => e.equipmentId === targetEqId
       );
       if (fromScope) return fromScope;
 
-      if (attempt?.unit?.equipment) {
-        const eq = attempt.unit.equipment;
+      const rawEq =
+        attempt?.equipment ||
+        attempt?.unit?.equipment ||
+        scopeDetails?.equipments?.[0];
+
+      if (rawEq) {
         return {
-          ...eq,
+          ...rawEq,
+          equipmentId: rawEq.equipmentId || targetEqId || '',
+          equipmentName: rawEq.equipmentName || 'Équipement',
+          hasSerialNumber: !!(
+            rawEq.hasSerialNumber ||
+            (rawEq.serialNumbers && rawEq.serialNumbers.length > 0)
+          ),
           shelves:
-            eq.shelves ||
-            eq.equipmentShelfs?.map((es: any) => ({
+            rawEq.shelves ||
+            attempt?.candidateShelves ||
+            rawEq.equipmentShelfs?.map((es: any) => ({
               shelfId: es.shelfId ?? '',
               shelfName: es.shelf?.shelfName ?? 'Emplacement non défini',
               quantity: es.equipmentQuantity ?? 0,
             })) ||
             [],
           serialNumbers:
-            eq.serialNumbers?.map((sn: any) => ({
+            rawEq.serialNumbers?.map((sn: any) => ({
               serialNumberId: sn.serialNumberId,
               serialNumberCode: sn.serialNumberCode ?? '',
               serialNumberStatus: sn.serialNumberStatus ?? '',
@@ -155,22 +187,28 @@ export default function InventoryTaskPage() {
   // ByShelf: Current Shelf
   const currentShelf = useMemo(() => {
     if (isByShelf) {
+      const targetShelfId =
+        attempt?.unit?.shelfId ||
+        attempt?.shelfId ||
+        attempt?.shelf?.shelfId ||
+        attempt?.unit?.shelf?.shelfId;
+
       const fromScope = scopeDetails?.shelves?.find(
-        (s: any) => s.shelfId === attempt?.unit?.shelfId
+        (s: any) => s.shelfId === targetShelfId
       );
       if (fromScope) return fromScope;
 
-      if (attempt?.unit?.shelf) {
-        const sh = attempt.unit.shelf;
+      const sh = attempt?.shelf || attempt?.unit?.shelf || scopeDetails?.shelves?.[0];
+      if (sh) {
         return {
-          shelfId: sh.shelfId,
+          shelfId: sh.shelfId || targetShelfId || '',
           shelfName: sh.shelfName || 'Étagère',
-          equipments: (sh.equipmentShelfs || []).map((es: any) => ({
-            equipmentId: es.equipmentId ?? '',
-            equipmentName: es.equipment?.equipmentName ?? 'Équipement inconnu',
-            hasSerialNumber: es.equipment?.hasSerialNumber ?? false,
-            quantity: es.equipmentQuantity ?? 0,
-            serialNumbers: (es.equipment?.serialNumbers || []).map((sn: any) => ({
+          equipments: (sh.equipmentShelfs || sh.equipments || []).map((es: any) => ({
+            equipmentId: es.equipmentId ?? es.equipment?.equipmentId ?? '',
+            equipmentName: es.equipment?.equipmentName ?? es.equipmentName ?? 'Équipement inconnu',
+            hasSerialNumber: !!(es.equipment?.hasSerialNumber ?? es.hasSerialNumber ?? false),
+            quantity: es.equipmentQuantity ?? es.quantity ?? 0,
+            serialNumbers: (es.equipment?.serialNumbers || es.serialNumbers || []).map((sn: any) => ({
               serialNumberId: sn.serialNumberId,
               serialNumberCode: sn.serialNumberCode ?? '',
               serialNumberStatus: sn.serialNumberStatus ?? '',
@@ -220,10 +258,42 @@ export default function InventoryTaskPage() {
     });
   }, [allShelfEquipments, scopeDetails, catalogSearch]);
 
-  // ByEquipment Helpers
-  const hasSerialNumber = currentEquipment?.hasSerialNumber ?? false;
-  const equipmentShelves = useMemo(() => currentEquipment?.shelves || [], [currentEquipment]);
-  const allEquipmentSns = useMemo(() => currentEquipment?.serialNumbers || [], [currentEquipment]);
+  // ByEquipment Helpers: Robust Serialized detection
+  const hasSerialNumber = useMemo(() => {
+    if (!isByEquipment) return false;
+    return !!(
+      currentEquipment?.hasSerialNumber ||
+      attempt?.equipment?.hasSerialNumber ||
+      attempt?.unit?.equipment?.hasSerialNumber ||
+      (currentEquipment?.serialNumbers && currentEquipment.serialNumbers.length > 0) ||
+      (attempt?.equipment?.serialNumbers && attempt.equipment.serialNumbers.length > 0)
+    );
+  }, [isByEquipment, currentEquipment, attempt]);
+
+  const equipmentShelves = useMemo(() => {
+    if (currentEquipment?.shelves && currentEquipment.shelves.length > 0) {
+      return currentEquipment.shelves;
+    }
+    if (attempt?.candidateShelves && attempt.candidateShelves.length > 0) {
+      return attempt.candidateShelves;
+    }
+    if (attempt?.equipment?.shelves && attempt.equipment.shelves.length > 0) {
+      return attempt.equipment.shelves;
+    }
+    if (attempt?.unit?.equipment?.shelves && attempt.unit.equipment.shelves.length > 0) {
+      return attempt.unit.equipment.shelves;
+    }
+    return [];
+  }, [currentEquipment, attempt]);
+
+  const allEquipmentSns = useMemo(() => {
+    return (
+      currentEquipment?.serialNumbers ||
+      attempt?.equipment?.serialNumbers ||
+      attempt?.unit?.equipment?.serialNumbers ||
+      []
+    );
+  }, [currentEquipment, attempt]);
 
   const filteredReferenceSns = useMemo(() => {
     if (!snReferenceSearch.trim()) return allEquipmentSns;
@@ -235,45 +305,55 @@ export default function InventoryTaskPage() {
     );
   }, [allEquipmentSns, snReferenceSearch]);
 
-  const otherWarehouseShelves = useMemo(() => {
-    const assignedIds = new Set(equipmentShelves.map((s: any) => s.shelfId));
-    const list: Array<{ shelfId: string; shelfName: string }> = [];
-    for (const eq of scopeDetails?.equipments || []) {
-      for (const sh of eq.shelves || []) {
-        if (sh.shelfId && !assignedIds.has(sh.shelfId)) {
-          assignedIds.add(sh.shelfId);
-          list.push({ shelfId: sh.shelfId, shelfName: sh.shelfName });
-        }
+  const allDisplayShelves = useMemo(() => {
+    const map = new Map<string, { shelfId: string; shelfName: string }>();
+    for (const sh of equipmentShelves) {
+      if (sh.shelfId) {
+        map.set(sh.shelfId, { shelfId: sh.shelfId, shelfName: sh.shelfName || 'Étagère' });
       }
     }
-    return list;
-  }, [equipmentShelves, scopeDetails]);
+    for (const sh of extraArticleShelves) {
+      if (sh.shelfId && !map.has(sh.shelfId)) {
+        map.set(sh.shelfId, { shelfId: sh.shelfId, shelfName: sh.shelfName || 'Étagère' });
+      }
+    }
+    for (const sn of countedSns) {
+      if (sn.shelfId && !map.has(sn.shelfId)) {
+        const found = (scopeDetails?.allShelves || attempt?.allShelves || []).find(
+          (s: any) => s.shelfId === sn.shelfId
+        );
+        map.set(sn.shelfId, {
+          shelfId: sn.shelfId,
+          shelfName: found?.shelfName || 'Autre emplacement',
+        });
+      }
+    }
+    for (const sId of Object.keys(shelfCounts)) {
+      if (sId && !map.has(sId)) {
+        const found = (scopeDetails?.allShelves || attempt?.allShelves || []).find(
+          (s: any) => s.shelfId === sId
+        );
+        map.set(sId, {
+          shelfId: sId,
+          shelfName: found?.shelfName || 'Autre emplacement',
+        });
+      }
+    }
+    // Fallback if none found
+    if (map.size === 0 && attempt?.unit?.shelfId) {
+      map.set(attempt.unit.shelfId, {
+        shelfId: attempt.unit.shelfId,
+        shelfName: attempt.unit.shelf?.shelfName || 'Emplacement principal',
+      });
+    }
+    return Array.from(map.values());
+  }, [equipmentShelves, extraArticleShelves, countedSns, shelfCounts, scopeDetails, attempt]);
 
-  const selectedShelfObj = useMemo(() => {
-    return equipmentShelves.find((s: any) => s.shelfId === selectedShelfId);
-  }, [equipmentShelves, selectedShelfId]);
-
-  const expectedSnsForSelectedShelf = useMemo(() => {
-    if (!selectedShelfId) return allEquipmentSns;
-    return allEquipmentSns.filter((s: any) => s.shelfId === selectedShelfId);
-  }, [allEquipmentSns, selectedShelfId]);
-
-  const countedSnsForSelectedShelf = useMemo(() => {
-    if (!selectedShelfId) return countedSns;
-    return countedSns.filter((s) => s.shelfId === selectedShelfId);
-  }, [countedSns, selectedShelfId]);
-
-  const filteredChecklistSns = useMemo(() => {
-    const search = snListSearch.trim().toLowerCase();
-    const countedCodes = new Set(countedSns.map((s) => s.code.toLowerCase()));
-    return expectedSnsForSelectedShelf.filter((sn: any) => {
-      if (search && !sn.serialNumberCode?.toLowerCase().includes(search)) return false;
-      const isCounted = countedCodes.has(sn.serialNumberCode?.toLowerCase());
-      if (snFilterTab === 'COUNTED') return isCounted;
-      if (snFilterTab === 'UNCOUNTED') return !isCounted;
-      return true;
-    });
-  }, [expectedSnsForSelectedShelf, snListSearch, snFilterTab, countedSns]);
+  const availableOtherShelves = useMemo(() => {
+    const presentIds = new Set(allDisplayShelves.map((s) => s.shelfId));
+    const all = scopeDetails?.allShelves || attempt?.allShelves || [];
+    return all.filter((s: any) => !presentIds.has(s.shelfId));
+  }, [allDisplayShelves, scopeDetails, attempt]);
 
   const totalNonSnCounted = useMemo(() => {
     return Object.values(shelfCounts).reduce((sum, n) => sum + (Number(n) || 0), 0);
@@ -283,44 +363,44 @@ export default function InventoryTaskPage() {
   // RESTORE SAVED DRAFTS / ORDERS
   // -------------------------------------------------------------
   useEffect(() => {
-    if (!attempt?.orders || attempt.orders.length === 0) {
-      if (isByEquipment && !selectedShelfId && equipmentShelves.length > 0) {
-        setSelectedShelfId(equipmentShelves[0].shelfId);
-      }
+    const savedObs =
+      attempt?.orders && attempt.orders.length > 0
+        ? attempt.orders
+        : (attempt?.draftData?.observations || []);
+
+    if (savedObs.length === 0) {
       return;
     }
 
-    if (attempt.orders[0]?.notes) {
-      setNotes(attempt.orders[0].notes);
+    if (savedObs[0]?.notes) {
+      setNotes(savedObs[0].notes);
     }
 
     if (isByEquipment) {
       if (hasSerialNumber) {
-        const restored = attempt.orders
-          .filter((o: any) => (o.quantityCalculated ?? 0) > 0)
+        const restored = savedObs
+          .filter((o: any) => (o.quantityCalculated ?? 0) > 0 || o.scannedSerialCode || o.serialNumberId)
           .map((o: any) => {
             const found = allEquipmentSns.find((s: any) => s.serialNumberId === o.serialNumberId);
             return {
               serialNumberId: o.serialNumberId || undefined,
               code:
+                o.scannedSerialCode ||
                 o.serialNumber?.serialNumberCode ||
                 found?.serialNumberCode ||
                 o.unknownItemEvidence ||
                 'S/N ' + (o.serialNumberId?.slice(0, 8) || 'inconnu'),
               shelfId: o.shelfId || undefined,
-              isNew: !o.serialNumberId && !!o.unknownItemEvidence,
+              isNew: !o.serialNumberId && (!!o.unknownItemEvidence || !!o.isUnexpected),
             };
           });
         if (restored.length > 0) setCountedSns(restored);
       } else {
         const restoredCounts: { [shelfId: string]: number } = {};
-        attempt.orders.forEach((o: any) => {
+        savedObs.forEach((o: any) => {
           if (o.shelfId) restoredCounts[o.shelfId] = o.quantityCalculated ?? 0;
         });
         setShelfCounts(restoredCounts);
-      }
-      if (attempt.orders[0]?.shelfId) {
-        setSelectedShelfId(attempt.orders[0].shelfId);
       }
     } else if (isByShelf) {
       // Restore ByShelf orders: map per equipment
@@ -330,20 +410,21 @@ export default function InventoryTaskPage() {
       } = {};
       const extraEquipmentsMap = new Map<string, any>();
 
-      attempt.orders.forEach((o: any) => {
+      savedObs.forEach((o: any) => {
         const eqId = o.equipmentId;
         if (!eqId) return;
 
-        if (o.serialNumberId || o.unknownItemEvidence) {
+        if (o.serialNumberId || o.scannedSerialCode || o.unknownItemEvidence) {
           if (!restoredSns[eqId]) restoredSns[eqId] = [];
           const code =
+            o.scannedSerialCode ||
             o.serialNumber?.serialNumberCode ||
             o.unknownItemEvidence ||
             'S/N ' + (o.serialNumberId?.slice(0, 8) || 'inconnu');
           restoredSns[eqId].push({
             serialNumberId: o.serialNumberId || undefined,
             code,
-            isNew: !o.serialNumberId && !!o.unknownItemEvidence,
+            isNew: !o.serialNumberId && (!!o.unknownItemEvidence || !!o.isUnexpected),
           });
         } else {
           restoredCounts[eqId] = (restoredCounts[eqId] || 0) + (o.quantityCalculated ?? 0);
@@ -371,6 +452,7 @@ export default function InventoryTaskPage() {
   }, [
     attempt?.attemptId,
     attempt?.orders,
+    attempt?.draftData,
     isByEquipment,
     isByShelf,
     hasSerialNumber,
@@ -527,8 +609,12 @@ export default function InventoryTaskPage() {
   // -------------------------------------------------------------
   // CAMERA SCANNER (QR & BARCODE) IMPLEMENTATION
   // -------------------------------------------------------------
-  const startCameraScanner = async (targetEquipmentId?: string) => {
-    setCameraTargetEquipmentId(targetEquipmentId || null);
+  const startCameraScanner = async (targetId?: string) => {
+    if (isByShelf) {
+      setCameraTargetEquipmentId(targetId || null);
+    } else {
+      setCameraTargetShelfId(targetId || null);
+    }
     setIsCameraScannerOpen(true);
     setIsCameraActive(true);
 
@@ -548,10 +634,13 @@ export default function InventoryTaskPage() {
                 const text = result.getText();
                 if (text) {
                   playBeep();
-                  if (targetEquipmentId) {
-                    handleAddShelfArticleSn(targetEquipmentId, text);
+                  if (isByShelf && targetId) {
+                    handleAddShelfArticleSn(targetId, text);
                   } else if (isByEquipment) {
-                    handleAddSerialNumber(text);
+                    const sId = targetId || cameraTargetShelfId || allDisplayShelves[0]?.shelfId;
+                    if (sId) {
+                      handleAddShelfSerialNumber(sId, text);
+                    }
                   }
                   toast.success(`Code scanné: ${text}`);
                 }
@@ -572,7 +661,6 @@ export default function InventoryTaskPage() {
   const stopCameraScanner = () => {
     if (codeReaderRef.current) {
       try {
-        // Stop decoding and release camera stream
         (codeReaderRef.current as any).reset?.();
       } catch {}
       codeReaderRef.current = null;
@@ -585,6 +673,7 @@ export default function InventoryTaskPage() {
     setIsCameraActive(false);
     setIsCameraScannerOpen(false);
     setCameraTargetEquipmentId(null);
+    setCameraTargetShelfId(null);
   };
 
   // Cleanup camera scanner on unmount
@@ -597,16 +686,15 @@ export default function InventoryTaskPage() {
   // -------------------------------------------------------------
   // HANDLERS FOR BY-EQUIPMENT (PAR ARTICLE)
   // -------------------------------------------------------------
-  const handleUpdateCurrentShelfCount = (val: number) => {
-    if (!selectedShelfId) return;
+  const handleUpdateCurrentShelfCount = (shelfId: string, val: number) => {
     setShelfCounts((prev) => ({
       ...prev,
-      [selectedShelfId]: Math.max(0, val),
+      [shelfId]: Math.max(0, val),
     }));
   };
 
-  const handleAddSerialNumber = (rawCode?: string) => {
-    const code = (rawCode || scanInput).trim();
+  const handleAddShelfSerialNumber = (shelfId: string, rawCode?: string) => {
+    const code = (rawCode || byEqShelfInputs[shelfId] || '').trim();
     if (!code) return;
 
     const codes = code.split(/[\r\n,;\s]+/).filter(Boolean);
@@ -632,7 +720,7 @@ export default function InventoryTaskPage() {
         next.push({
           serialNumberId: match?.serialNumberId,
           code: match?.serialNumberCode || c,
-          shelfId: selectedShelfId || match?.shelfId || undefined,
+          shelfId,
           isNew: !match,
         });
 
@@ -643,20 +731,25 @@ export default function InventoryTaskPage() {
       return next;
     });
 
-    setScanInput('');
+    setByEqShelfInputs((prev) => ({ ...prev, [shelfId]: '' }));
+    setTimeout(() => {
+      byEqInputRefs.current[shelfId]?.focus();
+    }, 50);
 
+    const targetShelf = allDisplayShelves.find((s) => s.shelfId === shelfId);
+    const shelfName = targetShelf?.shelfName || 'cet emplacement';
     if (added > 0) {
       playBeep();
-      toast.success(`${added} valeur(s) de N° de série ajoutée(s)`);
+      toast.success(`${added} N° de série ajouté(s) sur ${shelfName}`);
     }
     if (duplicates > 0) {
       toast.info(`${duplicates} N° de série déjà scanné(s)`);
     }
   };
 
-  const handleToggleCounted = (sn: any) => {
+  const handleToggleShelfCounted = (shelfId: string, sn: any) => {
+    const code = sn.serialNumberCode || sn.code;
     setCountedSns((prev) => {
-      const code = sn.serialNumberCode || sn.code;
       const idx = prev.findIndex(
         (s) =>
           (sn.serialNumberId && s.serialNumberId === sn.serialNumberId) ||
@@ -674,7 +767,7 @@ export default function InventoryTaskPage() {
           {
             serialNumberId: sn.serialNumberId,
             code,
-            shelfId: selectedShelfId || sn.shelfId || undefined,
+            shelfId,
             isNew: false,
           },
         ];
@@ -682,23 +775,20 @@ export default function InventoryTaskPage() {
     });
   };
 
-  const handleRemoveCounted = (code: string) => {
-    setCountedSns((prev) => prev.filter((s) => s.code !== code));
-  };
-
-  const handleBatchCheckAllForShelf = () => {
-    if (expectedSnsForSelectedShelf.length === 0) return;
+  const handleBatchCheckAllForShelf = (shelfId: string) => {
+    const expectedOnShelf = allEquipmentSns.filter((s: any) => s.shelfId === shelfId);
+    if (expectedOnShelf.length === 0) return;
 
     setCountedSns((prev) => {
       const next = [...prev];
       const existing = new Set(next.map((s) => s.code.toLowerCase()));
 
-      for (const sn of expectedSnsForSelectedShelf) {
+      for (const sn of expectedOnShelf) {
         if (!existing.has(sn.serialNumberCode.toLowerCase())) {
           next.push({
             serialNumberId: sn.serialNumberId,
             code: sn.serialNumberCode,
-            shelfId: selectedShelfId || sn.shelfId || undefined,
+            shelfId,
             isNew: false,
           });
           existing.add(sn.serialNumberCode.toLowerCase());
@@ -708,17 +798,18 @@ export default function InventoryTaskPage() {
     });
 
     playBeep();
-    toast.success(`Tous les N° de série attendus sur cet emplacement ont été validés`);
+    const targetShelf = allDisplayShelves.find((s) => s.shelfId === shelfId);
+    toast.success(`Tous les N° de série attendus sur ${targetShelf?.shelfName || 'ce rayon'} ont été validés`);
   };
 
-  const handleClearCountedForShelf = () => {
-    if (selectedShelfId) {
-      setCountedSns((prev) => prev.filter((s) => s.shelfId !== selectedShelfId));
-      toast.info(`Comptage réinitialisé pour cet emplacement`);
-    } else {
-      setCountedSns([]);
-      toast.info(`Tous les numéros de série ont été retirés`);
-    }
+  const handleClearCountedForShelf = (shelfId: string) => {
+    setCountedSns((prev) => prev.filter((s) => s.shelfId !== shelfId));
+    const targetShelf = allDisplayShelves.find((s) => s.shelfId === shelfId);
+    toast.info(`Comptage réinitialisé pour ${targetShelf?.shelfName || 'cet emplacement'}`);
+  };
+
+  const handleRemoveCounted = (code: string) => {
+    setCountedSns((prev) => prev.filter((s) => s.code !== code));
   };
 
   // -------------------------------------------------------------
@@ -732,7 +823,6 @@ export default function InventoryTaskPage() {
 
     if (isByShelf) {
       // INVENTORY BY LOCATION (PAR EMPLACEMENT):
-      // Observation per article in this shelf
       const targetShelfId =
         (isValidUuid(currentShelf?.shelfId) ? currentShelf.shelfId : null) ||
         (isValidUuid(attempt?.unit?.shelfId) ? attempt.unit.shelfId : undefined);
@@ -745,6 +835,7 @@ export default function InventoryTaskPage() {
               equipmentId: eq.equipmentId,
               shelfId: targetShelfId,
               quantityCalculated: 0,
+              isExplicitZero: true,
               notes: notes.trim() || undefined,
             });
           } else {
@@ -753,8 +844,10 @@ export default function InventoryTaskPage() {
                 equipmentId: eq.equipmentId,
                 shelfId: targetShelfId,
                 serialNumberId: isValidUuid(sn.serialNumberId) ? sn.serialNumberId : undefined,
+                scannedSerialCode: sn.code,
                 unknownItemEvidence: sn.isNew ? sn.code : undefined,
                 quantityCalculated: 1,
+                isUnexpected: !!sn.isNew,
                 notes: sn.isNew
                   ? `S/N scanné non répertorié sur ${currentShelf?.shelfName || 'étagère'}: ${sn.code}`
                   : (notes.trim() || undefined),
@@ -767,34 +860,45 @@ export default function InventoryTaskPage() {
             equipmentId: eq.equipmentId,
             shelfId: targetShelfId,
             quantityCalculated: qty,
+            isExplicitZero: qty === 0,
             notes: notes.trim() || undefined,
           });
         }
       }
     } else {
       // INVENTORY BY EQUIPMENT (PAR ARTICLE):
+      const eqId =
+        currentEquipment?.equipmentId ||
+        attempt?.equipment?.equipmentId ||
+        attempt?.unit?.equipmentId ||
+        attempt?.equipmentId ||
+        '';
+
       const fallbackShelfId =
-        (isValidUuid(selectedShelfId) ? selectedShelfId : null) ||
-        (isValidUuid(equipmentShelves[0]?.shelfId) ? equipmentShelves[0].shelfId : null) ||
+        allDisplayShelves[0]?.shelfId ||
+        attempt?.candidateShelves?.[0]?.shelfId ||
         (isValidUuid(attempt?.unit?.shelfId) ? attempt.unit.shelfId : undefined);
 
       if (hasSerialNumber) {
         if (countedSns.length === 0) {
           observations = [
             {
-              equipmentId: currentEquipment?.equipmentId || attempt?.unit?.equipmentId,
+              equipmentId: eqId,
               shelfId: fallbackShelfId,
               quantityCalculated: 0,
+              isExplicitZero: true,
               notes: notes.trim() || undefined,
             },
           ];
         } else {
           observations = countedSns.map((sn) => ({
-            equipmentId: currentEquipment?.equipmentId || attempt?.unit?.equipmentId,
+            equipmentId: eqId,
             shelfId: (isValidUuid(sn.shelfId) ? sn.shelfId : null) || fallbackShelfId,
             serialNumberId: isValidUuid(sn.serialNumberId) ? sn.serialNumberId : undefined,
+            scannedSerialCode: sn.code,
             unknownItemEvidence: sn.isNew ? sn.code : undefined,
             quantityCalculated: 1,
+            isUnexpected: !!sn.isNew,
             notes: sn.isNew
               ? `S/N scanné non répertorié: ${sn.code}`
               : (notes.trim() || undefined),
@@ -806,17 +910,19 @@ export default function InventoryTaskPage() {
         );
         if (entries.length > 0) {
           observations = entries.map(([shelfId, qty]) => ({
-            equipmentId: currentEquipment?.equipmentId || attempt?.unit?.equipmentId,
+            equipmentId: eqId,
             shelfId: shelfId,
             quantityCalculated: Number(qty) || 0,
+            isExplicitZero: Number(qty) === 0,
             notes: notes.trim() || undefined,
           }));
         } else {
           observations = [
             {
-              equipmentId: currentEquipment?.equipmentId || attempt?.unit?.equipmentId,
+              equipmentId: eqId,
               shelfId: fallbackShelfId,
-              quantityCalculated: Number(shelfCounts[selectedShelfId]) || 0,
+              quantityCalculated: 0,
+              isExplicitZero: true,
               notes: notes.trim() || undefined,
             },
           ];
@@ -862,11 +968,15 @@ export default function InventoryTaskPage() {
   }
 
   // Common Header Titles
-  const targetShelfName = currentShelf?.shelfName || attempt?.unit?.shelf?.shelfName || 'Étagère';
+  const targetShelfName =
+    currentShelf?.shelfName ||
+    attempt?.unit?.shelf?.shelfName ||
+    attempt?.shelf?.shelfName ||
+    'Étagère';
   const targetEquipmentName =
     currentEquipment?.equipmentName ||
     attempt?.unit?.equipment?.equipmentName ||
-    attempt?.unit?.shelf?.shelfName ||
+    attempt?.equipment?.equipmentName ||
     'Article';
 
   // Stats for ByShelf
@@ -897,7 +1007,7 @@ export default function InventoryTaskPage() {
             <div>
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#383330] text-[#aea69c] border border-[#3f3a36]">
-                  {attempt?.unit?.inventory?.title || 'Inventaire'}
+                  {attempt?.unit?.inventory?.title || attempt?.inventory?.title || 'Inventaire'}
                 </span>
                 <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/30">
                   {isByShelf ? 'Mode : Par Emplacement (Rayon)' : 'Mode : Par Article'}
@@ -910,7 +1020,7 @@ export default function InventoryTaskPage() {
                   <span
                     className={`text-[11px] font-mono px-2 py-0.5 rounded border ${
                       hasSerialNumber
-                        ? 'bg-purple-950/40 text-purple-300 border-purple-800/50'
+                        ? 'bg-[#383330] text-[#f7f5f0] border-[#3f3a36]'
                         : 'bg-[#383330] text-[#aea69c] border-[#3f3a36]'
                     }`}
                   >
@@ -994,7 +1104,7 @@ export default function InventoryTaskPage() {
                     <div className="px-3 py-1.5 rounded-[3px] bg-[#26221f] border border-[#3f3a36] text-right">
                       <span className="text-[10px] text-[#aea69c] block font-mono">UNITÉS PHYSIQUES</span>
                       <span className="text-sm font-semibold text-[#10b981] font-mono">
-                        {totalPhysicalUnitsCounted} / {totalTheoreticalUnits} attendues
+                        {totalPhysicalUnitsCounted} comptée(s)
                       </span>
                     </div>
                   </div>
@@ -1077,7 +1187,7 @@ export default function InventoryTaskPage() {
                             <div
                               className={`p-2 rounded-[3px] shrink-0 border ${
                                 isSerialized
-                                  ? 'bg-purple-950/40 text-purple-300 border-purple-800/50'
+                                  ? 'bg-[#383330] text-[#f7f5f0] border-[#3f3a36]'
                                   : 'bg-[#10b981]/15 text-[#10b981] border-[#10b981]/30'
                               }`}
                             >
@@ -1089,7 +1199,7 @@ export default function InventoryTaskPage() {
                                 <span
                                   className={`text-[10px] font-mono px-2 py-0.2 rounded border font-medium ${
                                     isSerialized
-                                      ? 'bg-purple-950/40 text-purple-300 border-purple-800/40'
+                                      ? 'bg-[#383330] text-[#f7f5f0] border-[#3f3a36]'
                                       : 'bg-[#383330] text-[#aea69c] border-[#3f3a36]'
                                   }`}
                                 >
@@ -1209,8 +1319,8 @@ export default function InventoryTaskPage() {
                             <div className="space-y-3.5 p-3.5 bg-[#1f1b18] border border-[#383330] rounded-[3px]">
                               {/* Serial Notice */}
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-[#2a2522] border border-[#383330] rounded-[3px]">
-                                <span className="text-xs font-mono text-purple-200 flex items-center gap-1.5">
-                                  <Barcode className="w-4 h-4 text-purple-400" />
+                                <span className="text-xs font-mono text-[#f7f5f0] flex items-center gap-1.5">
+                                  <Barcode className="w-4 h-4 text-[#10b981]" />
                                   Traçabilité unitaire par N° de série :
                                 </span>
                                 <span className="text-xs font-mono px-2.5 py-0.5 rounded bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]">
@@ -1259,7 +1369,7 @@ export default function InventoryTaskPage() {
                                     className="px-3 h-9 bg-[#383330] hover:bg-[#3f3a36] text-[#f7f5f0] border border-[#3f3a36] text-xs font-mono rounded-[3px] transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
                                     title="Scanner avec la caméra du smartphone"
                                   >
-                                    <Camera className="w-3.5 h-3.5 text-purple-400" />
+                                    <Camera className="w-3.5 h-3.5 text-[#10b981]" />
                                     <span className="hidden sm:inline">Caméra</span>
                                   </button>
                                 </div>
@@ -1394,13 +1504,9 @@ export default function InventoryTaskPage() {
                     <span className="text-[#aea69c]">Articles inventoriés</span>
                     <span className="font-mono font-semibold text-[#f7f5f0]">{totalShelfArticles}</span>
                   </div>
-                  <div className="flex justify-between items-center py-1 border-b border-[#383330]/50">
-                    <span className="text-[#aea69c]">Total unités physiques</span>
-                    <span className="font-mono font-bold text-[#10b981]">{totalPhysicalUnitsCounted}</span>
-                  </div>
                   <div className="flex justify-between items-center py-1">
-                    <span className="text-[#aea69c]">Stock théorique total</span>
-                    <span className="font-mono text-[#aea69c]">{totalTheoreticalUnits}</span>
+                    <span className="text-[#aea69c]">Total unités physiques comptées</span>
+                    <span className="font-mono font-bold text-[#10b981]">{totalPhysicalUnitsCounted}</span>
                   </div>
                 </div>
               </div>
@@ -1413,7 +1519,7 @@ export default function InventoryTaskPage() {
                   disabled={!isMultiUserValid}
                   onClick={async () => {
                     try {
-                      await submitTask({ taskId, data: buildPayload(true) });
+                      await saveDraft({ taskId, data: buildPayload(true) });
                       toast.success('Brouillon sauvegardé avec succès');
                     } catch (e: any) {
                       toast.error(e?.response?.data?.message || 'Erreur lors de la sauvegarde');
@@ -1469,7 +1575,7 @@ export default function InventoryTaskPage() {
                         : 'bg-red-950 text-red-300 border border-red-800'
                     }`}
                   >
-                    {uniqueParticipantsCount} / 2 min
+                    {uniqueParticipantsCount} / 3 (V2)
                   </span>
                 </div>
                 <div className="space-y-1.5">
@@ -1485,7 +1591,11 @@ export default function InventoryTaskPage() {
                         {p.User?.userName || p.User?.userEmail || p.userId.slice(0, 8)}
                       </span>
                       <span className="text-[10px] font-mono text-[#aea69c]">
-                        {p.sequence === 0 ? 'Contrôleur (Comptage)' : '3ème Contrôleur (Arbitrage)'}
+                        {p.sequence === 0
+                          ? '1er Contrôleur'
+                          : p.sequence === 1
+                          ? '2ème Contrôleur'
+                          : 'Contrôleur Final'}
                       </span>
                     </div>
                   ))}
@@ -1516,16 +1626,16 @@ export default function InventoryTaskPage() {
                     </div>
                     <h2 className="text-lg font-semibold text-[#f7f5f0]">{targetEquipmentName}</h2>
                     <p className="text-[11px] font-mono text-[#aea69c]">
-                      ID: {currentEquipment?.equipmentId || attempt?.unit?.equipmentId}
+                      ID: {currentEquipment?.equipmentId || attempt?.equipment?.equipmentId || attempt?.unit?.equipmentId}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="px-3 py-1.5 rounded-[3px] bg-[#26221f] border border-[#3f3a36] text-right">
-                    <span className="text-[10px] text-[#aea69c] block font-mono">STOCK THÉORIQUE ATTENDU</span>
-                    <span className="text-sm font-semibold text-[#f7f5f0] font-mono">
-                      {currentEquipment?.totalQuantity ?? currentEquipment?.equipmentQuantity ?? 0} unités
+                    <span className="text-[10px] text-[#aea69c] block font-mono">PROTOCOLE</span>
+                    <span className="text-xs font-semibold text-[#10b981] font-mono">
+                      Comptage à l'aveugle
                     </span>
                   </div>
                   <div className="px-3 py-1.5 rounded-[3px] bg-[#26221f] border border-[#3f3a36] text-right">
@@ -1542,282 +1652,353 @@ export default function InventoryTaskPage() {
                 </div>
               </div>
 
-              {/* Shelves Breakdown */}
+              {/* Shelves Overview & Quick Jump */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-[#aea69c] uppercase tracking-wider flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5 text-[#10b981]" />
-                    Emplacements où se trouve cet article :
+                    Emplacements où chercher cet article ({allDisplayShelves.length}) :
                   </span>
-                  <span className="text-[11px] text-[#aea69c] font-mono">
-                    {equipmentShelves.length} emplacement(s) répertorié(s)
-                  </span>
+                  {availableOtherShelves.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={!isMultiUserValid}
+                      onClick={() => setIsAddShelfModalOpen(true)}
+                      className="text-[11px] font-mono text-[#10b981] hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" /> Ajouter un autre emplacement
+                    </button>
+                  )}
                 </div>
 
-                {equipmentShelves.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                    {equipmentShelves.map((sh: any) => {
-                      const isSelected = selectedShelfId === sh.shelfId;
-                      const countedOnThisShelf = hasSerialNumber
-                        ? countedSns.filter((s) => s.shelfId === sh.shelfId).length
-                        : (shelfCounts[sh.shelfId] ?? 0);
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                  {allDisplayShelves.map((sh: any) => {
+                    const count = hasSerialNumber
+                      ? countedSns.filter((s) => s.shelfId === sh.shelfId).length
+                      : (shelfCounts[sh.shelfId] ?? 0);
 
-                      return (
-                        <button
-                          key={`ref-shelf-${sh.shelfId}`}
-                          type="button"
-                          onClick={() => setSelectedShelfId(sh.shelfId)}
-                          className={`text-left p-3 rounded-[3px] border transition-all cursor-pointer flex items-center justify-between ${
-                            isSelected
-                              ? 'border-[#10b981] bg-[#10b981]/15 text-[#f7f5f0] ring-1 ring-[#10b981]/50'
-                              : 'border-[#3f3a36] bg-[#26221f] hover:border-[#aea69c] text-[#aea69c]'
-                          }`}
-                        >
-                          <div>
-                            <span className="text-xs font-semibold text-[#f7f5f0] block flex items-center gap-1.5">
-                              <Layers className="w-3.5 h-3.5 text-[#10b981]" />
-                              {sh.shelfName}
-                            </span>
-                            <span className="text-[10px] text-[#aea69c] font-mono">
-                              {isSelected ? '✓ Sélectionnée pour saisie' : 'Cliquer pour observer'}
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-xs font-mono px-2 py-0.5 rounded bg-[#383330] text-[#f7f5f0] border border-[#3f3a36] block">
-                              {sh.quantity} attendus
-                            </span>
-                            <span className="text-[10px] font-mono text-[#10b981] block mt-0.5">
-                              {countedOnThisShelf} compté(s)
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="p-3 bg-[#26221f] border border-[#3f3a36] rounded-[3px] text-xs text-[#aea69c]">
-                    Aucun emplacement spécifique défini.
-                  </div>
-                )}
+                    return (
+                      <button
+                        key={`ref-pill-${sh.shelfId}`}
+                        type="button"
+                        onClick={() => {
+                          const el = document.getElementById(`shelf-card-${sh.shelfId}`);
+                          if (el) {
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }
+                          setTimeout(() => byEqInputRefs.current[sh.shelfId]?.focus(), 200);
+                        }}
+                        className="text-left p-3 rounded-[3px] border border-[#3f3a36] bg-[#26221f] hover:border-[#10b981] transition-all cursor-pointer flex items-center justify-between group"
+                      >
+                        <div>
+                          <span className="text-xs font-semibold text-[#f7f5f0] flex items-center gap-1.5 group-hover:text-[#10b981] transition-colors">
+                            <Layers className="w-3.5 h-3.5 text-[#10b981]" />
+                            {sh.shelfName}
+                          </span>
+                          <span className="text-[10px] text-[#aea69c] font-mono block mt-0.5">
+                            Cliquer pour aller à ce rayon
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded ${
+                              count > 0
+                                ? 'bg-[#10b981]/25 text-[#10b981] font-bold border border-[#10b981]/40'
+                                : 'text-[#aea69c] bg-[#383330]'
+                            }`}
+                          >
+                            {count} {hasSerialNumber ? 'S/N' : 'u.'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </section>
 
-            {/* ByEquipment Observation Form */}
+            {/* ByEquipment Observation Cards (Shelf by Shelf) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
               <div className="md:col-span-2 space-y-6">
-                <section className="space-y-4 p-5 rounded-[4px] border border-[#3f3a36] bg-[#2f2a26]">
-                  <div className="flex justify-between items-center pb-2 border-b border-[#3f3a36]">
-                    <h2 className="text-sm font-semibold text-[#f7f5f0] flex items-center gap-2">
-                      <Barcode className="w-4 h-4 text-[#10b981]" />
-                      Enregistrer une Observation Physique
-                    </h2>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#383330] text-[#aea69c]">
-                      Comptage Indépendant
-                    </span>
-                  </div>
+                {allDisplayShelves.map((sh: any) => {
+                  const countedOnShelf = countedSns.filter((s) => s.shelfId === sh.shelfId);
+                  const expectedOnShelf = allEquipmentSns.filter((s: any) => s.shelfId === sh.shelfId);
 
-                  <div className="space-y-4">
-                    <div className="p-4 border border-[#3f3a36] rounded-[3px] bg-[#26221f] space-y-4">
-                      {/* Target Article Notice */}
-                      <div className="space-y-2 pb-3 border-b border-[#383330]">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs font-mono text-[#aea69c]">
-                          <span>Élément cible :</span>
-                          <span className="text-[#f7f5f0] font-semibold text-sm">{targetEquipmentName}</span>
+                  return (
+                    <section
+                      key={`shelf-section-${sh.shelfId}`}
+                      id={`shelf-card-${sh.shelfId}`}
+                      className="p-5 rounded-[4px] border border-[#3f3a36] bg-[#2f2a26] space-y-4 shadow-sm"
+                    >
+                      {/* Shelf Card Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#3f3a36]">
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-2 rounded bg-[#10b981]/15 text-[#10b981] border border-[#10b981]/30">
+                            <Layers className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-semibold text-[#f7f5f0] flex items-center gap-2">
+                              {sh.shelfName}
+                            </h3>
+                            <p className="text-[10px] font-mono text-[#aea69c]">
+                              Saisie unitaire pour cet emplacement
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono px-2.5 py-1 rounded bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]">
+                            {hasSerialNumber ? (
+                              <>
+                                S/N saisis :{' '}
+                                <strong className="text-[#10b981]">{countedOnShelf.length}</strong>
+                              </>
+                            ) : (
+                              <>
+                                Quantité :{' '}
+                                <strong className="text-[#10b981]">{shelfCounts[sh.shelfId] || 0}</strong>
+                              </>
+                            )}
+                          </span>
+                          {countedOnShelf.length > 0 && (
+                            <button
+                              type="button"
+                              disabled={!isMultiUserValid}
+                              onClick={() => handleClearCountedForShelf(sh.shelfId)}
+                              className="text-[11px] font-mono px-2 py-1 rounded bg-[#383330] hover:bg-red-900/30 text-red-400 border border-[#3f3a36] transition-colors cursor-pointer flex items-center gap-1"
+                              title="Effacer les numéros saisis sur ce rayon"
+                            >
+                              <Trash2 className="w-3 h-3" /> Réinitialiser
+                            </button>
+                          )}
                         </div>
                       </div>
 
-                      {/* Shelf Selector Dropdown */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-mono text-[#aea69c] uppercase">
-                          EMPLACEMENT OBSERVÉ
-                        </label>
-                        <select
-                          disabled={!isMultiUserValid}
-                          value={selectedShelfId}
-                          onChange={(e) => setSelectedShelfId(e.target.value)}
-                          className="w-full h-9 bg-[#383330] border border-[#3f3a36] rounded-[3px] px-3 text-xs focus:outline-none focus:border-[#aea69c] transition-colors text-[#f7f5f0] disabled:opacity-50 font-mono"
-                        >
-                          <option value="">-- Sélectionner l'emplacement observé --</option>
-                          {equipmentShelves.length > 0 && (
-                            <optgroup label="Emplacements de cet article">
-                              {equipmentShelves.map((sh: any) => (
-                                <option key={`opt-eq-${sh.shelfId}`} value={sh.shelfId}>
-                                  {sh.shelfName} ({sh.quantity} unités attendues)
-                                </option>
-                              ))}
-                            </optgroup>
-                          )}
-                          {otherWarehouseShelves.length > 0 && (
-                            <optgroup label="Autres emplacements du magasin">
-                              {otherWarehouseShelves.map((sh: any) => (
-                                <option key={`opt-oth-${sh.shelfId}`} value={sh.shelfId}>
-                                  {sh.shelfName}
-                                </option>
-                              ))}
-                            </optgroup>
-                          )}
-                        </select>
-                      </div>
-
-                      {/* Non-Serialized Input */}
-                      {!hasSerialNumber ? (
-                        <div className="space-y-2 p-3.5 bg-[#2a2522] border border-[#3f3a36] rounded-[3px]">
-                          <div className="flex items-center justify-between">
-                            <label className="text-[10px] font-mono text-[#aea69c] uppercase flex items-center gap-1.5">
-                              <Package className="w-3.5 h-3.5 text-[#10b981]" />
-                              QUANTITÉ OBSERVÉE (COMPTÉE PHYSIQUEMENT)
+                      {/* Content for this shelf */}
+                      {hasSerialNumber ? (
+                        <div className="space-y-4">
+                          {/* Serial Number Input for this shelf */}
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono text-[#aea69c] uppercase flex items-center gap-1">
+                              <Barcode className="w-3.5 h-3.5 text-[#10b981]" />
+                              SCANNER OU SAISIR LE NUMÉRO DE SÉRIE SUR {sh.shelfName.toUpperCase()}
                             </label>
-                            {selectedShelfObj && (
-                              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#383330] text-[#aea69c] border border-[#3f3a36]">
-                                {selectedShelfObj.quantity} attendus sur cet emplacement
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min="0"
-                              disabled={!isMultiUserValid || !selectedShelfId}
-                              value={shelfCounts[selectedShelfId] ?? ''}
-                              placeholder={selectedShelfObj ? String(selectedShelfObj.quantity) : '0'}
-                              onChange={(e) =>
-                                handleUpdateCurrentShelfCount(
-                                  Math.max(0, parseInt(e.target.value, 10) || 0)
-                                )
-                              }
-                              className="flex-1 h-10 bg-[#383330] border border-[#3f3a36] rounded-[3px] px-3 text-base font-mono focus:outline-none focus:border-[#10b981] transition-colors text-[#f7f5f0] disabled:opacity-50"
-                            />
-                            {selectedShelfObj && (
+                            <div className="flex gap-2">
+                              <input
+                                ref={(el) => { byEqInputRefs.current[sh.shelfId] = el; }}
+                                type="text"
+                                disabled={!isMultiUserValid}
+                                placeholder={`Scanner ou taper le S/N sur ${sh.shelfName} puis Entrée...`}
+                                value={byEqShelfInputs[sh.shelfId] || ''}
+                                onChange={(e) =>
+                                  setByEqShelfInputs((prev) => ({ ...prev, [sh.shelfId]: e.target.value }))
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddShelfSerialNumber(sh.shelfId);
+                                  }
+                                }}
+                                className="flex-1 h-10 px-3.5 text-xs bg-[#383330] border border-[#3f3a36] rounded-[3px] text-[#f7f5f0] placeholder:text-[#6a625b] font-mono focus:outline-none focus:border-[#10b981] disabled:opacity-50"
+                              />
+                              <button
+                                type="button"
+                                disabled={!isMultiUserValid || !(byEqShelfInputs[sh.shelfId] || '').trim()}
+                                onClick={() => handleAddShelfSerialNumber(sh.shelfId)}
+                                className="px-4 h-10 bg-[#10b981] hover:bg-[#059669] text-[#1f1b18] font-semibold text-xs rounded-[3px] transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-1.5 shrink-0"
+                              >
+                                <Plus className="w-4 h-4" /> Ajouter
+                              </button>
                               <button
                                 type="button"
                                 disabled={!isMultiUserValid}
-                                onClick={() => handleUpdateCurrentShelfCount(selectedShelfObj.quantity)}
-                                className="h-10 px-3 bg-[#383330] hover:bg-[#3f3a36] text-[#10b981] border border-[#3f3a36] text-xs font-mono rounded-[3px] transition-colors cursor-pointer shrink-0"
+                                onClick={() => startCameraScanner(sh.shelfId)}
+                                className="px-3.5 h-10 bg-[#383330] hover:bg-[#3f3a36] text-[#f7f5f0] border border-[#3f3a36] text-xs font-mono rounded-[3px] transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
+                                title="Scanner avec la caméra du smartphone"
                               >
-                                = {selectedShelfObj.quantity} (Conforme)
+                                <Camera className="w-4 h-4 text-[#10b981]" />
+                                <span className="hidden sm:inline">Caméra</span>
                               </button>
+                            </div>
+                          </div>
+
+                          {/* Expected S/N Checklist for this shelf */}
+                          {expectedOnShelf.length > 0 && (
+                            <div className="space-y-1.5 pt-2 border-t border-[#383330]">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-mono text-[#aea69c] uppercase flex items-center gap-1.5">
+                                  <Sparkles className="w-3.5 h-3.5 text-[#10b981]" />
+                                  N° de série attendus sur {sh.shelfName} ({expectedOnShelf.length}) :
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={!isMultiUserValid}
+                                  onClick={() => handleBatchCheckAllForShelf(sh.shelfId)}
+                                  className="text-[11px] font-mono text-[#10b981] hover:underline cursor-pointer flex items-center gap-1"
+                                >
+                                  <Check className="w-3 h-3" /> Cocher tous les attendus sur ce rayon
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 bg-[#1f1b18] border border-[#3f3a36] rounded-[3px]">
+                                {expectedOnShelf.map((sn: any) => {
+                                  const isCounted = countedSns.some(
+                                    (c) =>
+                                      (sn.serialNumberId && c.serialNumberId === sn.serialNumberId) ||
+                                      c.code.toLowerCase() === sn.serialNumberCode?.toLowerCase()
+                                  );
+                                  return (
+                                    <button
+                                      key={`shelf-sn-${sh.shelfId}-${sn.serialNumberId || sn.serialNumberCode}`}
+                                      type="button"
+                                      disabled={!isMultiUserValid}
+                                      onClick={() => handleToggleShelfCounted(sh.shelfId, sn)}
+                                      className={`text-[11px] font-mono px-2.5 py-1 rounded-[2px] border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                        isCounted
+                                          ? 'bg-[#10b981]/25 border-[#10b981] text-[#f7f5f0] font-medium shadow-xs'
+                                          : 'bg-[#2a2522] border-[#3f3a36] text-[#aea69c] hover:border-[#aea69c] hover:text-[#f7f5f0]'
+                                      }`}
+                                    >
+                                      <span className={isCounted ? 'text-[#10b981] font-bold' : 'text-[#5c544d]'}>
+                                        {isCounted ? '✓' : '○'}
+                                      </span>
+                                      <span>{sn.serialNumberCode}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Counted Serial Numbers Tag Cloud on this shelf */}
+                          <div className="space-y-1.5 pt-2 border-t border-[#383330]">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-mono text-[#f7f5f0] flex items-center gap-1.5 font-semibold">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-[#10b981]" />
+                                N° de série saisis sur {sh.shelfName} ({countedOnShelf.length}) :
+                              </span>
+                              {countedOnShelf.length > 0 && (
+                                <span className="text-[10px] text-[#aea69c] font-mono">
+                                  Cliquer sur × pour retirer un numéro
+                                </span>
+                              )}
+                            </div>
+
+                            {countedOnShelf.length > 0 ? (
+                              <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2.5 bg-[#1f1b18] border border-[#383330] rounded-[3px]">
+                                {countedOnShelf.map((sn) => (
+                                  <span
+                                    key={`counted-${sh.shelfId}-${sn.code}`}
+                                    className={`text-[11px] font-mono px-2.5 py-1 rounded-[2px] flex items-center gap-2 border transition-all ${
+                                      sn.isNew
+                                        ? 'bg-amber-950/60 text-amber-300 border-amber-800/70'
+                                        : 'bg-[#10b981]/20 text-[#10b981] border-[#10b981]/40'
+                                    }`}
+                                  >
+                                    <span className="font-medium">{sn.code}</span>
+                                    {sn.isNew && (
+                                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-900/60 text-amber-200 uppercase font-bold tracking-wider">
+                                        Inattendu
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      disabled={!isMultiUserValid}
+                                      onClick={() => handleRemoveCounted(sn.code)}
+                                      className="hover:text-red-400 hover:bg-red-950/50 p-0.5 rounded cursor-pointer transition-colors text-xs font-bold leading-none"
+                                      title="Retirer ce numéro de série"
+                                    >
+                                      ×
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="p-3 bg-[#1f1b18] border border-dashed border-[#383330] rounded-[3px] text-center">
+                                <p className="text-[11px] text-[#aea69c] font-mono">
+                                  Aucun N° de série saisi sur <span className="text-[#f7f5f0] font-medium">{sh.shelfName}</span> pour l&apos;instant.
+                                </p>
+                                <p className="text-[10px] text-[#6a625b] font-mono mt-0.5">
+                                  Tapez le numéro ou scannez-le ci-dessus puis appuyez sur Entrée.
+                                </p>
+                              </div>
                             )}
                           </div>
                         </div>
                       ) : (
-                        /* Serialized Input */
-                        <div className="space-y-4 p-4 bg-[#2a2522] border border-[#3f3a36] rounded-[3px]">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-[#1f1b18] border border-[#3f3a36] rounded-[3px]">
-                            <span className="text-xs font-mono text-[#f7f5f0] flex items-center gap-1.5">
-                              <Barcode className="w-4 h-4 text-[#10b981]" />
-                              Saisie unitaire des N° de série :
-                            </span>
-                            <span className="text-xs font-mono px-2.5 py-1 rounded bg-[#383330] text-[#f7f5f0] border border-[#3f3a36]">
-                              Comptés ici : <strong className="text-[#10b981]">{countedSnsForSelectedShelf.length}</strong> / {expectedSnsForSelectedShelf.length}
-                            </span>
-                          </div>
-
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
+                        /* Non-Serialized Input for this shelf */
+                        <div className="space-y-2 p-3.5 bg-[#1f1b18] border border-[#383330] rounded-[3px]">
+                          <label className="text-[10px] font-mono text-[#aea69c] uppercase flex items-center gap-1.5">
+                            <Package className="w-3.5 h-3.5 text-[#10b981]" />
+                            QUANTITÉ OBSERVÉE SUR {sh.shelfName.toUpperCase()}
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
                               disabled={!isMultiUserValid}
-                              placeholder="Scanner ou taper le S/N puis Entrée..."
-                              value={scanInput}
-                              onChange={(e) => setScanInput(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  handleAddSerialNumber();
-                                }
-                              }}
-                              className="flex-1 h-9 px-3 text-xs bg-[#383330] border border-[#3f3a36] rounded-[3px] text-[#f7f5f0] placeholder:text-[#6a625b] font-mono focus:outline-none focus:border-[#10b981] disabled:opacity-50"
+                              onClick={() =>
+                                handleUpdateCurrentShelfCount(sh.shelfId, Math.max(0, (shelfCounts[sh.shelfId] || 0) - 1))
+                              }
+                              className="w-10 h-10 rounded-[3px] bg-[#383330] hover:bg-[#3f3a36] text-[#f7f5f0] border border-[#3f3a36] font-mono text-base font-bold transition-colors cursor-pointer flex items-center justify-center shrink-0"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min="0"
+                              disabled={!isMultiUserValid}
+                              value={shelfCounts[sh.shelfId] ?? ''}
+                              placeholder="0"
+                              onChange={(e) =>
+                                handleUpdateCurrentShelfCount(sh.shelfId, Math.max(0, parseInt(e.target.value, 10) || 0))
+                              }
+                              className="flex-1 h-10 bg-[#2f2a26] border border-[#3f3a36] rounded-[3px] px-3 text-base font-mono focus:outline-none focus:border-[#10b981] transition-colors text-[#f7f5f0] text-center"
                             />
                             <button
                               type="button"
-                              disabled={!isMultiUserValid || !scanInput.trim()}
-                              onClick={() => handleAddSerialNumber()}
-                              className="px-4 h-9 bg-[#10b981] hover:bg-[#059669] text-[#1f1b18] font-semibold text-xs rounded-[3px] transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-1 shrink-0"
-                            >
-                              <Plus className="w-3.5 h-3.5" /> Ajouter
-                            </button>
-                            <button
-                              type="button"
                               disabled={!isMultiUserValid}
-                              onClick={() => startCameraScanner()}
-                              className="px-3 h-9 bg-[#383330] hover:bg-[#3f3a36] text-[#f7f5f0] border border-[#3f3a36] text-xs font-mono rounded-[3px] transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
+                              onClick={() =>
+                                handleUpdateCurrentShelfCount(sh.shelfId, (shelfCounts[sh.shelfId] || 0) + 1)
+                              }
+                              className="w-10 h-10 rounded-[3px] bg-[#383330] hover:bg-[#3f3a36] text-[#f7f5f0] border border-[#3f3a36] font-mono text-base font-bold transition-colors cursor-pointer flex items-center justify-center shrink-0"
                             >
-                              <Camera className="w-3.5 h-3.5 text-purple-400" />
-                              <span>Caméra</span>
+                              +
                             </button>
-                          </div>
-
-                          {/* Fast Action Buttons */}
-                          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#383330]">
-                            <button
-                              type="button"
-                              disabled={!isMultiUserValid || expectedSnsForSelectedShelf.length === 0}
-                              onClick={handleBatchCheckAllForShelf}
-                              className="text-[11px] font-mono px-2.5 py-1 rounded-[2px] bg-[#383330] hover:bg-[#3f3a36] text-[#10b981] border border-[#3f3a36] transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-1"
-                            >
-                              <Check className="w-3 h-3" /> Cocher tous les attendus sur cet emplacement ({expectedSnsForSelectedShelf.length})
-                            </button>
-                            {countedSnsForSelectedShelf.length > 0 && (
-                              <button
-                                type="button"
-                                disabled={!isMultiUserValid}
-                                onClick={handleClearCountedForShelf}
-                                className="text-[11px] font-mono px-2 py-1 rounded-[2px] bg-[#383330] hover:bg-red-900/30 text-red-400 border border-[#3f3a36] transition-colors disabled:opacity-40 cursor-pointer flex items-center gap-1"
-                              >
-                                <Trash2 className="w-3 h-3" /> Réinitialiser
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Checklist */}
-                          <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto p-2.5 bg-[#1f1b18] border border-[#3f3a36] rounded-[3px]">
-                            {filteredChecklistSns.map((sn: any) => {
-                              const isCounted = countedSns.some(
-                                (c) =>
-                                  (sn.serialNumberId && c.serialNumberId === sn.serialNumberId) ||
-                                  c.code.toLowerCase() === sn.serialNumberCode?.toLowerCase()
-                              );
-
-                              return (
-                                <button
-                                  key={`sn-check-${sn.serialNumberId || sn.serialNumberCode}`}
-                                  type="button"
-                                  disabled={!isMultiUserValid}
-                                  onClick={() => handleToggleCounted(sn)}
-                                  className={`text-[11px] font-mono px-2.5 py-1 rounded-[2px] border transition-all cursor-pointer flex items-center gap-2 ${
-                                    isCounted
-                                      ? 'bg-[#10b981]/25 border-[#10b981] text-[#f7f5f0] font-medium shadow-xs'
-                                      : 'bg-[#2a2522] border-[#3f3a36] text-[#aea69c] hover:border-[#aea69c] hover:text-[#f7f5f0]'
-                                  }`}
-                                >
-                                  <span className={isCounted ? 'text-[#10b981] font-bold' : 'text-[#5c544d]'}>
-                                    {isCounted ? '✓' : '○'}
-                                  </span>
-                                  <span>{sn.serialNumberCode}</span>
-                                </button>
-                              );
-                            })}
                           </div>
                         </div>
                       )}
+                    </section>
+                  );
+                })}
 
-                      {/* Notes Input */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-mono text-[#aea69c] uppercase">
-                          NOTES & OBSERVATIONS (OPTIONNEL)
-                        </label>
-                        <input
-                          type="text"
-                          disabled={!isMultiUserValid}
-                          value={notes}
-                          onChange={(e) => setNotes(e.target.value)}
-                          placeholder="Ex: Emballage intact, 2 pièces déplacées..."
-                          className="w-full h-9 bg-[#383330] border border-[#3f3a36] rounded-[3px] px-3 text-xs focus:outline-none focus:border-[#aea69c] transition-colors text-[#f7f5f0] disabled:opacity-50"
-                        />
-                      </div>
-                    </div>
+                {/* Button to add an extra shelf */}
+                {availableOtherShelves.length > 0 && (
+                  <div className="p-4 border border-dashed border-[#3f3a36] rounded-[4px] bg-[#26221f] text-center">
+                    <button
+                      type="button"
+                      disabled={!isMultiUserValid}
+                      onClick={() => setIsAddShelfModalOpen(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#383330] hover:bg-[#3f3a36] text-[#f7f5f0] border border-[#3f3a36] text-xs font-mono rounded-[3px] transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-[#10b981]" />
+                      Ajouter un autre emplacement du magasin pour cet article
+                    </button>
                   </div>
-                </section>
+                )}
+
+                {/* Notes Input */}
+                <div className="p-4 rounded-[4px] border border-[#3f3a36] bg-[#2f2a26] space-y-2">
+                  <label className="text-[10px] font-mono text-[#aea69c] uppercase">
+                    NOTES & OBSERVATIONS GLOBALES (OPTIONNEL)
+                  </label>
+                  <input
+                    type="text"
+                    disabled={!isMultiUserValid}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Ex: Emballage intact, étiquettes conformes..."
+                    className="w-full h-9 bg-[#383330] border border-[#3f3a36] rounded-[3px] px-3 text-xs focus:outline-none focus:border-[#aea69c] transition-colors text-[#f7f5f0] disabled:opacity-50"
+                  />
+                </div>
               </div>
 
               {/* ByEquipment Sidebar */}
@@ -1829,8 +2010,8 @@ export default function InventoryTaskPage() {
                     disabled={!isMultiUserValid}
                     onClick={async () => {
                       try {
-                        await submitTask({ taskId, data: buildPayload(true) });
-                        toast.success('Brouillon sauvegardé');
+                        await saveDraft({ taskId, data: buildPayload(true) });
+                        toast.success('Brouillon sauvegardé avec succès');
                       } catch (e: any) {
                         toast.error(e?.response?.data?.message || 'Erreur lors de la sauvegarde');
                       }
@@ -1855,8 +2036,50 @@ export default function InventoryTaskPage() {
                     className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 bg-[#f7f5f0] hover:bg-[#dad2c1] disabled:opacity-40 disabled:cursor-not-allowed text-[#2b2622] text-xs font-semibold rounded-[3px] transition-colors cursor-pointer"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    Soumettre le compte
+                    Soumettre le compte ({hasSerialNumber ? `${countedSns.length} S/N` : `${totalNonSnCounted} u.`})
                   </button>
+                </div>
+
+                {/* Summary Card by Shelf */}
+                <div className="p-4 rounded-[4px] border border-[#3f3a36] bg-[#2f2a26] space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#383330]">
+                    <h3 className="text-xs font-semibold text-[#f7f5f0] flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-[#10b981]" />
+                      Récapitulatif par rayon
+                    </h3>
+                    <span className="text-xs font-mono font-bold text-[#10b981] bg-[#10b981]/15 px-2 py-0.5 rounded border border-[#10b981]/30">
+                      {hasSerialNumber ? `${countedSns.length} S/N total` : `${totalNonSnCounted} unité(s)`}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {allDisplayShelves.map((sh: any) => {
+                      const count = hasSerialNumber
+                        ? countedSns.filter((s) => s.shelfId === sh.shelfId).length
+                        : (shelfCounts[sh.shelfId] ?? 0);
+
+                      return (
+                        <div
+                          key={`sidebar-shelf-${sh.shelfId}`}
+                          onClick={() => {
+                            const el = document.getElementById(`shelf-card-${sh.shelfId}`);
+                            if (el) {
+                              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                            setTimeout(() => byEqInputRefs.current[sh.shelfId]?.focus(), 200);
+                          }}
+                          className="flex items-center justify-between text-xs p-2 rounded-[3px] border border-[#3f3a36] bg-[#26221f] hover:border-[#10b981] cursor-pointer transition-colors"
+                        >
+                          <span className="truncate max-w-[140px] font-mono text-[11px] text-[#f7f5f0]">
+                            {sh.shelfName}
+                          </span>
+                          <span className="font-mono text-[11px] font-semibold text-[#10b981]">
+                            {count} {hasSerialNumber ? 'S/N' : 'u.'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="p-4 rounded-[4px] border border-[#3f3a36] bg-[#2f2a26] space-y-3">
@@ -1869,7 +2092,7 @@ export default function InventoryTaskPage() {
                           : 'bg-red-950 text-red-300 border border-red-800'
                       }`}
                     >
-                      {uniqueParticipantsCount} / 2 min
+                      {uniqueParticipantsCount} / 3 (V2)
                     </span>
                   </div>
                   <div className="space-y-1.5">
@@ -1882,7 +2105,11 @@ export default function InventoryTaskPage() {
                           {p.User?.userName || p.User?.userEmail || p.userId.slice(0, 8)}
                         </span>
                         <span className="text-[10px] font-mono text-[#aea69c]">
-                          {p.sequence === 0 ? 'Contrôleur (Comptage)' : '3ème Contrôleur (Arbitrage)'}
+                          {p.sequence === 0
+                            ? '1er Contrôleur'
+                            : p.sequence === 1
+                            ? '2ème Contrôleur'
+                            : 'Contrôleur Final'}
                         </span>
                       </div>
                     ))}
@@ -1890,6 +2117,77 @@ export default function InventoryTaskPage() {
                 </div>
               </div>
             </div>
+
+            {/* Modal: Add Extra Shelf to Article */}
+            {isAddShelfModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs">
+                <div className="bg-[#2f2a26] border border-[#3f3a36] rounded-[4px] max-w-lg w-full p-5 space-y-4 shadow-xl">
+                  <div className="flex items-center justify-between pb-3 border-b border-[#3f3a36]">
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-[#10b981]" />
+                      <h3 className="text-base font-semibold text-[#f7f5f0]">
+                        Ajouter un emplacement pour cet article
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddShelfModalOpen(false)}
+                      className="text-[#aea69c] hover:text-[#f7f5f0] cursor-pointer text-lg leading-none"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Rechercher un emplacement..."
+                      value={shelfModalSearch}
+                      onChange={(e) => setShelfModalSearch(e.target.value)}
+                      className="w-full h-9 px-3 text-xs bg-[#383330] border border-[#3f3a36] rounded-[3px] text-[#f7f5f0] placeholder:text-[#6a625b] font-mono focus:outline-none focus:border-[#10b981]"
+                    />
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+                    {availableOtherShelves
+                      .filter((s: any) =>
+                        !shelfModalSearch.trim() ||
+                        s.shelfName?.toLowerCase().includes(shelfModalSearch.trim().toLowerCase())
+                      )
+                      .map((sh: any) => (
+                        <div
+                          key={`modal-shelf-${sh.shelfId}`}
+                          className="flex items-center justify-between p-2.5 bg-[#26221f] border border-[#3f3a36] rounded-[3px] hover:border-[#10b981] transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Layers className="w-4 h-4 text-[#10b981]" />
+                            <span className="text-xs font-semibold text-[#f7f5f0]">{sh.shelfName}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExtraArticleShelves((prev) => [
+                                ...prev,
+                                { shelfId: sh.shelfId, shelfName: sh.shelfName },
+                              ]);
+                              setIsAddShelfModalOpen(false);
+                              toast.success(`Emplacement "${sh.shelfName}" ajouté`);
+                            }}
+                            className="px-3 py-1 bg-[#10b981] hover:bg-[#059669] text-[#1f1b18] text-xs font-semibold rounded-[2px] transition-colors cursor-pointer flex items-center gap-1"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Ajouter
+                          </button>
+                        </div>
+                      ))}
+                    {availableOtherShelves.length === 0 && (
+                      <p className="text-xs text-[#aea69c] text-center py-3">
+                        Tous les emplacements du magasin sont déjà affichés.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -1943,7 +2241,7 @@ export default function InventoryTaskPage() {
                         </span>
                         <span className="text-[10px] font-mono text-[#aea69c] flex items-center gap-1.5">
                           {eq.hasSerialNumber ? (
-                            <span className="text-purple-400">● Sérialisé (N° de série)</span>
+                            <span className="text-[#c9c0ad]">● Sérialisé (N° de série)</span>
                           ) : (
                             <span className="text-[#10b981]">● Quantitatif</span>
                           )}

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Param, Patch, Query, Req, UseGuards, Delete } from "@nestjs/common";
+import { Controller, Post, Body, Get, Param, Patch, Query, Req, UseGuards, Delete, ForbiddenException } from "@nestjs/common";
 import { InventoryService } from "./inventory.service.js";
 import { ClerkAuthGuard } from "../auth/clerk-auth.guard.js";
 import type { AuthenticatedRequest } from "../auth/clerk-auth.guard.js";
@@ -10,6 +10,8 @@ import type {
   PaginationDTO, 
   CreateInventoryDTO, 
   SubmitTaskDTO, 
+  SaveDraftDTO,
+  ResolveIssueDTO,
   AdjudicateDTO,
   AssignThirdUserDTO
 } from "./dto/index.js";
@@ -38,29 +40,11 @@ export class InventoryController {
     return this.inventory.getInventories(pagination, filterUserId);
   }
 
-  @RequirePermissions('inventory.read')
-  @Get(':id')
-  async getInventoryById(@Param('id') id: string) {
-    return this.inventory.getInventoryById(id);
-  }
-
-  @RequirePermissions('inventory.launch')
-  @Post(':id/launch')
-  async launchInventory(@Param('id') inventoryId: string) {
-    return this.inventory.launchInventory(inventoryId);
-  }
-
-  @Get('debug/all-tasks')
-  async getAllTasksDebug() {
-    return this.inventory['prisma'].inventoryCountAttempt.findMany({ include: { unit: true }});
-  }
-
   @RequirePermissions('inventory.count', 'inventory.adjudicate')
   @Get('my-tasks')
   async getMyTasksCurrent(@CurrentUser() user: AuthenticatedUser) {
     return this.inventory.getMyTasks(user.userId);
   }
-
 
   @RequirePermissions('inventory.count', 'inventory.adjudicate')
   @Get('my-tasks/:userId')
@@ -68,14 +52,31 @@ export class InventoryController {
     @Param('userId') userId: string,
     @CurrentUser() user: AuthenticatedUser
   ) {
+    // Security: Only admins can view another user's tasks
+    if (userId && userId !== user.userId && !user.isAdmin) {
+      throw new ForbiddenException('Vous ne pouvez pas accéder aux tâches d\'un autre utilisateur.');
+    }
     const targetUserId = (userId && userId !== 'undefined' && userId !== 'null') ? userId : user.userId;
     return this.inventory.getMyTasks(targetUserId);
   }
 
   @RequirePermissions('inventory.count', 'inventory.adjudicate')
   @Get('tasks/:taskId')
-  async getTask(@Param('taskId') taskId: string) {
-    return this.inventory.getTask(taskId);
+  async getTask(
+    @Param('taskId') taskId: string,
+    @CurrentUser() user: AuthenticatedUser
+  ) {
+    return this.inventory.getTask(taskId, user?.userId);
+  }
+
+  @RequirePermissions('inventory.count', 'inventory.adjudicate')
+  @Patch('tasks/:taskId/draft')
+  async saveDraft(
+    @Param('taskId') taskId: string,
+    @Body() data: SaveDraftDTO,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.inventory.saveDraft(taskId, user.userId, data);
   }
 
   @RequirePermissions('inventory.count', 'inventory.adjudicate')
@@ -87,6 +88,72 @@ export class InventoryController {
   ) {
     return this.inventory.submitCountAttempt(taskId, user.userId, data);
   }
+
+  @RequirePermissions('inventory.read')
+  @Get(':id/progress')
+  async getInventoryProgress(@Param('id') inventoryId: string) {
+    return this.inventory.getInventoryProgress(inventoryId);
+  }
+
+  @RequirePermissions('inventory.read')
+  @Get(':id/comparison')
+  async getInventoryComparison(@Param('id') inventoryId: string) {
+    return this.inventory.getInventoryComparison(inventoryId);
+  }
+
+  @RequirePermissions('inventory.read')
+  @Get(':id/report')
+  async getInventoryReport(@Param('id') inventoryId: string) {
+    return this.inventory.getInventoryReport(inventoryId);
+  }
+
+  @RequirePermissions('inventory.read')
+  @Get(':id/issues')
+  async getInventoryIssues(@Param('id') inventoryId: string) {
+    return this.inventory.getInventoryIssues(inventoryId);
+  }
+
+  @RequirePermissions('inventory.finalize', 'inventory.create')
+  @Post(':id/issues/:issueId/resolve')
+  async resolveInvestigationIssue(
+    @Param('id') inventoryId: string,
+    @Param('issueId') issueId: string,
+    @Body() data: ResolveIssueDTO,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.inventory.resolveInvestigationIssue(inventoryId, issueId, user.userId, data);
+  }
+
+  @RequirePermissions('inventory.launch')
+  @Post(':id/launch')
+  async launchInventory(@Param('id') inventoryId: string) {
+    return this.inventory.launchInventory(inventoryId);
+  }
+
+  @RequirePermissions('inventory.finalize')
+  @Post(':id/finalize')
+  async finalizeInventory(
+    @Param('id') inventoryId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.inventory.finalizeInventory(inventoryId, user.userId);
+  }
+
+  @RequirePermissions('inventory.read')
+  @Get(':id')
+  async getInventoryById(@Param('id') id: string) {
+    return this.inventory.getInventoryById(id);
+  }
+
+  @RequirePermissions('inventory.delete')
+  @Delete(':id')
+  async deleteInventory(@Param('id') id: string) {
+    return this.inventory.deleteInventory(id);
+  }
+
+  // --------------------------------------------------------------------------
+  // LEGACY ROUTES
+  // --------------------------------------------------------------------------
 
   @RequirePermissions('inventory.adjudicate', 'inventory.count')
   @Get('adjudicate/:unitId')
@@ -103,7 +170,6 @@ export class InventoryController {
   ) {
     return this.inventory.manualAdjudicate(unitId, user.userId, data);
   }
-
 
   @RequirePermissions('inventory.launch', 'inventory.adjudicate')
   @Post(':id/work-units/:unitId/assign-third-user')
@@ -163,26 +229,5 @@ export class InventoryController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.inventory.notifyAllPendingControllers(inventoryId, user?.userId);
-  }
-
-  @RequirePermissions('inventory.finalize')
-  @Get(':id/adjustments/preview')
-  async previewAdjustments(@Param('id') inventoryId: string) {
-    return this.inventory.previewAdjustments(inventoryId);
-  }
-
-  @RequirePermissions('inventory.finalize')
-  @Post(':id/finalize')
-  async finalizeInventory(
-    @Param('id') inventoryId: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.inventory.finalizeInventory(inventoryId, user.userId);
-  }
-
-  @RequirePermissions('inventory.delete')
-  @Delete(':id')
-  async deleteInventory(@Param('id') id: string) {
-    return this.inventory.deleteInventory(id);
   }
 }

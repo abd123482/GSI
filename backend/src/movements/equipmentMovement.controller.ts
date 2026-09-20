@@ -11,6 +11,8 @@ import {
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard.js';
 import { PermissionsGuard } from '../auth/guards/permissions.guard.js';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import type { AuthenticatedUser } from '../auth/types/authenticated-user.type.js';
 import { EquipmentMovementService } from './equipmentMovement.service.js';
 import type {
   CreateEquipmentMovementDTO,
@@ -33,8 +35,11 @@ export class EquipmentMovementController {
 
   @RequirePermissions('movement.create')
   @Post()
-  async createEquipmentMovement(@Body() dto: CreateEquipmentMovementDTO) {
-    return this.equipmentMovementService.createEquipmentMovement(dto);
+  async createEquipmentMovement(
+    @Body() dto: CreateEquipmentMovementDTO,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.equipmentMovementService.createEquipmentMovement(dto, user?.userId);
   }
 
   @RequirePermissions('movement.read')

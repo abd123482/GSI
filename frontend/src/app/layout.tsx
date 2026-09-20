@@ -5,6 +5,7 @@ import { warpClerkAppearance } from '@/lib/warp-theme';
 import { QueryProvider } from '@/providers/query-provider';
 import { Toaster } from 'sonner';
 import { NavbarVisibility } from '@/components/navigation/NavbarVisibility';
+import { ClerkNetworkErrorHandler } from '@/components/auth/ClerkNetworkErrorHandler';
 import './globals.css';
 
 const inter = Inter({
@@ -49,6 +50,7 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider appearance={warpClerkAppearance}>
+      <ClerkNetworkErrorHandler />
       <html lang="fr" className="h-full dark">
         <body
           className={`${inter.variable} ${dmMono.variable} ${instrumentSerif.variable} font-sans h-full bg-[#2b2622] text-[#f7f5f0] antialiased flex flex-col`}

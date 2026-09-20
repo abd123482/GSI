@@ -100,7 +100,7 @@ export class EquipmentMovementService {
   /**
    * Creates a new equipment movement tuple
    */
-  async createEquipmentMovement(dto: CreateEquipmentMovementDTO) {
+  async createEquipmentMovement(dto: CreateEquipmentMovementDTO, userId?: string) {
     // 1. Validate inputs of creating a new equipment movement from CreateEquipmentMovementDTO
     const validatedData = createEquipmentMovementSchema.parse(dto);
 
@@ -144,6 +144,49 @@ export class EquipmentMovementService {
 
     // 6. Validate movement business rules
     await this.validateMovement(validatedData);
+
+    // 6B. Check active inventory locks (prevent movement on scoped items/shelves during active inventory)
+    const activeInventories = (await this.prisma.inventory?.findMany?.({
+      where: {
+        status: { in: ['IN_PROGRESS', 'THIRD_COUNT_REQUIRED'] },
+      },
+      select: {
+        inventoryId: true,
+        title: true,
+        typeInventory: true,
+        equipmentScopeIds: true,
+        shelfScopeIds: true,
+      },
+    })) || [];
+
+    for (const inv of activeInventories) {
+      if (inv.typeInventory === 'ByEquipment' && inv.equipmentScopeIds) {
+        try {
+          const eqIds: string[] = JSON.parse(inv.equipmentScopeIds);
+          if (eqIds.includes(validatedData.equipmentId)) {
+            throw new BadRequestException(
+              `L'article est actuellement sous inventaire actif ("${inv.title || inv.inventoryId}"). Les mouvements de stock sont verrouillés pour cet article jusqu'à finalisation de l'inventaire.`
+            );
+          }
+        } catch (e) {
+          if (e instanceof BadRequestException) throw e;
+        }
+      } else if (inv.typeInventory === 'ByShelf' && inv.shelfScopeIds) {
+        try {
+          const shIds: string[] = JSON.parse(inv.shelfScopeIds);
+          if (
+            (validatedData.sourceShelfId && shIds.includes(validatedData.sourceShelfId)) ||
+            (validatedData.destinationShelfId && shIds.includes(validatedData.destinationShelfId))
+          ) {
+            throw new BadRequestException(
+              `L'emplacement concerné est actuellement sous inventaire actif ("${inv.title || inv.inventoryId}"). Les mouvements de stock sont verrouillés pour cet emplacement jusqu'à finalisation de l'inventaire.`
+            );
+          }
+        } catch (e) {
+          if (e instanceof BadRequestException) throw e;
+        }
+      }
+    }
 
     // 7. Execute movement, stock update, and serial number updates in a transaction
     return await this.prisma.$transaction(async (tx) => {
@@ -333,6 +376,8 @@ export class EquipmentMovementService {
           destinationShelfId: validatedData.destinationShelfId,
           mouvementQuantity: validatedData.movementQuantity,
           mouvementStatus: validatedData.movementType,
+          createdAt: new Date(),
+          createdByUserId: userId || null,
         },
         include: {
           equipment: true,

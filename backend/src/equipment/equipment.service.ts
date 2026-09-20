@@ -355,7 +355,7 @@ export class EquipmentService {
           ...(validatedData.hasSerialNumber !== undefined && {
             hasSerialNumber: validatedData.hasSerialNumber,
           }),
-          ...(validatedData.equipmentQuantity !== undefined && !existingEquipment.hasSerialNumber && !validatedData.hasSerialNumber && {
+          ...(validatedData.equipmentQuantity !== undefined && (validatedData.hasSerialNumber === false || (!existingEquipment.hasSerialNumber && validatedData.hasSerialNumber === undefined)) && {
             equipmentQuantity: validatedData.equipmentQuantity,
           }),
           ...(validatedData.minEquipmentQuantity !== undefined && {

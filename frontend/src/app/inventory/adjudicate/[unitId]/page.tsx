@@ -1202,7 +1202,7 @@ export default function AdjudicatePage() {
                             <span
                               className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
                                 hasSn
-                                  ? 'bg-purple-950/40 text-purple-300 border-purple-800/50'
+                                  ? 'bg-[#383330] text-[#f7f5f0] border-[#3f3a36]'
                                   : 'bg-[#26221f] text-[#aea69c] border-[#383330]'
                               }`}
                             >
@@ -1217,14 +1217,14 @@ export default function AdjudicatePage() {
 
                         {/* Comparative Badge: C1 vs C2 for this specific article */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          <div className="px-2.5 py-1 bg-[#26221f] border border-blue-900/40 rounded-[2px] text-right font-mono">
-                            <span className="text-[9px] text-blue-400 block uppercase">1er Compteur</span>
+                          <div className="px-2.5 py-1 bg-[#26221f] border border-[#383330] rounded-[2px] text-right font-mono">
+                            <span className="text-[9px] text-[#aea69c] block uppercase">1er Contrôleur</span>
                             <span className="text-xs font-semibold text-[#f7f5f0]">
                               {c1Info.quantity} pcs
                             </span>
                           </div>
-                          <div className="px-2.5 py-1 bg-[#26221f] border border-amber-900/40 rounded-[2px] text-right font-mono">
-                            <span className="text-[9px] text-amber-400 block uppercase">2ème Compteur</span>
+                          <div className="px-2.5 py-1 bg-[#26221f] border border-[#383330] rounded-[2px] text-right font-mono">
+                            <span className="text-[9px] text-[#aea69c] block uppercase">2ème Contrôleur</span>
                             <span className="text-xs font-semibold text-[#f7f5f0]">
                               {c2Info.quantity} pcs
                             </span>
@@ -1233,7 +1233,7 @@ export default function AdjudicatePage() {
                             <span className="text-[9px] text-[#8c827a] block uppercase">Écart</span>
                             <span
                               className={`text-xs font-semibold ${
-                                c1Info.quantity !== c2Info.quantity ? 'text-amber-400' : 'text-emerald-400'
+                                c1Info.quantity !== c2Info.quantity ? 'text-red-400 font-bold' : 'text-[#10b981]'
                               }`}
                             >
                               {Math.abs(c1Info.quantity - c2Info.quantity)} pcs

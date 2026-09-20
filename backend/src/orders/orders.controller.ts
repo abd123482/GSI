@@ -6,6 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard.js';
 import { OrdersService } from './orders.service.js';
@@ -18,6 +19,9 @@ export class OrdersController {
 
   @Post()
   async createOrder(@Body() dto: CreateOrderDTO) {
+    if (dto.inventoryId) {
+      throw new BadRequestException('Cannot associate inventory directly via generic order endpoint. Inventory observations must be submitted through authorized inventory count tasks.');
+    }
     return this.ordersService.createOrder(dto);
   }
 

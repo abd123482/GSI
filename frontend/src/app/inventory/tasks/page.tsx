@@ -103,8 +103,8 @@ export default function MyTasksPage() {
                               {equipment.equipmentName}
                             </span>
                           </div>
-                          <span className="text-[11px] font-mono text-[#aea69c] shrink-0">
-                            Total: <strong className="text-[#f7f5f0]">{equipment.equipmentQuantity}</strong>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#383330] text-[#aea69c] border border-[#3f3a36]">
+                            Comptage à l'aveugle
                           </span>
                         </div>
 
@@ -112,7 +112,7 @@ export default function MyTasksPage() {
                         <div className="space-y-1 pt-1 border-t border-[#3f3a36]/60">
                           <span className="text-[10px] font-mono text-[#aea69c] uppercase flex items-center gap-1">
                             <MapPin className="w-3 h-3 text-[#10b981]" />
-                            Emplacements attribués ({eqShelves.length}) :
+                            Emplacements à vérifier ({eqShelves.length}) :
                           </span>
                           {eqShelves.length > 0 ? (
                             <div className="flex flex-wrap gap-1.5 pt-0.5">
@@ -122,7 +122,6 @@ export default function MyTasksPage() {
                                   className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#383330] border border-[#3f3a36] text-[#f7f5f0] flex items-center gap-1"
                                 >
                                   <span>{es.shelf?.shelfName || 'Emplacement'}</span>
-                                  <span className="text-[#10b981]">({es.equipmentQuantity} pcs)</span>
                                 </span>
                               ))}
                             </div>
@@ -145,15 +144,15 @@ export default function MyTasksPage() {
                               Emplacement : {shelf.shelfName}
                             </span>
                           </div>
-                          <span className="text-[11px] font-mono text-[#aea69c]">
-                            Stock théorique : {displayShelfQty} pcs
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#383330] text-[#aea69c] border border-[#3f3a36]">
+                            Comptage à l'aveugle
                           </span>
                         </div>
 
                         {shelf.equipmentShelfs && shelf.equipmentShelfs.length > 0 && (
                           <div className="space-y-1 pt-1 border-t border-[#3f3a36]/60">
                             <span className="text-[10px] font-mono text-[#aea69c] uppercase">
-                              Articles sur cet emplacement ({shelf.equipmentShelfs.length}) :
+                              Articles attendus sur cet emplacement ({shelf.equipmentShelfs.length}) :
                             </span>
                             <div className="flex flex-wrap gap-1.5 pt-0.5">
                               {shelf.equipmentShelfs.map((es: any) => (
@@ -161,7 +160,7 @@ export default function MyTasksPage() {
                                   key={es.equipmentShelfId || es.equipmentId}
                                   className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#383330] border border-[#3f3a36] text-[#f7f5f0]"
                                 >
-                                  {es.equipment?.equipmentName} ({es.equipmentQuantity} pcs)
+                                  {es.equipment?.equipmentName}
                                 </span>
                               ))}
                             </div>
@@ -172,13 +171,15 @@ export default function MyTasksPage() {
 
                     <div className="flex items-center justify-between text-xs text-[#aea69c] pt-1">
                       <span>Statut: <strong className="text-[#f7f5f0]">{task.status}</strong></span>
-                      <span className="font-mono text-[10px]">Séquence: {task.sequence}</span>
+                      <span className="font-mono text-[10px]">
+                        {task.sequence === 0 ? '1er Contrôleur' : task.sequence === 1 ? '2ème Contrôleur' : 'Contrôleur Final'}
+                      </span>
                     </div>
                   </div>
 
                   <div className="pt-3 border-t border-[#3f3a36] flex justify-end gap-2">
                     <Link
-                      href={task.purpose === 'ADJUDICATION' ? `/inventory/adjudicate/${task.unitId}` : `/inventory/tasks/${task.attemptId}`}
+                      href={`/inventory/tasks/${task.attemptId}`}
                       className="inline-flex items-center gap-2 text-xs bg-[#f7f5f0] text-[#2b2622] px-3.5 py-1.5 rounded-[3px] font-medium transition-colors hover:bg-[#dad2c1] shadow-xs cursor-pointer"
                     >
                       <PlayCircle className="w-3.5 h-3.5" />

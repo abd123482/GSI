@@ -100,7 +100,7 @@ export default function InventoryPage() {
             {hasPermission('inventory.create') && (
               <Link
                 href="/inventory/create"
-                className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-[#f7f5f0] hover:bg-[#dad2c1] text-[#2b2622] text-xs font-medium rounded-[3px] shadow-xs transition-colors cursor-pointer"
+                className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-[#10b981] hover:bg-[#059669] text-[#1f1b18] text-xs font-semibold rounded-[3px] shadow-xs transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Nouvel Inventaire</span>
@@ -114,7 +114,7 @@ export default function InventoryPage() {
           <div className="flex flex-col items-center justify-center py-20 border border-dashed border-[#3f3a36] rounded-[4px] bg-[#2f2a26]">
             <ClipboardList className="w-8 h-8 text-[#5c544d] mb-3" />
             <p className="text-sm text-[#aea69c]">Aucun inventaire trouvé.</p>
-            <Link href="/inventory/create" className="mt-4 text-xs font-medium text-[#f7f5f0] underline underline-offset-2 hover:text-[#dad2c1]">
+            <Link href="/inventory/create" className="mt-4 text-xs font-medium text-[#10b981] underline underline-offset-2 hover:text-[#059669]">
               Créer votre premier inventaire
             </Link>
           </div>
@@ -125,7 +125,15 @@ export default function InventoryPage() {
                    <div className="space-y-2">
                       <div className="flex justify-between items-start">
                          <h3 className="font-medium text-[#f7f5f0]">{inv.title}</h3>
-                         <span className="text-[10px] font-mono px-2 py-0.5 rounded-[2px] bg-[#383330] text-[#aea69c] border border-[#3f3a36]">{inv.status}</span>
+                         <span className={`text-[10px] font-mono px-2 py-0.5 rounded-[2px] border font-medium ${
+                           inv.status === 'FINALIZED' || inv.status === 'COMPLETED'
+                             ? 'bg-[#10b981]/15 text-[#10b981] border-[#10b981]/30'
+                             : inv.status === 'THIRD_COUNT_REQUIRED'
+                             ? 'bg-red-500/15 text-red-400 border-red-500/30'
+                             : 'bg-[#383330] text-[#c9c0ad] border-[#3f3a36]'
+                         }`}>
+                           {inv.status === 'THIRD_COUNT_REQUIRED' ? 'ARBITRAGE REQUIS' : inv.status}
+                         </span>
                       </div>
                       <p className="text-xs text-[#c9c0ad]">Type: {inv.typeInventory}</p>
                    </div>
@@ -155,18 +163,18 @@ export default function InventoryPage() {
                                  toast.error('Erreur lancement');
                                }
                              }}
-                             className="text-xs bg-[#f7f5f0] text-[#2b2622] px-3 py-1.5 rounded-[3px] font-medium hover:bg-[#dad2c1] transition-colors cursor-pointer"
+                             className="text-xs bg-[#10b981] hover:bg-[#059669] text-[#1f1b18] px-3 py-1.5 rounded-[3px] font-semibold transition-colors cursor-pointer"
                            >
                              Lancer
                            </button>
                         )}
-                        {inv.status === 'IN_PROGRESS' && (
+                        {(inv.status === 'IN_PROGRESS' || inv.status === 'THIRD_COUNT_REQUIRED' || inv.status === 'COMPLETED') && (
                            <Link href={`/inventory/${inv.inventoryId}/report`} className="text-xs border border-[#3f3a36] text-[#c9c0ad] px-3 py-1.5 rounded-[3px] font-medium hover:text-[#f7f5f0] hover:bg-[#383330] transition-colors">
                              Voir l'avancement
                            </Link>
                         )}
                         {inv.status === 'FINALIZED' && (
-                           <Link href={`/inventory/${inv.inventoryId}/report`} className="text-xs border border-[#3f3a36] text-[#10b981] px-3 py-1.5 rounded-[3px] font-medium hover:bg-[#383330] transition-colors">
+                           <Link href={`/inventory/${inv.inventoryId}/report`} className="text-xs border border-[#10b981]/40 bg-[#10b981]/10 text-[#10b981] px-3 py-1.5 rounded-[3px] font-medium hover:bg-[#10b981]/20 transition-colors">
                              Rapport final
                            </Link>
                         )}

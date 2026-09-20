@@ -39,18 +39,26 @@ export function NotificationBell() {
 
     setOpen(false);
 
+    const isTask =
+      notif.eventType === 'INVENTORY_TASK_AVAILABLE' ||
+      notif.eventType === 'INVENTORY_COUNT_REQUIRED' ||
+      notif.eventType === 'INVENTORY_THIRD_COUNT_REQUIRED' ||
+      notif.eventType === 'TASK';
+
     const isAdjudication =
       notif.eventType === 'INVENTORY_ADJUDICATION_ASSIGNED' ||
       notif.eventType === 'INVENTORY_ADJUDICATION_REQUIRED';
 
-    if (isAdjudication && notif.payload?.unitId) {
-      router.push(`/inventory/adjudicate/${notif.payload.unitId}`);
-    } else if (notif.payload?.taskId) {
+    if (notif.payload?.taskId) {
       router.push(`/inventory/tasks/${notif.payload.taskId}`);
+    } else if (isAdjudication && notif.payload?.unitId) {
+      router.push(`/inventory/adjudicate/${notif.payload.unitId}`);
+    } else if (isTask) {
+      router.push('/inventory/tasks');
     } else if (notif.payload?.unitId) {
       router.push(`/inventory/adjudicate/${notif.payload.unitId}`);
     } else if (notif.payload?.inventoryId) {
-      router.push(`/inventory/${notif.payload.inventoryId}/report`);
+      router.push(`/inventory/${notif.payload.inventoryId}`);
     } else {
       router.push('/inventory/tasks');
     }

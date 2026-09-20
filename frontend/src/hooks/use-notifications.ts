@@ -62,20 +62,28 @@ export function useNotifications() {
           const unitId = n.payload?.unitId;
           const inventoryId = n.payload?.inventoryId;
 
+          const isTask =
+            n.eventType === 'INVENTORY_TASK_AVAILABLE' ||
+            n.eventType === 'INVENTORY_COUNT_REQUIRED' ||
+            n.eventType === 'INVENTORY_THIRD_COUNT_REQUIRED' ||
+            n.eventType === 'TASK';
+
           const isAdjudication =
             n.eventType === 'INVENTORY_ADJUDICATION_ASSIGNED' ||
             n.eventType === 'INVENTORY_ADJUDICATION_REQUIRED';
 
           const destination =
-            isAdjudication && unitId
-              ? `/inventory/adjudicate/${unitId}`
-              : taskId
+            taskId
               ? `/inventory/tasks/${taskId}`
+              : isAdjudication && unitId
+              ? `/inventory/adjudicate/${unitId}`
+              : isTask
+              ? `/inventory/tasks`
               : unitId
               ? `/inventory/adjudicate/${unitId}`
               : inventoryId
-              ? `/inventory/${inventoryId}/report`
-              : null;
+              ? `/inventory/${inventoryId}`
+              : '/inventory/tasks';
 
           toast.info(title, {
             description: msg,

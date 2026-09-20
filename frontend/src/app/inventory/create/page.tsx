@@ -43,6 +43,7 @@ export default function CreateInventoryPage() {
       users: [
         { userId: '', responsibility: 'COUNT' },
         { userId: '', responsibility: 'COUNT' },
+        { userId: '', responsibility: 'ADJUDICATE' },
       ],
       equipmentIds: [],
       shelfIds: [],
@@ -53,10 +54,6 @@ export default function CreateInventoryPage() {
   const selectedEquipmentIds = watch('equipmentIds') || [];
   const selectedShelfIds = watch('shelfIds') || [];
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: 'users'
-  });
   const { mutateAsync: createInventory } = useCreateInventory();
 
   // Paginated and searchable Equipments (only loaded when active)
@@ -571,79 +568,109 @@ export default function CreateInventoryPage() {
 
           {/* Section 3: Participants */}
           <section className="space-y-4 p-5 rounded-[4px] border border-[#3f3a36] bg-[#2f2a26]">
-            <h2 className="text-sm font-medium text-[#f7f5f0]">3. Contrôleurs d'inventaire</h2>
-            <p className="text-xs text-[#c9c0ad]">
-              Désignez les contrôleurs. Les deux premiers effectueront le double comptage initial. En cas de divergence, le 3ème contrôleur vérifiera et finalisera l'arbitrage.
-            </p>
+            <div>
+              <h2 className="text-sm font-medium text-[#f7f5f0]">3. Contrôleurs d'inventaire (Architecture V2)</h2>
+              <p className="text-xs text-[#c9c0ad] mt-1 leading-relaxed">
+                Désignez exactement <strong>trois utilisateurs distincts</strong> préassignés dès la création. Le 1er et le 2ème contrôleur effectuent un double comptage indépendant en flux tendu. Le contrôleur final reste bloqué et n'intervient que si une divergence existe entre les deux premiers après la fin complète des comptages, auquel cas il recompte l'intégralité de l'inventaire et son résultat fait foi.
+              </p>
+            </div>
             
             <div className="space-y-4">
-              {fields.map((field, index) => (
-                <div key={field.id} className="flex gap-2 items-end">
-                  <div className="flex-1 space-y-1.5">
-                     <label className="text-xs font-medium text-[#aea69c]">Utilisateur</label>
-                     <Controller
-                       control={control}
-                       name={`users.${index}.userId`}
-                       render={({ field: { value, onChange } }) => (
-                         <UserAutocomplete 
-                           value={value} 
-                           onChange={onChange} 
-                           error={errors.users?.[index]?.userId?.message}
-                         />
-                       )}
-                     />
+              {/* Controller 1 */}
+              <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end p-3 rounded bg-[#26221f] border border-[#3f3a36]">
+                <div className="flex-1 w-full space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-[#f7f5f0]">1er Contrôleur</label>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded border bg-[#10b981]/15 text-[#10b981] border-[#10b981]/30 font-mono">
+                      Comptage initial 1
+                    </span>
                   </div>
-                  <div className="w-52 sm:w-64 space-y-1.5">
-                     <label className="text-xs font-medium text-[#aea69c]">Rôle</label>
-                     <div className="h-9 bg-[#26221f] border border-[#3f3a36] rounded-[3px] px-3 flex items-center justify-between text-xs font-mono">
-                       <span className="text-[#f7f5f0] font-medium">
-                         {index === 0
-                           ? '1er Contrôleur'
-                           : index === 1
-                           ? '2ème Contrôleur'
-                           : index === 2
-                           ? '3ème Contrôleur'
-                           : `Contrôleur ${index + 1}`}
-                       </span>
-                       <span
-                         className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                           index < 2
-                             ? 'bg-[#10b981]/15 text-[#10b981] border-[#10b981]/30'
-                             : 'bg-amber-950/50 text-amber-300 border-amber-800/50'
-                         }`}
-                       >
-                         {index < 2 ? 'Comptage initial' : 'Vérification en litige'}
-                       </span>
-                     </div>
-                     <input
-                       type="hidden"
-                       {...register(`users.${index}.responsibility`)}
-                       value={index < 2 ? 'COUNT' : 'ADJUDICATE'}
-                     />
-                  </div>
-                  {fields.length > 2 && (
-                    <button 
-                      type="button" 
-                      onClick={() => remove(index)}
-                      className="h-9 px-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-[3px] text-xs font-medium transition-colors cursor-pointer"
-                    >
-                      Retirer
-                    </button>
-                  )}
+                  <Controller
+                    control={control}
+                    name="users.0.userId"
+                    render={({ field: { value, onChange } }) => (
+                      <UserAutocomplete 
+                        value={value} 
+                        onChange={onChange} 
+                        error={errors.users?.[0]?.userId?.message}
+                      />
+                    )}
+                  />
                 </div>
-              ))}
+                <div className="w-full sm:w-56 space-y-1.5">
+                  <label className="text-xs font-medium text-[#aea69c]">Rôle système</label>
+                  <div className="h-9 bg-[#1f1b18] border border-[#3f3a36] rounded-[3px] px-3 flex items-center text-xs font-mono text-[#c9c0ad]">
+                    PRIMARY_COUNTER_1
+                  </div>
+                  <input type="hidden" {...register('users.0.responsibility')} value="COUNT" />
+                </div>
+              </div>
+
+              {/* Controller 2 */}
+              <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end p-3 rounded bg-[#26221f] border border-[#3f3a36]">
+                <div className="flex-1 w-full space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-[#f7f5f0]">2ème Contrôleur</label>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded border bg-[#10b981]/15 text-[#10b981] border-[#10b981]/30 font-mono">
+                      Comptage initial 2 (streamé)
+                    </span>
+                  </div>
+                  <Controller
+                    control={control}
+                    name="users.1.userId"
+                    render={({ field: { value, onChange } }) => (
+                      <UserAutocomplete 
+                        value={value} 
+                        onChange={onChange} 
+                        error={errors.users?.[1]?.userId?.message}
+                      />
+                    )}
+                  />
+                </div>
+                <div className="w-full sm:w-56 space-y-1.5">
+                  <label className="text-xs font-medium text-[#aea69c]">Rôle système</label>
+                  <div className="h-9 bg-[#1f1b18] border border-[#3f3a36] rounded-[3px] px-3 flex items-center text-xs font-mono text-[#c9c0ad]">
+                    PRIMARY_COUNTER_2
+                  </div>
+                  <input type="hidden" {...register('users.1.responsibility')} value="COUNT" />
+                </div>
+              </div>
+
+              {/* Controller 3 / Final Controller */}
+              <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end p-3 rounded bg-[#26221f] border border-amber-900/40">
+                <div className="flex-1 w-full space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-[#f7f5f0]">Contrôleur Final</label>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded border bg-amber-950/60 text-amber-300 border-amber-800/60 font-mono">
+                      Recomptage complet si désaccord (Autorité finale)
+                    </span>
+                  </div>
+                  <Controller
+                    control={control}
+                    name="users.2.userId"
+                    render={({ field: { value, onChange } }) => (
+                      <UserAutocomplete 
+                        value={value} 
+                        onChange={onChange} 
+                        error={errors.users?.[2]?.userId?.message}
+                      />
+                    )}
+                  />
+                </div>
+                <div className="w-full sm:w-56 space-y-1.5">
+                  <label className="text-xs font-medium text-[#aea69c]">Rôle système</label>
+                  <div className="h-9 bg-[#1f1b18] border border-[#3f3a36] rounded-[3px] px-3 flex items-center text-xs font-mono text-amber-200/80">
+                    FINAL_CONTROLLER
+                  </div>
+                  <input type="hidden" {...register('users.2.responsibility')} value="ADJUDICATE" />
+                </div>
+              </div>
+
               {errors.users && (
                 <p className="text-xs text-red-400 font-medium">
-                  {errors.users.message || (errors.users as any)?.root?.message || 'Au moins 2 participants distincts sont obligatoires.'}
+                  {errors.users.message || (errors.users as any)?.root?.message || 'Exactement 3 participants distincts sont obligatoires.'}
                 </p>
               )}
-              <button 
-                type="button" 
-                onClick={() => append({ userId: '', responsibility: 'COUNT' })}
-                className="text-xs font-medium text-[#f7f5f0] underline hover:text-[#dad2c1] cursor-pointer"
-              >
-                + Ajouter un participant
-              </button>
             </div>
           </section>
 
