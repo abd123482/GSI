@@ -7,10 +7,7 @@ import {
   ClipboardList,
   AlertTriangle,
   ArrowRight,
-  ExternalLink,
-  Barcode,
   CheckCircle2,
-  Clock,
 } from 'lucide-react';
 import { DashboardStats } from '@/types/dashboard';
 
@@ -58,13 +55,15 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#3f3a36]/60 text-[#dad2c1]">
-                {movementOverview.recentMovements.map((m) => {
+                {movementOverview.recentMovements.flatMap(header =>
+                  header.items?.length ? header.items.map(item => ({ ...header, ...item, rowKey: item.mouvementEquipmentId })) : [{ ...header, rowKey: header.mouvementId }],
+                ).map((m) => {
                   const typeUpper = m.mouvementStatus.toUpperCase();
-                  const isIN = typeUpper === 'IN';
-                  const isOUT = typeUpper === 'OUT';
+                  const isIN = typeUpper === 'IN' || typeUpper === 'ENTRY';
+                  const isOUT = typeUpper === 'OUT' || typeUpper === 'EXIT';
 
                   return (
-                    <tr key={m.mouvementId} className="hover:bg-[#2b2622]/50 transition-colors">
+                    <tr key={m.rowKey} className="hover:bg-[#2b2622]/50 transition-colors">
                       {/* Type Badge */}
                       <td className="py-2 px-2.5 whitespace-nowrap">
                         <span
@@ -83,6 +82,7 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
                       {/* Equipment Name */}
                       <td className="py-2 px-2.5 whitespace-nowrap font-medium text-[#f7f5f0] max-w-[180px] truncate">
                         {m.equipmentName}
+                        <div className="text-[9px] text-[#aea69c]" title={m.mouvementId}>Mvt {m.mouvementId.slice(0, 8)}</div>
                       </td>
 
                       {/* Quantity */}
@@ -126,7 +126,7 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4 text-[#f59e0b]" />
               <h2 className="text-xs font-mono font-medium text-[#f7f5f0] uppercase tracking-wider">
-                Campagnes d'Inventaire
+                Campagnes d&apos;Inventaire
               </h2>
             </div>
             <Link
@@ -140,7 +140,7 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
 
           {inventoryOverview.activeCampaigns.length === 0 ? (
             <div className="py-6 text-center text-xs font-mono text-[#aea69c]">
-              Aucune campagne d'inventaire active.
+              Aucune campagne d&apos;inventaire active.
             </div>
           ) : (
             <div className="space-y-2.5">
@@ -183,7 +183,7 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-[#ef4444]" />
               <h2 className="text-xs font-mono font-medium text-[#f7f5f0] uppercase tracking-wider">
-                Articles sous seuil d'alerte
+                Articles sous seuil d&apos;alerte
               </h2>
             </div>
             <span className="text-[11px] font-mono text-[#ef4444] font-semibold">

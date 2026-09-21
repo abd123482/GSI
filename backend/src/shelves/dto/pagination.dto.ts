@@ -11,8 +11,8 @@ export const paginationSchema = z.object({
     .number()
     .int()
     .min(1)
-    .max(500)
-    .default(10),
+    .max(100)
+    .default(20),
 });
 
 export type PaginationDTO = z.infer<typeof paginationSchema>;

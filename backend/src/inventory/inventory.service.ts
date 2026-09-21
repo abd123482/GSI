@@ -1,21 +1,21 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
-import { 
-  PaginationDTO, 
-  CreateInventoryDTO, 
-  SubmitTaskDTO, 
+import {
+  PaginationDTO,
+  CreateInventoryDTO,
+  SubmitTaskDTO,
   SaveDraftDTO,
   ResolveIssueDTO,
-  AdjudicateDTO, 
-  AssignThirdUserDTO 
+  AdjudicateDTO,
+  AssignThirdUserDTO
 } from './dto/index.js';
 
 @Injectable()
 export class InventoryService {
   private readonly logger = new Logger(InventoryService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * Retrieves all inventories with pagination and optional user filtering
@@ -636,10 +636,10 @@ export class InventoryService {
 
       equipmentDetails = eq
         ? {
-            ...eq,
-            shelves: candidateShelves,
-            serialNumbers,
-          }
+          ...eq,
+          shelves: candidateShelves,
+          serialNumbers,
+        }
         : null;
     } else if (!isByEquipment && attempt.unit.shelfId) {
       const sh = await this.prisma.shelf.findUnique({
@@ -671,18 +671,18 @@ export class InventoryService {
       const snsOnShelf =
         serializedEqIds.length > 0
           ? await this.prisma.serialNumber.findMany({
-              where: {
-                shelfId: attempt.unit.shelfId,
-                equipmentId: { in: serializedEqIds },
-              },
-              select: {
-                serialNumberId: true,
-                serialNumberCode: true,
-                serialNumberStatus: true,
-                equipmentId: true,
-                shelfId: true,
-              },
-            })
+            where: {
+              shelfId: attempt.unit.shelfId,
+              equipmentId: { in: serializedEqIds },
+            },
+            select: {
+              serialNumberId: true,
+              serialNumberCode: true,
+              serialNumberStatus: true,
+              equipmentId: true,
+              shelfId: true,
+            },
+          })
           : [];
 
       candidateEquipments = eqShelfs
@@ -705,10 +705,10 @@ export class InventoryService {
 
       shelfDetails = sh
         ? {
-            shelfId: sh.shelfId,
-            shelfName: sh.shelfName,
-            equipments: candidateEquipments,
-          }
+          shelfId: sh.shelfId,
+          shelfName: sh.shelfName,
+          equipments: candidateEquipments,
+        }
         : null;
     }
 
@@ -749,10 +749,10 @@ export class InventoryService {
         roleSnapshot: iu.roleSnapshot,
         user: iu.User
           ? {
-              userId: iu.User.userId,
-              userName: iu.User.userName,
-              userEmail: iu.User.userEmail,
-            }
+            userId: iu.User.userId,
+            userName: iu.User.userName,
+            userEmail: iu.User.userEmail,
+          }
           : undefined,
         User: iu.User,
       })),
@@ -772,22 +772,22 @@ export class InventoryService {
       notes: o.notes,
       equipment: o.equipment
         ? {
-            equipmentId: o.equipment.equipmentId,
-            equipmentName: o.equipment.equipmentName,
-            hasSerialNumber: o.equipment.hasSerialNumber,
-          }
+          equipmentId: o.equipment.equipmentId,
+          equipmentName: o.equipment.equipmentName,
+          hasSerialNumber: o.equipment.hasSerialNumber,
+        }
         : undefined,
       shelf: o.shelf
         ? {
-            shelfId: o.shelf.shelfId,
-            shelfName: o.shelf.shelfName,
-          }
+          shelfId: o.shelf.shelfId,
+          shelfName: o.shelf.shelfName,
+        }
         : undefined,
       serialNumber: o.serialNumber
         ? {
-            serialNumberId: o.serialNumber.serialNumberId,
-            serialNumberCode: o.serialNumber.serialNumberCode,
-          }
+          serialNumberId: o.serialNumber.serialNumberId,
+          serialNumberCode: o.serialNumber.serialNumberCode,
+        }
         : undefined,
       equipmentName: o.equipment?.equipmentName,
       shelfName: o.shelf?.shelfName,
@@ -1281,18 +1281,37 @@ export class InventoryService {
         const c1NonSerialMap = new Map<string, number>();
         const c2NonSerialMap = new Map<string, number>();
 
-        // 2. Serialized set: unique normalized serial codes in this unit
+        // 2. Serialized set:
+        //    `${serialCode}:${equipmentId}:${shelfId}`
+        //
+        // Serial identity alone is not enough for inventory reconciliation:
+        // finding the same serial on a different shelf is a real position
+        // discrepancy and must trigger the final recount.
         const c1SerialSet = new Set<string>();
         const c2SerialSet = new Set<string>();
 
         const extractSerial = (o: any) => {
-          return (o.scannedSerialCode || o.serialNumber?.serialNumberCode || '').trim().toLowerCase();
+          return (o.scannedSerialCode || o.serialNumber?.serialNumberCode || '')
+            .trim()
+            .toLowerCase();
+        };
+
+        const serializedKey = (o: any, serialCode: string) => {
+          const eqId = (o.equipmentId || unit.equipmentId || 'UNKNOWN')
+            .toLowerCase()
+            .trim();
+
+          const shId = (o.shelfId || unit.shelfId || 'UNASSIGNED')
+            .toLowerCase()
+            .trim();
+
+          return `${serialCode}:${eqId}:${shId}`;
         };
 
         for (const o of c1Orders) {
           const sn = extractSerial(o);
           if (sn) {
-            c1SerialSet.add(sn);
+            c1SerialSet.add(serializedKey(o, sn));
           } else {
             const eqId = (o.equipmentId || unit.equipmentId || 'UNKNOWN').toLowerCase().trim();
             const shId = (o.shelfId || unit.shelfId || 'UNKNOWN').toLowerCase().trim();
@@ -1305,7 +1324,7 @@ export class InventoryService {
         for (const o of c2Orders) {
           const sn = extractSerial(o);
           if (sn) {
-            c2SerialSet.add(sn);
+            c2SerialSet.add(serializedKey(o, sn));
           } else {
             const eqId = (o.equipmentId || unit.equipmentId || 'UNKNOWN').toLowerCase().trim();
             const shId = (o.shelfId || unit.shelfId || 'UNKNOWN').toLowerCase().trim();
@@ -1679,13 +1698,13 @@ export class InventoryService {
     const [equipments, shelves] = await Promise.all([
       equipmentIds.length > 0
         ? this.prisma.equipment.findMany({
-            where: { equipmentId: { in: equipmentIds } },
-          })
+          where: { equipmentId: { in: equipmentIds } },
+        })
         : [],
       shelfIds.length > 0
         ? this.prisma.shelf.findMany({
-            where: { shelfId: { in: shelfIds } },
-          })
+          where: { shelfId: { in: shelfIds } },
+        })
         : [],
     ]);
 
@@ -1877,11 +1896,15 @@ export class InventoryService {
           // Shortage detected! Check movement records
           const movements = await tx.mouvement.findMany({
             where: {
-              equipmentId: launchSnap.equipmentId,
-              OR: [
-                { sourceShelfId: launchSnap.shelfId },
-                { destinationShelfId: launchSnap.shelfId },
-              ],
+              items: {
+                some: {
+                  equipmentId: launchSnap.equipmentId,
+                  OR: [
+                    { sourceShelfId: launchSnap.shelfId },
+                    { destinationShelfId: launchSnap.shelfId },
+                  ],
+                }
+              },
             },
           });
 

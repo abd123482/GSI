@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { InventoryService } from './inventory.service.js';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
 describe('Inventory Workflow V2: Three-Controller Full-Recount Architecture', () => {
   let inventoryService: InventoryService;
@@ -36,6 +36,7 @@ describe('Inventory Workflow V2: Three-Controller Full-Recount Architecture', ()
         findMany: vi.fn(),
         findUnique: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         deleteMany: vi.fn(),
         count: vi.fn(),
       },

@@ -25,6 +25,8 @@ export interface DashboardStats {
     inCount: number;
     outCount: number;
     transferCount: number;
+    mixedCount?: number;
+    otherCount?: number;
     recentMovements: Array<{
       mouvementId: string;
       mouvementStatus: string;
@@ -33,6 +35,15 @@ export interface DashboardStats {
       sourceShelfName: string | null;
       destinationShelfName: string | null;
       serialNumberCode: string | null;
+      items?: Array<{
+        mouvementEquipmentId: string;
+        mouvementStatus: string;
+        mouvementQuantity: number;
+        equipmentName: string;
+        sourceShelfName: string | null;
+        destinationShelfName: string | null;
+        serialNumberCode: string | null;
+      }>;
     }>;
   };
   inventoryOverview: {

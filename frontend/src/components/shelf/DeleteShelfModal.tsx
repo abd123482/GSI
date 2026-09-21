@@ -1,20 +1,28 @@
 'use client';
 
-import { getErrorMessage } from '@/lib/error-message';
-
-import { useState } from 'react';
-import { useShelves } from '@/hooks/use-shelves';
-import { usePermissions } from '@/hooks/use-permissions';
-import { REQUIRED_DELETE_PERMISSION } from '@/services/shelf.service';
-import { InsufficientPermissionException } from '@/services/shelf.errors';
-import { Shelf } from '@/types/shelf';
 import {
-  X,
-  Trash2,
+  useState,
+} from 'react';
+import {
+  AlertTriangle,
   Loader2,
   ShieldAlert,
-  AlertTriangle,
+  Trash2,
+  X,
 } from 'lucide-react';
+
+import type {
+  Shelf,
+} from '@/types/shelf';
+import {
+  useShelves,
+} from '@/hooks/use-shelves';
+import {
+  usePermissions,
+} from '@/hooks/use-permissions';
+import {
+  getErrorMessage,
+} from '@/lib/error-message';
 
 interface DeleteShelfModalProps {
   shelf: Shelf | null;
@@ -29,140 +37,148 @@ export function DeleteShelfModal({
   onClose,
   onSuccess,
 }: DeleteShelfModalProps) {
-  const { deleteShelf, isDeleting } = useShelves();
-  const { canDeleteShelf, roleName } = usePermissions();
-  const [error, setError] = useState<string | null>(null);
+  const {
+    deleteShelf,
+    isDeleting,
+  } = useShelves({
+    enabled: false,
+  });
 
-  if (!isOpen || !shelf) return null;
+  const {
+    canDeleteShelf,
+  } = usePermissions();
 
-  const handleDelete = async () => {
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(
+      null,
+    );
+
+  if (
+    !isOpen ||
+    !shelf
+  ) {
+    return null;
+  }
+
+  async function handleDelete() {
     setError(null);
 
-    // Client-side permission guard check
     if (!canDeleteShelf) {
-      const err = new InsufficientPermissionException(
-        REQUIRED_DELETE_PERMISSION,
-        `Action interdite : Votre rôle (${roleName ?? 'Utilisateur'}) ne possède pas la permission '${REQUIRED_DELETE_PERMISSION}' pour supprimer cet emplacement.`,
+      setError(
+        "Permission 'shelf.delete' requise.",
       );
-      setError(err.message);
-      throw err;
+      return;
     }
 
     try {
-      await deleteShelf(shelf.shelfId);
+      await deleteShelf(
+        shelf!.shelfId,
+      );
+
+      onSuccess?.();
       onClose();
-      if (onSuccess) onSuccess();
-    } catch (err: unknown) {
-      console.error('[DeleteShelfModal] Delete failed:', err);
-      setError(getErrorMessage(err, 'Impossible de supprimer cet emplacement.'));
+    } catch (cause: unknown) {
+      setError(
+        getErrorMessage(
+          cause,
+          'Impossible de supprimer cet emplacement.',
+        ),
+      );
     }
-  };
+  }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-      {/* Danger Card Modal (#6b7b97 Theme) */}
-      <div
-        className="w-full max-w-md bg-[#383330] border border-[#3f3a36] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-shelf-title"
-      >
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-[#3f3a36] flex items-center justify-between bg-[#2b2622]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-rose-950/60 border border-rose-500/50 flex items-center justify-center text-rose-300">
-              <Trash2 className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 id="delete-shelf-title" className="text-base font-semibold text-white">
-                Supprimer l’emplacement
-              </h2>
-            </div>
-          </div>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-5 py-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <Trash2 className="h-4 w-4 text-rose-300" />
+            Supprimer l’emplacement
+          </h2>
 
           <button
             type="button"
             onClick={onClose}
-            className="text-white/80 hover:text-white hover:bg-white/20 p-1.5 rounded-md transition-colors cursor-pointer"
-            aria-label="Fermer"
+            className="rounded p-1.5 text-white/60 hover:bg-white/10 hover:text-white"
           >
-            <X className="w-4 h-4" />
+            <X className="h-4 w-4" />
           </button>
-        </div>
+        </header>
 
-        <div className="p-6 space-y-4">
-          {/* Security Alert if lacking permission */}
-          {!canDeleteShelf && (
-            <div className="p-3.5 bg-amber-950/50 border border-amber-500/50 rounded-lg flex items-start gap-3 text-left">
-              <ShieldAlert className="w-5 h-5 text-amber-300 shrink-0 mt-0.5" />
-              <div className="text-xs text-amber-200 space-y-1">
-                <p className="font-semibold">Autorisation requise : {REQUIRED_DELETE_PERMISSION}</p>
-                <p>
-                  Votre compte ne dispose pas des droits de suppression. L&apos;opération sera bloquée.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Error display */}
+        <div className="space-y-4 p-5">
           {error && (
-            <div className="p-3.5 bg-rose-950/50 border border-rose-500/50 rounded-lg flex items-start gap-2.5 text-xs text-rose-200">
-              <AlertTriangle className="w-4 h-4 text-rose-300 shrink-0 mt-0.5" />
-              <p>{error}</p>
+            <div className="flex gap-2 rounded-lg border border-rose-500/40 bg-rose-950/40 p-3 text-xs text-rose-200">
+              <ShieldAlert className="h-4 w-4 shrink-0" />
+              {error}
             </div>
           )}
 
-          {/* Warning text */}
-          <p className="text-xs text-white/90 leading-relaxed">
-            Êtes-vous sûr de vouloir supprimer définitivement cet emplacement ? Cette action est irréversible.
-          </p>
+          <div className="flex gap-2.5 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-[11px] text-amber-100">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
 
-          {/* Target Shelf Summary Box */}
-          <div className="p-3.5 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg space-y-2 text-xs text-white">
-            <div className="flex items-center justify-between font-medium">
-              <span className="text-white text-sm font-semibold truncate">
-                {shelf.shelfName ?? 'Emplacement sans nom'}
-              </span>
-              <span className="px-2 py-0.5 rounded bg-[#2b2622] border border-[#3f3a36] font-mono text-[11px] text-white">
-                {shelf.shelfQuantity} unités
-              </span>
-            </div>
-            <div className="text-[11px] font-mono text-white/80 truncate">
-              ID: {shelf.shelfId}
+            <div className="space-y-1">
+              <p className="font-semibold">
+                Suppression protégée.
+              </p>
+
+              <p>
+                Le backend refusera cette opération si l’emplacement contient
+                du stock, un numéro de série, ou s’il est référencé par un
+                historique de mouvements.
+              </p>
+
+              <p className="text-amber-100/70">
+                Les mouvements historiques ne sont jamais supprimés pour
+                permettre la suppression d’un emplacement.
+              </p>
             </div>
           </div>
 
-          {/* Modal Action Buttons */}
-          <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-[#3f3a36]">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isDeleting}
-              className="px-4 py-2 bg-white/15 hover:bg-white/25 text-white border border-white/30 text-xs font-medium rounded-lg transition-colors cursor-pointer"
-            >
-              Annuler
-            </button>
+          <div className="rounded-lg border border-[#3f3a36] bg-[#2b2622]/65 p-3 text-xs">
+            <p className="font-semibold">
+              {shelf.shelfName ??
+                shelf.shelfId}
+            </p>
 
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={isDeleting || !canDeleteShelf}
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Suppression...</span>
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Supprimer l’emplacement</span>
-                </>
-              )}
-            </button>
+            <p className="mt-2 text-white/55">
+              Quantité actuelle :{' '}
+              <strong className="font-mono text-white">
+                {shelf.shelfQuantity}
+              </strong>
+            </p>
           </div>
         </div>
+
+        <footer className="flex justify-end gap-2 border-t border-[#3f3a36] bg-[#2b2622] px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isDeleting}
+            className="rounded border border-[#3f3a36] px-3 py-1.5 text-xs"
+          >
+            Annuler
+          </button>
+
+          <button
+            type="button"
+            onClick={
+              handleDelete
+            }
+            disabled={
+              isDeleting ||
+              !canDeleteShelf
+            }
+            className="inline-flex items-center gap-1.5 rounded bg-rose-600 px-3.5 py-1.5 text-xs disabled:opacity-40"
+          >
+            {isDeleting && (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            )}
+            Supprimer
+          </button>
+        </footer>
       </div>
     </div>
   );

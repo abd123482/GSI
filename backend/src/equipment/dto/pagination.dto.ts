@@ -1,5 +1,3 @@
-// pagination.dto.ts
-
 import { z } from 'zod';
 
 export const paginationSchema = z.object({
@@ -13,7 +11,7 @@ export const paginationSchema = z.object({
         .number()
         .int()
         .min(1)
-        .max(500)
+        .max(100)
         .default(20),
 });
 

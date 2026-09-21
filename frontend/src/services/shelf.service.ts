@@ -1,377 +1,434 @@
-import { AxiosInstance, isAxiosError } from 'axios';
+import type {
+  AxiosInstance,
+} from 'axios';
 import {
-  Shelf,
-  CreateShelfInput,
-  UpdateShelfInput,
-  ShelfPaginationQuery,
-  PaginatedShelvesResponse,
-} from '@/types/shelf';
+  isAxiosError,
+} from 'axios';
+
 import {
   createShelfSchema,
   updateShelfSchema,
 } from '@/schemas/shelf.schema';
+import type {
+  CreateShelfInput,
+  PaginatedShelfEquipmentResponse,
+  PaginatedShelfSerialNumbersResponse,
+  PaginatedShelvesResponse,
+  Shelf,
+  ShelfPaginationQuery,
+  UpdateShelfInput,
+} from '@/types/shelf';
 import {
   InsufficientPermissionException,
-  ShelfValidationException,
   ShelfServiceException,
+  ShelfValidationException,
 } from './shelf.errors';
 
-export const REQUIRED_CREATE_PERMISSION = 'shelf.create';
-export const REQUIRED_READ_PERMISSION = 'shelf.read';
-export const REQUIRED_UPDATE_PERMISSION = 'shelf.update';
-export const REQUIRED_DELETE_PERMISSION = 'shelf.delete';
+export const REQUIRED_CREATE_PERMISSION =
+  'shelf.create';
+export const REQUIRED_READ_PERMISSION =
+  'shelf.read';
+export const REQUIRED_UPDATE_PERMISSION =
+  'shelf.update';
+export const REQUIRED_DELETE_PERMISSION =
+  'shelf.delete';
 
-/**
- * Frontend service for managing Shelves (emplacements de stockage).
- * Handles token session authorization checks, custom exceptions, and Zod validation.
- */
+function ensurePermission(
+  permissions: string[] | undefined,
+  permission: string,
+) {
+  if (
+    permissions &&
+    !permissions.includes(permission)
+  ) {
+    throw new InsufficientPermissionException(
+      permission,
+      `Permission '${permission}' requise.`,
+    );
+  }
+}
+
+function messageFrom(
+  error: unknown,
+  fallback: string,
+) {
+  if (
+    isAxiosError(error)
+  ) {
+    const message =
+      error.response?.data?.message;
+
+    if (
+      Array.isArray(message)
+    ) {
+      return message.join(', ');
+    }
+
+    if (
+      typeof message ===
+      'string' &&
+      message
+    ) {
+      return message;
+    }
+
+    return (
+      error.message ||
+      fallback
+    );
+  }
+
+  return error instanceof Error
+    ? error.message
+    : fallback;
+}
+
+function throwShelfError(
+  error: unknown,
+  fallback: string,
+  permission?: string,
+): never {
+  if (isAxiosError(error)) {
+    if (
+      error.response?.status ===
+      403 &&
+      permission
+    ) {
+      throw new InsufficientPermissionException(
+        permission,
+        messageFrom(
+          error,
+          `Permission '${permission}' requise.`,
+        ),
+      );
+    }
+
+    throw new ShelfServiceException(
+      messageFrom(
+        error,
+        fallback,
+      ),
+      error.response?.status,
+      error.response?.data,
+    );
+  }
+
+  if (
+    error instanceof
+    InsufficientPermissionException ||
+    error instanceof
+    ShelfValidationException ||
+    error instanceof
+    ShelfServiceException
+  ) {
+    throw error;
+  }
+
+  throw new ShelfServiceException(
+    messageFrom(
+      error,
+      fallback,
+    ),
+  );
+}
+
 export class ShelfService {
-  /**
-   * Fast creation of a new Shelf via POST /shelves.
-   * Proactively checks for 'shelf.create' permission and validates payload using Zod.
-   * Throws InsufficientPermissionException if authorization check fails.
-   */
   static async createShelf(
     client: AxiosInstance,
     input: CreateShelfInput,
     userPermissions?: string[],
   ): Promise<Shelf> {
-    // 1. Proactive Security Check: Authorization permission check
-    if (userPermissions && !userPermissions.includes(REQUIRED_CREATE_PERMISSION)) {
-      throw new InsufficientPermissionException(
-        REQUIRED_CREATE_PERMISSION,
-        `Permission refusée : Vous n'avez pas l'autorisation '${REQUIRED_CREATE_PERMISSION}' pour créer un emplacement.`,
-      );
-    }
+    ensurePermission(
+      userPermissions,
+      REQUIRED_CREATE_PERMISSION,
+    );
 
-    // 2. High-speed client-side Zod validation
-    const validationResult = createShelfSchema.safeParse(input);
-    if (!validationResult.success) {
-      const fieldErrors: Record<string, string[]> = {};
-      validationResult.error.errors.forEach((err) => {
-        const field = err.path.join('.') || 'form';
-        if (!fieldErrors[field]) fieldErrors[field] = [];
-        fieldErrors[field].push(err.message);
-      });
+    const validation =
+      createShelfSchema.safeParse(
+        input,
+      );
+
+    if (!validation.success) {
+      const fields:
+        Record<
+          string,
+          string[]
+        > = {};
+
+      for (
+        const issue of
+        validation.error.issues
+      ) {
+        const field =
+          issue.path.join('.') ||
+          'form';
+
+        (
+          fields[field] ??= []
+        ).push(issue.message);
+      }
+
       throw new ShelfValidationException(
-        'Erreur de validation des données d’emplacement',
-        fieldErrors,
+        'Données d’emplacement invalides.',
+        fields,
       );
     }
 
-    // 3. Dispatch authenticated POST request to NestJS /shelves
     try {
-      const response = await client.post<Shelf>('/shelves', {
-        shelfName: validationResult.data.shelfName,
-        shelfCode: validationResult.data.shelfCode,
-        ...(validationResult.data.stockId ? { stockId: validationResult.data.stockId } : {}),
-      });
+      const response =
+        await client.post<Shelf>(
+          '/shelves',
+          {
+            shelfName:
+              validation.data
+                .shelfName,
+
+            stockId:
+              validation.data.stockId === ''
+                ? null
+                : validation.data.stockId ?? null,
+          },
+        );
+
       return response.data;
     } catch (error: unknown) {
-      if (isAxiosError(error)) {
-        // Backend 403 Forbidden check (PermissionsGuard / ClerkAuthGuard)
-        if (error.response?.status === 403) {
-          const backendMsg =
-            error.response.data?.message ||
-            `Accès refusé : Permission '${REQUIRED_CREATE_PERMISSION}' manquante.`;
-          throw new InsufficientPermissionException(
-            REQUIRED_CREATE_PERMISSION,
-            Array.isArray(backendMsg) ? backendMsg.join(', ') : backendMsg,
-          );
-        }
-
-        // Backend 400 Bad Request (e.g. Duplicate shelfName)
-        if (error.response?.status === 400) {
-          const backendMsg =
-            error.response.data?.message || 'Données d’emplacement invalides ou emplacement déjà existant.';
-          throw new ShelfServiceException(
-            Array.isArray(backendMsg) ? backendMsg.join(', ') : backendMsg,
-            400,
-            error.response.data,
-          );
-        }
-
-        // Backend 401 Unauthorized (Token missing or expired)
-        if (error.response?.status === 401) {
-          throw new ShelfServiceException(
-            'Session expirée ou non authentifiée. Veuillez vous reconnecter.',
-            401,
-          );
-        }
-
-        throw new ShelfServiceException(
-          error.response?.data?.message || error.message || 'Erreur réseau lors de la création de l’emplacement.',
-          error.response?.status,
-        );
-      }
-
-      if (error instanceof InsufficientPermissionException || error instanceof ShelfValidationException) {
-        throw error;
-      }
-
-      throw new ShelfServiceException(
-        error instanceof Error ? error.message : 'Erreur inconnue lors de la création de l’emplacement.',
+      throwShelfError(
+        error,
+        'Erreur lors de la création de l’emplacement.',
+        REQUIRED_CREATE_PERMISSION,
       );
     }
   }
 
-  /**
-   * Fetch all shelves with pagination support and total counts.
-   */
   static async getAllShelves(
     client: AxiosInstance,
     params?: ShelfPaginationQuery,
   ): Promise<PaginatedShelvesResponse> {
     try {
-      const page = params?.page ?? 1;
-      const limit = params?.limit ?? 10;
-      const response = await client.get<Partial<PaginatedShelvesResponse> | Shelf[]>('/shelves', {
-        params: {
-          page,
-          limit,
-        },
-      });
+      const response =
+        await client.get<PaginatedShelvesResponse>(
+          '/shelves',
+          {
+            params: {
+              page:
+                params?.page ??
+                1,
 
-      if (response.data && !Array.isArray(response.data) && Array.isArray(response.data.shelves)) {
-        return {
-          shelves: response.data.shelves,
-          totalShelves: Number(response.data.totalShelves ?? response.data.shelves.length),
-          totalPages: Number(response.data.totalPages ?? 1),
-          currentPage: Number(response.data.currentPage ?? page),
-          limit: Number(response.data.limit ?? limit),
-        };
-      }
-
-      if (Array.isArray(response.data)) {
-        return {
-          shelves: response.data,
-          totalShelves: response.data.length,
-          totalPages: 1,
-          currentPage: 1,
-          limit: response.data.length,
-        };
-      }
-
-      return {
-        shelves: [],
-        totalShelves: 0,
-        totalPages: 1,
-        currentPage: page,
-        limit,
-      };
-    } catch (error: unknown) {
-      if (isAxiosError(error) && error.response?.status === 403) {
-        throw new InsufficientPermissionException(
-          REQUIRED_READ_PERMISSION,
-          'Permission refusée pour la consultation des emplacements.',
+              limit:
+                params?.limit ??
+                10,
+            },
+          },
         );
-      }
-      throw new ShelfServiceException(
-        'Impossible de récupérer la liste des emplacements.',
-      );
-    }
-  }
 
-  /**
-   * Get single shelf by its UUID.
-   */
-  static async getShelfById(
-    client: AxiosInstance,
-    id: string,
-  ): Promise<Shelf> {
-    try {
-      const response = await client.get<Shelf>(`/shelves/${id}`);
       return response.data;
     } catch (error: unknown) {
-      if (isAxiosError(error) && error.response?.status === 403) {
-        throw new InsufficientPermissionException(
-          REQUIRED_READ_PERMISSION,
-          'Permission refusée pour la consultation de cet emplacement.',
-        );
-      }
-      throw new ShelfServiceException(
-        `Emplacement avec l'ID '${id}' introuvable ou inaccessible.`,
+      throwShelfError(
+        error,
+        'Impossible de récupérer les emplacements.',
+        REQUIRED_READ_PERMISSION,
       );
     }
   }
 
-  /**
-   * Search shelves by name query with pagination support.
-   */
   static async searchShelves(
     client: AxiosInstance,
     name: string,
     params?: ShelfPaginationQuery,
   ): Promise<PaginatedShelvesResponse> {
     try {
-      const page = params?.page ?? 1;
-      const limit = params?.limit ?? 10;
-      const response = await client.get<Partial<PaginatedShelvesResponse> | Shelf[]>('/shelves/search', {
-        params: {
-          shelfName: name,
-          page,
-          limit,
-        },
-      });
-
-      if (response.data && !Array.isArray(response.data) && Array.isArray(response.data.shelves)) {
-        return {
-          shelves: response.data.shelves,
-          totalShelves: Number(response.data.totalShelves ?? response.data.shelves.length),
-          totalPages: Number(response.data.totalPages ?? 1),
-          currentPage: Number(response.data.currentPage ?? page),
-          limit: Number(response.data.limit ?? limit),
-        };
-      }
-
-      if (Array.isArray(response.data)) {
-        return {
-          shelves: response.data,
-          totalShelves: response.data.length,
-          totalPages: 1,
-          currentPage: 1,
-          limit: response.data.length,
-        };
-      }
-
-      return {
-        shelves: [],
-        totalShelves: 0,
-        totalPages: 1,
-        currentPage: page,
-        limit,
-      };
-    } catch (error: unknown) {
-      if (isAxiosError(error) && error.response?.status === 403) {
-        throw new InsufficientPermissionException(
-          REQUIRED_READ_PERMISSION,
-          'Permission refusée pour la recherche d’emplacements.',
+      const response =
+        await client.get<PaginatedShelvesResponse>(
+          '/shelves/search',
+          {
+            params: {
+              shelfName:
+                name.trim(),
+              page:
+                params?.page ??
+                1,
+              limit:
+                params?.limit ??
+                10,
+            },
+          },
         );
-      }
-      throw new ShelfServiceException('Échec de la recherche d’emplacements.');
+
+      return response.data;
+    } catch (error: unknown) {
+      throwShelfError(
+        error,
+        'Échec de la recherche d’emplacements.',
+        REQUIRED_READ_PERMISSION,
+      );
     }
   }
 
-  /**
-   * Update an existing shelf.
-   */
+  static async getShelfById(
+    client: AxiosInstance,
+    id: string,
+  ): Promise<Shelf> {
+    try {
+      const response =
+        await client.get<Shelf>(
+          `/shelves/${id}`,
+        );
+
+      return response.data;
+    } catch (error: unknown) {
+      throwShelfError(
+        error,
+        `Emplacement '${id}' introuvable ou inaccessible.`,
+        REQUIRED_READ_PERMISSION,
+      );
+    }
+  }
+
   static async updateShelf(
     client: AxiosInstance,
     id: string,
     data: UpdateShelfInput,
     userPermissions?: string[],
   ): Promise<Shelf> {
-    if (userPermissions && !userPermissions.includes(REQUIRED_UPDATE_PERMISSION)) {
-      throw new InsufficientPermissionException(
-        REQUIRED_UPDATE_PERMISSION,
-        `Permission refusée : Vous n'avez pas le droit '${REQUIRED_UPDATE_PERMISSION}' pour modifier cet emplacement.`,
+    ensurePermission(
+      userPermissions,
+      REQUIRED_UPDATE_PERMISSION,
+    );
+
+    const validation =
+      updateShelfSchema.safeParse(
+        data,
+      );
+
+    if (!validation.success) {
+      throw new ShelfValidationException(
+        'Données de mise à jour non valides.',
       );
     }
 
-    const validation = updateShelfSchema.safeParse(data);
-    if (!validation.success) {
-      throw new ShelfValidationException('Données de mise à jour non valides');
-    }
-
     try {
-      const response = await client.patch<Shelf>(`/shelves/${id}`, validation.data);
+      const payload = {
+        ...validation.data,
+        ...(validation.data.stockId !== undefined && {
+          stockId:
+            validation.data.stockId === ''
+              ? null
+              : validation.data.stockId,
+        }),
+      };
+
+      const response =
+        await client.patch<Shelf>(
+          `/shelves/${id}`,
+          payload,
+        );
+
       return response.data;
     } catch (error: unknown) {
-      if (isAxiosError(error)) {
-        if (error.response?.status === 403) {
-          const backendMsg =
-            error.response.data?.message || `Permission '${REQUIRED_UPDATE_PERMISSION}' manquante.`;
-          throw new InsufficientPermissionException(
-            REQUIRED_UPDATE_PERMISSION,
-            Array.isArray(backendMsg) ? backendMsg.join(', ') : backendMsg,
-          );
-        }
-
-        if (error.response?.status === 401) {
-          throw new ShelfServiceException(
-            'Session expirée ou non authentifiée. Veuillez vous reconnecter.',
-            401,
-          );
-        }
-
-        const backendMsg =
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          error.message ||
-          'Erreur lors de la mise à jour de l’emplacement.';
-
-        throw new ShelfServiceException(
-          Array.isArray(backendMsg) ? backendMsg.join(', ') : backendMsg,
-          error.response?.status,
-          error.response?.data,
-        );
-      }
-
-      if (error instanceof InsufficientPermissionException || error instanceof ShelfValidationException) {
-        throw error;
-      }
-
-      throw new ShelfServiceException(
-        error instanceof Error ? error.message : 'Erreur inconnue lors de la mise à jour de l’emplacement.',
+      throwShelfError(
+        error,
+        'Erreur lors de la mise à jour de l’emplacement.',
+        REQUIRED_UPDATE_PERMISSION,
       );
     }
   }
 
-  /**
-   * Delete a shelf by ID.
-   */
   static async deleteShelf(
     client: AxiosInstance,
     id: string,
     userPermissions?: string[],
   ): Promise<Shelf> {
-    if (userPermissions && !userPermissions.includes(REQUIRED_DELETE_PERMISSION)) {
-      throw new InsufficientPermissionException(
-        REQUIRED_DELETE_PERMISSION,
-        `Permission refusée : Vous n'avez pas le droit '${REQUIRED_DELETE_PERMISSION}' pour supprimer cet emplacement.`,
-      );
-    }
+    ensurePermission(
+      userPermissions,
+      REQUIRED_DELETE_PERMISSION,
+    );
 
     try {
-      const response = await client.delete<Shelf>(`/shelves/${id}`);
+      const response =
+        await client.delete<Shelf>(
+          `/shelves/${id}`,
+        );
+
       return response.data;
     } catch (error: unknown) {
-      if (isAxiosError(error)) {
-        if (error.response?.status === 403) {
-          const backendMsg =
-            error.response.data?.message || `Permission '${REQUIRED_DELETE_PERMISSION}' manquante.`;
-          throw new InsufficientPermissionException(
-            REQUIRED_DELETE_PERMISSION,
-            Array.isArray(backendMsg) ? backendMsg.join(', ') : backendMsg,
-          );
-        }
+      throwShelfError(
+        error,
+        'Erreur lors de la suppression de l’emplacement.',
+        REQUIRED_DELETE_PERMISSION,
+      );
+    }
+  }
 
-        if (error.response?.status === 401) {
-          throw new ShelfServiceException(
-            'Session expirée ou non authentifiée. Veuillez vous reconnecter.',
-            401,
-          );
-        }
+  static async getShelfEquipment(
+    client: AxiosInstance,
+    id: string,
+    pagination: ShelfPaginationQuery = {},
+    userPermissions?: string[],
+  ): Promise<PaginatedShelfEquipmentResponse> {
+    ensurePermission(
+      userPermissions,
+      REQUIRED_READ_PERMISSION,
+    );
 
-        const backendMsg =
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          error.message ||
-          'Erreur lors de la suppression de l’emplacement.';
-
-        throw new ShelfServiceException(
-          Array.isArray(backendMsg) ? backendMsg.join(', ') : backendMsg,
-          error.response?.status,
-          error.response?.data,
+    try {
+      const response =
+        await client.get<PaginatedShelfEquipmentResponse>(
+          `/shelves/${id}/equipment`,
+          {
+            params: {
+              page:
+                pagination.page ??
+                1,
+              limit:
+                pagination.limit ??
+                20,
+            },
+          },
         );
-      }
 
-      if (error instanceof InsufficientPermissionException) {
-        throw error;
-      }
+      return response.data;
+    } catch (error: unknown) {
+      throwShelfError(
+        error,
+        'Impossible de charger les articles de cet emplacement.',
+        REQUIRED_READ_PERMISSION,
+      );
+    }
+  }
 
-      throw new ShelfServiceException(
-        error instanceof Error ? error.message : 'Erreur inconnue lors de la suppression de l’emplacement.',
+  static async getShelfSerialNumbers(
+    client: AxiosInstance,
+    id: string,
+    pagination: ShelfPaginationQuery = {},
+    userPermissions?: string[],
+  ): Promise<PaginatedShelfSerialNumbersResponse> {
+    ensurePermission(
+      userPermissions,
+      REQUIRED_READ_PERMISSION,
+    );
+
+    try {
+      const response =
+        await client.get<PaginatedShelfSerialNumbersResponse>(
+          `/shelves/${id}/serial-numbers`,
+          {
+            params: {
+              page:
+                pagination.page ??
+                1,
+              limit:
+                pagination.limit ??
+                20,
+            },
+          },
+        );
+
+      return response.data;
+    } catch (error: unknown) {
+      throwShelfError(
+        error,
+        'Impossible de charger les numéros de série de cet emplacement.',
+        REQUIRED_READ_PERMISSION,
       );
     }
   }

@@ -1,0 +1,540 @@
+### SOMIPHARM V3 — End-to-End REST Client Test
+### Works with VS Code extension: REST Client (humao.rest-client)
+###
+### BEFORE RUNNING:
+### 1) Start backend: npm run start:dev
+### 2) Paste a valid Clerk bearer token below.
+### 3) The logged-in user needs:
+###    shelf.read/create/update/delete
+###    equipment.read/create/update/delete
+###    serial-number.read/create/update/delete
+###    movement.read/create
+###
+### Run requests from top to bottom.
+### Canonical backend URL has NO /api prefix.
+
+@api = http://localhost:3001
+@token = PASTE_CLERK_BEARER_TOKEN_HERE
+
+###############################################################################
+# 0. AUTH / SERVER CHECK
+###############################################################################
+
+### Current authenticated user
+# @name currentUser
+GET {{api}}/auth/me
+Authorization: Bearer {{token}}
+
+###############################################################################
+# 1. CREATE TWO TEST SHELVES
+###############################################################################
+
+### Create Shelf A
+# @name createShelfA
+POST {{api}}/shelves
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "shelfName": "REST-A-{{$timestamp}}"
+}
+
+### Create Shelf B
+# @name createShelfB
+POST {{api}}/shelves
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "shelfName": "REST-B-{{$timestamp}}"
+}
+
+### Read Shelf A
+GET {{api}}/shelves/{{createShelfA.response.body.$.shelfId}}
+Authorization: Bearer {{token}}
+
+### Read Shelf B
+GET {{api}}/shelves/{{createShelfB.response.body.$.shelfId}}
+Authorization: Bearer {{token}}
+
+###############################################################################
+# 2. CREATE STANDARD EQUIPMENT
+###############################################################################
+
+### Standard equipment starts with equipmentQuantity = 0
+# @name createStandardEquipment
+POST {{api}}/equipment
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "equipmentName": "REST-Standard-{{$timestamp}}",
+  "hasSerialNumber": false,
+  "minEquipmentQuantity": 2
+}
+
+### Verify standard equipment starts at 0
+GET {{api}}/equipment/{{createStandardEquipment.response.body.$.equipmentId}}
+Authorization: Bearer {{token}}
+
+###############################################################################
+# 3. CREATE SERIALIZED EQUIPMENT + ONE SERIAL
+###############################################################################
+
+### Serialized equipment also starts at equipmentQuantity = 0
+# @name createSerializedEquipment
+POST {{api}}/equipment
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "equipmentName": "REST-Serialized-{{$timestamp}}",
+  "hasSerialNumber": true,
+  "minEquipmentQuantity": 1
+}
+
+### Create serial identity
+### Expected:
+### - shelfId = null
+### - serialized Equipment.equipmentQuantity becomes 1
+# @name createSerial
+POST {{api}}/serial-numbers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "serialNumberCode": "REST-SN-{{$timestamp}}",
+  "equipmentId": "{{createSerializedEquipment.response.body.$.equipmentId}}",
+  "serialNumberStatus": "AVAILABLE"
+}
+
+### Verify serial initially has shelfId = null
+GET {{api}}/serial-numbers/{{createSerial.response.body.$.serialNumberId}}
+Authorization: Bearer {{token}}
+
+### Verify serialized equipment total is now 1
+GET {{api}}/equipment/{{createSerializedEquipment.response.body.$.equipmentId}}
+Authorization: Bearer {{token}}
+
+###############################################################################
+# 4. IN MOVEMENT — ONE PARENT, TWO LINES
+###############################################################################
+
+### Put:
+### - 10 standard units
+### - 1 serialized unit
+### into Shelf A in ONE movement.
+###
+### Expected after this:
+### Standard Equipment total = 10
+### Serialized Equipment total = 1  (unchanged by movement)
+### Shelf A total += 11
+### Serial shelfId = Shelf A
+###
+### Parent:
+### movementType = IN
+### source = null
+### destination = Shelf A
+### movementQuantity = 11
+###
+### Both child lines must also be IN / null -> Shelf A.
+# @name inMovement
+POST {{api}}/movements
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "movementType": "IN",
+  "destinationShelfId": "{{createShelfA.response.body.$.shelfId}}",
+  "items": [
+    {
+      "equipmentId": "{{createStandardEquipment.response.body.$.equipmentId}}",
+      "movementQuantity": 10
+    },
+    {
+      "equipmentId": "{{createSerializedEquipment.response.body.$.equipmentId}}",
+      "serialNumberId": "{{createSerial.response.body.$.serialNumberId}}",
+      "movementQuantity": 1
+    }
+  ]
+}
+
+### Read IN movement by ID
+GET {{api}}/movements/{{inMovement.response.body.$.mouvementId}}
+Authorization: Bearer {{token}}
+
+### Verify Standard equipment total = 10
+GET {{api}}/equipment/{{createStandardEquipment.response.body.$.equipmentId}}
+Authorization: Bearer {{token}}
+
+### Verify Standard equipment Shelf A allocation = 10
+GET {{api}}/equipment/{{createStandardEquipment.response.body.$.equipmentId}}/shelves
+Authorization: Bearer {{token}}
+
+### Verify serial now points to Shelf A
+GET {{api}}/serial-numbers/{{createSerial.response.body.$.serialNumberId}}
+Authorization: Bearer {{token}}
+
+### Verify Shelf A after IN
+GET {{api}}/shelves/{{createShelfA.response.body.$.shelfId}}
+Authorization: Bearer {{token}}
+
+###############################################################################
+# 5. TRANSFER MOVEMENT — SAME TWO ITEMS, SAME ROUTE
+###############################################################################
+
+### Move:
+### - 4 standard units
+### - the serial
+### Shelf A -> Shelf B in ONE movement.
+###
+### Expected:
+### Standard Equipment total stays 10
+### Serialized Equipment total stays 1
+### Standard A allocation: 10 -> 6
+### Standard B allocation: 0 -> 4
+### Serial: A -> B
+###
+### Parent movementQuantity = 5
+# @name transferMovement
+POST {{api}}/movements
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "movementType": "TRANSFER",
+  "sourceShelfId": "{{createShelfA.response.body.$.shelfId}}",
+  "destinationShelfId": "{{createShelfB.response.body.$.shelfId}}",
+  "items": [
+    {
+      "equipmentId": "{{createStandardEquipment.response.body.$.equipmentId}}",
+      "movementQuantity": 4
+    },
+    {
+      "equipmentId": "{{createSerializedEquipment.response.body.$.equipmentId}}",
+      "serialNumberId": "{{createSerial.response.body.$.serialNumberId}}",
+      "movementQuantity": 1
+    }
+  ]
+}
+
+### Read TRANSFER movement
+GET {{api}}/movements/{{transferMovement.response.body.$.mouvementId}}
+Authorization: Bearer {{token}}
+
+### Standard total should still be 10
+GET {{api}}/equipment/{{createStandardEquipment.response.body.$.equipmentId}}
+Authorization: Bearer {{token}}
+
+### Standard allocations should now show A=6, B=4
+GET {{api}}/equipment/{{createStandardEquipment.response.body.$.equipmentId}}/shelves
+Authorization: Bearer {{token}}
+
+### Serial should now point to Shelf B
+GET {{api}}/serial-numbers/{{createSerial.response.body.$.serialNumberId}}
+Authorization: Bearer {{token}}
+
+### Inspect both shelf totals
+GET {{api}}/shelves/{{createShelfA.response.body.$.shelfId}}
+Authorization: Bearer {{token}}
+
+###
+GET {{api}}/shelves/{{createShelfB.response.body.$.shelfId}}
+Authorization: Bearer {{token}}
+
+###############################################################################
+# 6. OUT MOVEMENT — STANDARD + SERIAL
+###############################################################################
+
+### Remove from Shelf B:
+### - 2 standard units
+### - the serial
+###
+### Expected:
+### Standard Equipment total: 10 -> 8
+### Standard B allocation: 4 -> 2
+### Standard A allocation remains 6
+### Serialized Equipment total remains 1
+### Serial shelfId: Shelf B -> null
+###
+### Parent movementQuantity = 3
+# @name outMovement
+POST {{api}}/movements
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "movementType": "OUT",
+  "sourceShelfId": "{{createShelfB.response.body.$.shelfId}}",
+  "items": [
+    {
+      "equipmentId": "{{createStandardEquipment.response.body.$.equipmentId}}",
+      "movementQuantity": 2
+    },
+    {
+      "equipmentId": "{{createSerializedEquipment.response.body.$.equipmentId}}",
+      "serialNumberId": "{{createSerial.response.body.$.serialNumberId}}",
+      "movementQuantity": 1
+    }
+  ]
+}
+
+### Read OUT movement
+GET {{api}}/movements/{{outMovement.response.body.$.mouvementId}}
+Authorization: Bearer {{token}}
+
+### Standard total should now be 8
+GET {{api}}/equipment/{{createStandardEquipment.response.body.$.equipmentId}}
+Authorization: Bearer {{token}}
+
+### Standard allocations should be A=6, B=2
+GET {{api}}/equipment/{{createStandardEquipment.response.body.$.equipmentId}}/shelves
+Authorization: Bearer {{token}}
+
+### Serial should now have shelfId = null
+GET {{api}}/serial-numbers/{{createSerial.response.body.$.serialNumberId}}
+Authorization: Bearer {{token}}
+
+###############################################################################
+# 7. MOVEMENT HISTORY / FILTERS
+###############################################################################
+
+### All movements, newest first
+GET {{api}}/movements?page=1&limit=20
+Authorization: Bearer {{token}}
+
+### Only IN
+GET {{api}}/movements?page=1&limit=20&movementType=IN
+Authorization: Bearer {{token}}
+
+### Only TRANSFER
+GET {{api}}/movements?page=1&limit=20&movementType=TRANSFER
+Authorization: Bearer {{token}}
+
+### Only OUT
+GET {{api}}/movements?page=1&limit=20&movementType=OUT
+Authorization: Bearer {{token}}
+
+### Movements containing standard equipment
+GET {{api}}/movements?page=1&limit=20&equipmentId={{createStandardEquipment.response.body.$.equipmentId}}
+Authorization: Bearer {{token}}
+
+### Movements containing serialized equipment
+GET {{api}}/movements?page=1&limit=20&equipmentId={{createSerializedEquipment.response.body.$.equipmentId}}
+Authorization: Bearer {{token}}
+
+### Movements containing this serial
+GET {{api}}/movements?page=1&limit=20&serialNumberId={{createSerial.response.body.$.serialNumberId}}
+Authorization: Bearer {{token}}
+
+### Movements sourced from Shelf A
+GET {{api}}/movements?page=1&limit=20&sourceShelfId={{createShelfA.response.body.$.shelfId}}
+Authorization: Bearer {{token}}
+
+### Movements destined to Shelf B
+GET {{api}}/movements?page=1&limit=20&destinationShelfId={{createShelfB.response.body.$.shelfId}}
+Authorization: Bearer {{token}}
+
+###############################################################################
+# 8. EQUIPMENT / SERIAL / SHELF LIST ROUTES
+###############################################################################
+
+### Equipment list
+GET {{api}}/equipment?page=1&limit=20
+Authorization: Bearer {{token}}
+
+### Equipment search by name
+GET {{api}}/equipment/search?page=1&limit=20&equipmentName=REST
+Authorization: Bearer {{token}}
+
+### Serial list
+GET {{api}}/serial-numbers?page=1&limit=20
+Authorization: Bearer {{token}}
+
+### Serials for serialized equipment
+GET {{api}}/equipment/{{createSerializedEquipment.response.body.$.equipmentId}}/serial-numbers?page=1&limit=20
+Authorization: Bearer {{token}}
+
+### Search serial by equipment
+GET {{api}}/serial-numbers?page=1&limit=20&equipmentId={{createSerializedEquipment.response.body.$.equipmentId}}
+Authorization: Bearer {{token}}
+
+### Exact serial code lookup uses the returned code
+GET {{api}}/serial-numbers/code/{{createSerial.response.body.$.serialNumberCode}}
+Authorization: Bearer {{token}}
+
+### Shelf list
+GET {{api}}/shelves?page=1&limit=20
+Authorization: Bearer {{token}}
+
+### Equipment allocations on Shelf A
+GET {{api}}/shelves/{{createShelfA.response.body.$.shelfId}}/equipment?page=1&limit=20
+Authorization: Bearer {{token}}
+
+### Equipment allocations on Shelf B
+GET {{api}}/shelves/{{createShelfB.response.body.$.shelfId}}/equipment?page=1&limit=20
+Authorization: Bearer {{token}}
+
+### Serials currently on Shelf B
+### Expected: none, because the serial was OUT.
+GET {{api}}/shelves/{{createShelfB.response.body.$.shelfId}}/serial-numbers?page=1&limit=20
+Authorization: Bearer {{token}}
+
+###############################################################################
+# 9. METADATA UPDATE TESTS
+###############################################################################
+
+### Update minimum equipment quantity
+PATCH {{api}}/equipment/{{createStandardEquipment.response.body.$.equipmentId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "minEquipmentQuantity": 3
+}
+
+### Update serial status only
+PATCH {{api}}/serial-numbers/{{createSerial.response.body.$.serialNumberId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "serialNumberStatus": "AVAILABLE"
+}
+
+### Rename Shelf A
+PATCH {{api}}/shelves/{{createShelfA.response.body.$.shelfId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "shelfName": "REST-A-UPDATED-{{$timestamp}}"
+}
+
+###############################################################################
+# 10. NEGATIVE TESTS — THESE SHOULD FAIL WITH 400
+###############################################################################
+
+### INVALID: IN cannot have a source shelf
+POST {{api}}/movements
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "movementType": "IN",
+  "sourceShelfId": "{{createShelfA.response.body.$.shelfId}}",
+  "destinationShelfId": "{{createShelfB.response.body.$.shelfId}}",
+  "items": [
+    {
+      "equipmentId": "{{createStandardEquipment.response.body.$.equipmentId}}",
+      "movementQuantity": 1
+    }
+  ]
+}
+
+### INVALID: TRANSFER source and destination cannot be the same
+POST {{api}}/movements
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "movementType": "TRANSFER",
+  "sourceShelfId": "{{createShelfA.response.body.$.shelfId}}",
+  "destinationShelfId": "{{createShelfA.response.body.$.shelfId}}",
+  "items": [
+    {
+      "equipmentId": "{{createStandardEquipment.response.body.$.equipmentId}}",
+      "movementQuantity": 1
+    }
+  ]
+}
+
+### INVALID: serialized quantity must be exactly 1
+POST {{api}}/movements
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "movementType": "IN",
+  "destinationShelfId": "{{createShelfA.response.body.$.shelfId}}",
+  "items": [
+    {
+      "equipmentId": "{{createSerializedEquipment.response.body.$.equipmentId}}",
+      "serialNumberId": "{{createSerial.response.body.$.serialNumberId}}",
+      "movementQuantity": 2
+    }
+  ]
+}
+
+### INVALID: OUT more standard stock than exists on Shelf B
+### Current B standard allocation should be 2.
+POST {{api}}/movements
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "movementType": "OUT",
+  "sourceShelfId": "{{createShelfB.response.body.$.shelfId}}",
+  "items": [
+    {
+      "equipmentId": "{{createStandardEquipment.response.body.$.equipmentId}}",
+      "movementQuantity": 999999
+    }
+  ]
+}
+
+###############################################################################
+# 11. HISTORY-PRESERVATION TESTS — THESE SHOULD FAIL WITH 400
+###############################################################################
+
+### Serial has movement history, so physical DELETE should be rejected
+DELETE {{api}}/serial-numbers/{{createSerial.response.body.$.serialNumberId}}
+Authorization: Bearer {{token}}
+
+### Standard equipment has movement history, so DELETE should be rejected
+DELETE {{api}}/equipment/{{createStandardEquipment.response.body.$.equipmentId}}
+Authorization: Bearer {{token}}
+
+### Serialized equipment has movement history, so DELETE should be rejected
+DELETE {{api}}/equipment/{{createSerializedEquipment.response.body.$.equipmentId}}
+Authorization: Bearer {{token}}
+
+### Shelf A has movement history, so DELETE should be rejected
+DELETE {{api}}/shelves/{{createShelfA.response.body.$.shelfId}}
+Authorization: Bearer {{token}}
+
+### Shelf B has movement history, so DELETE should be rejected
+DELETE {{api}}/shelves/{{createShelfB.response.body.$.shelfId}}
+Authorization: Bearer {{token}}
+
+###############################################################################
+# 12. FINAL STATE CHECK
+###############################################################################
+
+### Expected final STANDARD state:
+### Equipment total = 8
+### Shelf A allocation = 6
+### Shelf B allocation = 2
+
+GET {{api}}/equipment/{{createStandardEquipment.response.body.$.equipmentId}}
+Authorization: Bearer {{token}}
+
+###
+GET {{api}}/equipment/{{createStandardEquipment.response.body.$.equipmentId}}/shelves
+Authorization: Bearer {{token}}
+
+### Expected final SERIALIZED state:
+### Equipment total = 1
+### Serial shelfId = null
+
+GET {{api}}/equipment/{{createSerializedEquipment.response.body.$.equipmentId}}
+Authorization: Bearer {{token}}
+
+###
+GET {{api}}/serial-numbers/{{createSerial.response.body.$.serialNumberId}}
+Authorization: Bearer {{token}}
+
+### Expected three successful movement documents from this flow:
+### 1 IN, 1 TRANSFER, 1 OUT
+GET {{api}}/movements?page=1&limit=20
+Authorization: Bearer {{token}}

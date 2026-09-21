@@ -1,24 +1,38 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Equipment, EquipmentWithShelvesResponse } from '@/types/equipment';
-import { EquipmentService } from '@/services/equipment.service';
-import { useApi } from '@/hooks/use-api';
-import { usePermissions } from '@/hooks/use-permissions';
 import {
-  Layers,
-  X,
-  Copy,
-  Check,
-  Package,
+  useState,
+} from 'react';
+import {
+  useQuery,
+} from '@tanstack/react-query';
+import {
   AlertTriangle,
-  Info,
-  RefreshCw,
-  Barcode,
+  Check,
+  Copy,
   Hash,
+  Layers,
+  Package,
+  RefreshCw,
+  X,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import {
+  toast,
+} from 'sonner';
+
+import type {
+  Equipment,
+  EquipmentWithShelvesResponse,
+} from '@/types/equipment';
+import {
+  EquipmentService,
+} from '@/services/equipment.service';
+import {
+  useApi,
+} from '@/hooks/use-api';
+import {
+  usePermissions,
+} from '@/hooks/use-permissions';
 
 interface ViewEquipmentShelvesModalProps {
   isOpen: boolean;
@@ -26,318 +40,298 @@ interface ViewEquipmentShelvesModalProps {
   onClose: () => void;
 }
 
-export const ViewEquipmentShelvesModal: React.FC<ViewEquipmentShelvesModalProps> = ({
+export function ViewEquipmentShelvesModal({
   isOpen,
   equipment,
   onClose,
-}) => {
+}: ViewEquipmentShelvesModalProps) {
   const api = useApi();
-  const { permissions } = usePermissions();
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const {
+    permissions,
+  } = usePermissions();
 
-  const { data: remoteData, isLoading, refetch } = useQuery<EquipmentWithShelvesResponse>({
-    queryKey: ['equipment-shelves', equipment?.equipmentId],
-    queryFn: () =>
-      EquipmentService.getEquipmentShelves(
-        api,
-        equipment!.equipmentId,
-        permissions,
-      ),
-    enabled: isOpen && !!equipment?.equipmentId,
-    staleTime: 10 * 1000,
-  });
+  const [
+    copied,
+    setCopied,
+  ] =
+    useState<string | null>(
+      null,
+    );
 
-  const data = remoteData ?? (equipment as EquipmentWithShelvesResponse | null);
+  const query =
+    useQuery<EquipmentWithShelvesResponse>({
+      queryKey: [
+        'equipment-shelves',
+        equipment?.equipmentId,
+      ],
 
-  if (!isOpen || !equipment) return null;
+      queryFn: () =>
+        EquipmentService.getEquipmentShelves(
+          api,
+          equipment!.equipmentId,
+          permissions,
+        ),
 
-  const handleCopy = (e: React.MouseEvent, text: string, label: string) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(text);
-    setCopiedId(text);
-    toast.success(`${label} copié dans le presse-papier !`);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
+      enabled:
+        isOpen &&
+        Boolean(
+          equipment?.equipmentId,
+        ),
 
-  const isSerialized = data?.hasSerialNumber ?? equipment.hasSerialNumber;
-  const tuples = data?.equipmentShelfs ?? equipment.equipmentShelfs ?? [];
-  const serials = data?.serialNumbers ?? equipment.serialNumbers ?? [];
+      staleTime: 10_000,
+    });
 
-  const totalStock = isSerialized
-    ? serials.length
-    : (data?.equipmentQuantity ?? equipment.equipmentQuantity ?? 0);
+  if (
+    !isOpen ||
+    !equipment
+  ) {
+    return null;
+  }
 
-  // Calculate metrics
-  const totalAllocated = isSerialized
-    ? serials.filter((s) => s.shelfId !== null).length
-    : tuples.reduce((sum, t) => sum + (t.equipmentQuantity || 0), 0);
+  const data =
+    query.data ??
+    (equipment as EquipmentWithShelvesResponse);
 
-  const unallocated = Math.max(0, totalStock - totalAllocated);
-  const distinctShelvesCount = isSerialized
-    ? new Set(serials.map((s) => s.shelfId).filter(Boolean)).size
-    : tuples.length;
+  const allocations =
+    data.equipmentShelfs ?? [];
+
+  const totalStock =
+    data.equipmentQuantity ??
+    0;
+
+  const totalAllocated =
+    data.totalAllocated ??
+    allocations.reduce(
+      (sum, allocation) =>
+        sum +
+        Number(
+          allocation.equipmentQuantity ||
+          0,
+        ),
+      0,
+    );
+
+  const unallocated =
+    data.unallocatedQuantity ??
+    Math.max(
+      0,
+      totalStock -
+      totalAllocated,
+    );
+
+  const shelvesCount =
+    data.shelvesCount ??
+    allocations.length;
+
+  async function copyShelf(
+    shelfId: string,
+  ) {
+    await navigator.clipboard.writeText(
+      shelfId,
+    );
+
+    setCopied(shelfId);
+    toast.success('GUID emplacement copié');
+
+    setTimeout(
+      () =>
+        setCopied(null),
+      1500,
+    );
+  }
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
-      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      onMouseDown={(event) => {
+        if (
+          event.target ===
+          event.currentTarget
+        ) {
+          onClose();
+        }
+      }}
     >
-      <div
-        className="relative w-full max-w-2xl max-h-[90vh] bg-[#383330] text-white rounded-xl shadow-2xl border border-[#3f3a36] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#3f3a36] bg-[#2b2622]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#2b2622] border border-white/20 flex items-center justify-center text-[#f7f5f0] shrink-0 shadow-2xs">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-semibold text-white">
-                  Emplacements associés
-                </h2>
-                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-black/30 border border-white/20 text-white/90">
-                  {isSerialized ? 'Sérialisé' : 'Standard'}
-                </span>
-              </div>
-              <p className="text-xs text-white/70 truncate max-w-md">
-                {equipment.equipmentName ?? 'Article sans nom'}
-              </p>
-            </div>
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-5 py-4">
+          <div>
+            <h2 className="text-sm font-semibold">
+              Emplacements associés
+            </h2>
+
+            <p className="mt-0.5 text-[10px] text-white/50">
+              {equipment.equipmentName ??
+                equipment.equipmentId}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex gap-1">
             <button
               type="button"
-              onClick={() => refetch()}
-              disabled={isLoading}
-              className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
-              title="Actualiser les emplacements"
+              onClick={() =>
+                query.refetch()
+              }
+              className="rounded p-2 text-white/60 hover:bg-white/10 hover:text-white"
             >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`h-4 w-4 ${query.isFetching
+                    ? 'animate-spin'
+                    : ''
+                  }`}
+              />
             </button>
+
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
-              title="Fermer"
+              className="rounded p-2 text-white/60 hover:bg-white/10 hover:text-white"
             >
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-5">
-          {/* Metric Cards Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg">
-              <span className="text-[11px] font-medium text-white/70 flex items-center gap-1 mb-1">
-                <Package className="w-3.5 h-3.5 text-white" />
-                Stock Total
-              </span>
-              <p className="text-lg font-bold text-white">
-                {totalStock} <span className="text-xs font-normal text-white/70">unités</span>
-              </p>
-            </div>
-
-            <div className="p-3 bg-[#2b2622]/70 border border-emerald-400/40 rounded-lg">
-              <span className="text-[11px] font-medium text-emerald-300 flex items-center gap-1 mb-1">
-                <Check className="w-3.5 h-3.5" />
-                Alloué en Emplacements
-              </span>
-              <p className="text-lg font-bold text-emerald-300">
-                {totalAllocated} <span className="text-xs font-normal text-emerald-300/80">unités</span>
-              </p>
-            </div>
-
-            <div className={`p-3 rounded-lg border ${
-              unallocated > 0
-                ? 'bg-amber-950/40 border-amber-400/40'
-                : 'bg-[#2b2622]/60 border border-[#3f3a36]'
-            }`}>
-              <span className={`text-[11px] font-medium flex items-center gap-1 mb-1 ${
-                unallocated > 0 ? 'text-amber-300' : 'text-white/70'
-              }`}>
-                <AlertTriangle className="w-3.5 h-3.5" />
-                Non Alloué
-              </span>
-              <p className={`text-lg font-bold ${
-                unallocated > 0 ? 'text-amber-300' : 'text-white'
-              }`}>
-                {unallocated} <span className="text-xs font-normal">unités</span>
-              </p>
-            </div>
-
-            <div className="p-3 bg-[#2b2622]/60 border border-[#3f3a36] rounded-lg">
-              <span className="text-[11px] font-medium text-white/70 flex items-center gap-1 mb-1">
-                <Layers className="w-3.5 h-3.5 text-white" />
-                Emplacements
-              </span>
-              <p className="text-lg font-bold text-white">
-                {distinctShelvesCount} <span className="text-xs font-normal text-white/70">emplacements</span>
-              </p>
-            </div>
+        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Metric
+              label="Global"
+              value={totalStock}
+              icon={
+                <Package className="h-3.5 w-3.5" />
+              }
+            />
+            <Metric
+              label="Alloué"
+              value={totalAllocated}
+              icon={
+                <Check className="h-3.5 w-3.5" />
+              }
+            />
+            <Metric
+              label="Non alloué"
+              value={unallocated}
+              warning={
+                unallocated > 0
+              }
+              icon={
+                <AlertTriangle className="h-3.5 w-3.5" />
+              }
+            />
+            <Metric
+              label="Emplacements"
+              value={shelvesCount}
+              icon={
+                <Layers className="h-3.5 w-3.5" />
+              }
+            />
           </div>
 
-          {/* Shelves Breakdown Table / List */}
-          <div>
-            <div className="flex items-center justify-between mb-2.5">
-              <h3 className="text-xs font-semibold text-white uppercase tracking-wider">
-                Emplacements de l&apos;Article
-              </h3>
-              <span className="text-[11px] text-white/70">
-                {tuples.length} emplacement{tuples.length > 1 ? 's' : ''} enregistré{tuples.length > 1 ? 's' : ''}
-              </span>
+          <p className="text-[10px] leading-relaxed text-white/45">
+            Pour un article sérialisé, la quantité globale correspond au nombre
+            d’identités série enregistrées. La répartition physique est suivie
+            par les allocations/emplacements et les mouvements.
+          </p>
+
+          {query.isLoading ? (
+            <div className="py-8 text-center text-xs text-white/45">
+              Chargement...
             </div>
+          ) : allocations.length ? (
+            <div className="overflow-hidden rounded-lg border border-[#3f3a36]">
+              <div className="grid grid-cols-[minmax(0,1fr)_90px] border-b border-[#3f3a36] bg-[#2b2622] px-4 py-2 text-[10px] uppercase text-white/45">
+                <span>
+                  Emplacement
+                </span>
+                <span className="text-right">
+                  Quantité
+                </span>
+              </div>
 
-            {tuples.length > 0 ? (
-              <div className="border border-[#3f3a36] rounded-lg overflow-hidden divide-y divide-[#8191ad]/50 bg-[#2b2622]/60">
-                <div className="bg-[#2b2622] px-4 py-2 text-[11px] font-semibold text-white/90 grid grid-cols-12 gap-2">
-                  <span className="col-span-5">Emplacement</span>
-                  <span className="col-span-3 text-center">Quantité Allouée</span>
-                  <span className="col-span-4 text-right">Part du Stock</span>
-                </div>
-
-                {tuples.map((t) => {
-                  const shelfName = t.shelf?.shelfName ?? 'Emplacement inconnu';
-                  const qty = t.equipmentQuantity || 0;
-                  const percent = totalStock > 0 ? Math.round((qty / totalStock) * 100) : 0;
-                  return (
+              <div className="divide-y divide-[#3f3a36]">
+                {allocations.map(
+                  (allocation) => (
                     <div
-                      key={t.equipmentShelfId || t.shelfId}
-                      className="px-4 py-3 grid grid-cols-12 gap-2 items-center hover:bg-white/10 transition-colors"
+                      key={
+                        allocation.equipmentShelfId
+                      }
+                      className="grid grid-cols-[minmax(0,1fr)_90px] items-center px-4 py-3 text-xs"
                     >
-                      <div className="col-span-5 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Layers className="w-4 h-4 text-[#f7f5f0] shrink-0" />
-                          <span className="font-semibold text-xs text-white truncate">
-                            {shelfName}
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">
+                          {allocation.shelf?.shelfName ??
+                            allocation.shelfId}
+                        </p>
+
+                        <div className="mt-1 flex items-center gap-1">
+                          <span className="truncate font-mono text-[9px] text-white/35">
+                            {allocation.shelfId}
                           </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[10px] font-mono text-white/60 truncate max-w-[140px]">
-                            {t.shelfId}
-                          </span>
+
                           <button
                             type="button"
-                            onClick={(e) => handleCopy(e, t.shelfId, "ID d'emplacement")}
-                            className="text-white/60 hover:text-white transition-colors cursor-pointer"
-                            title="Copier le GUID de l'emplacement"
+                            onClick={() =>
+                              copyShelf(
+                                allocation.shelfId,
+                              )
+                            }
+                            className="text-white/45 hover:text-white"
                           >
-                            {copiedId === t.shelfId ? (
-                              <Check className="w-3 h-3 text-emerald-400" />
+                            {copied ===
+                              allocation.shelfId ? (
+                              <Check className="h-3 w-3 text-emerald-300" />
                             ) : (
-                              <Copy className="w-3 h-3" />
+                              <Copy className="h-3 w-3" />
                             )}
                           </button>
                         </div>
                       </div>
 
-                      <div className="col-span-3 text-center">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#2b2622] text-emerald-300 border border-emerald-400/40 text-xs font-semibold">
-                          <Hash className="w-3 h-3" />
-                          {qty} {qty > 1 ? 'unités' : 'unité'}
-                        </span>
-                      </div>
-
-                      <div className="col-span-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-24 bg-black/30 h-2 rounded-full overflow-hidden shrink-0">
-                            <div
-                              className="bg-[#38bdf8] h-full rounded-full transition-all duration-300"
-                              style={{ width: `${Math.min(100, percent)}%` }}
-                            />
-                          </div>
-                          <span className="text-[11px] font-medium text-white/80 w-9 text-right font-mono">
-                            {percent}%
-                          </span>
-                        </div>
-                      </div>
+                      <span className="text-right font-mono font-semibold">
+                        {allocation.equipmentQuantity}
+                      </span>
                     </div>
-                  );
-                })}
+                  ),
+                )}
               </div>
-            ) : (
-              <div className="text-center py-8 border border-dashed border-[#3f3a36] rounded-lg bg-[#2b2622]/40 px-4">
-                <Layers className="w-8 h-8 text-white/50 mx-auto mb-2" />
-                <p className="text-xs font-semibold text-white mb-1">
-                  Aucun emplacement assigné
-                </p>
-                <p className="text-[11px] text-white/70 max-w-sm mx-auto">
-                  Cet article n&apos;a pas encore d&apos;unités réparties dans des emplacements. Enregistrez un mouvement d&apos;entrée ou de transfert pour assigner des emplacements.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Child Serial Numbers Breakdown (If Serialized) */}
-          {isSerialized && (
-            <div>
-              <div className="flex items-center justify-between mb-2.5">
-                <h3 className="text-xs font-semibold text-white uppercase tracking-wider">
-                  Numéros de Série & Emplacements Associés
-                </h3>
-                <span className="text-[11px] text-white/70">
-                  {serials.length} numéro{serials.length > 1 ? 's' : ''} de série
-                </span>
-              </div>
-
-              {serials.length > 0 ? (
-                <div className="max-h-52 overflow-y-auto border border-[#3f3a36] rounded-lg divide-y divide-[#8191ad]/50 bg-[#2b2622]/60">
-                  {serials.map((sn) => (
-                    <div
-                      key={sn.serialNumberId}
-                      className="px-4 py-2 text-xs flex items-center justify-between hover:bg-white/10"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Barcode className="w-3.5 h-3.5 text-emerald-300" />
-                        <span className="font-mono font-medium text-white">
-                          {sn.serialNumberCode ?? 'S/N sans code'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {sn.shelf ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#2b2622] border border-white/20 text-[11px] font-medium text-white">
-                            <Layers className="w-3 h-3 text-[#f7f5f0]" />
-                            {sn.shelf.shelfName}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-white/60 italic">
-                            Non assigné
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-white/70 italic">
-                  Aucun numéro de série enregistré pour cet article.
-                </p>
-              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-[#3f3a36] py-8 text-center text-xs text-white/45">
+              Aucun emplacement actuellement alloué.
             </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-t border-[#3f3a36] bg-[#2b2622]">
-          <div className="text-[11px] text-white/70 flex items-center gap-1">
-            <Info className="w-3.5 h-3.5 text-white/80" />
-            <span>Consultation en lecture seule</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-1.5 text-xs font-medium text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-colors cursor-pointer"
-            >
-              Fermer
-            </button>
-          </div>
         </div>
       </div>
     </div>
   );
-};
+}
+
+function Metric({
+  label,
+  value,
+  icon,
+  warning = false,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  warning?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-lg border p-3 ${warning
+          ? 'border-amber-400/30 bg-amber-400/10'
+          : 'border-[#3f3a36] bg-[#2b2622]/65'
+        }`}
+    >
+      <div className="flex items-center gap-1.5 text-[10px] text-white/45">
+        {icon}
+        {label}
+      </div>
+
+      <div className="mt-2 flex items-center gap-1 font-mono text-lg font-semibold">
+        <Hash className="h-3 w-3 text-white/35" />
+        {value}
+      </div>
+    </div>
+  );
+}

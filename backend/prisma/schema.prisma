@@ -58,6 +58,7 @@ model Session {
 }
 
 model Equipment {
+  movementItems MouvementEquipment[]
   equipmentId          String               @id(map: "PK_Equipment") @unique(map: "UX_Equipment_EquipmentId") @default(dbgenerated("newid()"), map: "DF__Equipment__equip__1E6F845E") @db.UniqueIdentifier
   equipmentName        String               @unique(map: "UX_Equipment_EquipmentName") @db.VarChar(200)
   hasSerialNumber      Boolean
@@ -82,6 +83,7 @@ model Equipment {
 }
 
 model SerialNumber {
+  movementItems MouvementEquipment[]
   serialNumberId      String      @id(map: "PK_SerialNumber") @default(dbgenerated("newid()"), map: "DF__SerialNum__seria__22401542") @db.UniqueIdentifier
   serialNumberCode    String?     @db.VarChar(200)
   serialNumberStatus  String?     @db.VarChar(100)
@@ -99,6 +101,8 @@ model SerialNumber {
 }
 
 model Shelf {
+  movementSources MouvementEquipment[] @relation("MovementItemSource")
+  movementDestinations MouvementEquipment[] @relation("MovementItemDestination")
   shelfId               String            @id(map: "PK_Shelf") @default(dbgenerated("newid()"), map: "DF__Shelf__shelfId__29E1370A") @db.UniqueIdentifier
   shelfName             String?           @db.VarChar(100)
   shelfQuantity         Int?
@@ -141,23 +145,36 @@ model Stock {
 }
 
 model Mouvement {
-  mouvementId        String        @id(map: "mouvementId") @default(dbgenerated("newid()"), map: "DF__Mouvement__mouve__2DB1C7EE") @db.UniqueIdentifier
-  mouvementStatus    String?       @db.VarChar(50)
-  mouvementQuantity  Int?          @map("movementQuantity")
-  equipmentId        String?       @db.UniqueIdentifier
-  sourceShelfId      String?       @db.UniqueIdentifier
-  destinationShelfId String?       @db.UniqueIdentifier
-  serialNumberId     String?       @db.UniqueIdentifier
-  createdAt          DateTime?     @default(dbgenerated("sysdatetime()"))
-  createdByUserId    String?       @db.UniqueIdentifier
-  createdByUser      User?         @relation("MovementCreatedByUser", fields: [createdByUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Mouvement_CreatedByUser")
-  serialNumber       SerialNumber? @relation(fields: [serialNumberId], references: [serialNumberId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Mouvement_SerialNumber")
-  sourceShelf        Shelf?        @relation("SourceShelf", fields: [sourceShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Mouvement_Shelfsource")
-  equipment          Equipment?    @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MouvementEequipment")
-  destinationShelf   Shelf?        @relation("DestinationShelf", fields: [destinationShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_SerialNumber_Shelfdestination")
+  items                MouvementEquipment[]
+  mouvementId          String               @id(map: "mouvementId") @default(dbgenerated("newid()"), map: "DF__Mouvement__mouve__2DB1C7EE") @db.UniqueIdentifier
+
+  // Header summary only. Child lines in MovementEquipment are authoritative.
+  // If all child lines have the same type this is IN / OUT / TRANSFER.
+  // If child lines have different types this is MIXED.
+  mouvementStatus      String?              @db.VarChar(50)
+
+  // Sum of child line quantities.
+  mouvementQuantity    Int?                 @map("movementQuantity")
+
+  // Legacy compatibility fields. New multi-line movements keep these NULL.
+  // A single-line movement may mirror its child values here.
+  equipmentId          String?              @db.UniqueIdentifier
+  sourceShelfId        String?              @db.UniqueIdentifier
+  destinationShelfId   String?              @db.UniqueIdentifier
+  serialNumberId       String?              @db.UniqueIdentifier
+
+  createdAt            DateTime?            @default(dbgenerated("sysdatetime()"))
+  createdByUserId      String?              @db.UniqueIdentifier
+
+  createdByUser        User?                @relation("MovementCreatedByUser", fields: [createdByUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Mouvement_CreatedByUser")
+  serialNumber         SerialNumber?        @relation(fields: [serialNumberId], references: [serialNumberId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Mouvement_SerialNumber")
+  sourceShelf          Shelf?               @relation("SourceShelf", fields: [sourceShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Mouvement_Shelfsource")
+  equipment            Equipment?           @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MouvementEequipment")
+  destinationShelf     Shelf?               @relation("DestinationShelf", fields: [destinationShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_SerialNumber_Shelfdestination")
 
   @@index([equipmentId], map: "IDX_Mouvement_EquipmentId")
-  @@index([createdAt], map: "IDX_Mouvement_CreatedAt")
+  @@index([createdAt, mouvementId], map: "IX_Mouvement_CreatedAt_Id")
+  @@index([mouvementStatus], map: "IX_Mouvement_Status")
   @@map("Mouvement")
 }
 
@@ -168,6 +185,11 @@ model EquipmentShelfs {
   shelfId           String?    @db.UniqueIdentifier
   equipment         Equipment? @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_EquipmentShelfs_Equipment")
   shelf             Shelf?     @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_EquipmentShelfs_Shelf")
+
+  // One equipment can have only one allocation row per shelf.
+  @@unique([equipmentId, shelfId], map: "UX_EquipmentShelfs_Equipment_Shelf", where: raw("([equipmentId] IS NOT NULL AND [shelfId] IS NOT NULL)"))
+  @@index([equipmentId], map: "IX_EquipmentShelfs_EquipmentId")
+  @@index([shelfId], map: "IX_EquipmentShelfs_ShelfId")
 
   @@map("EquipmentShelfs")
 }
@@ -411,4 +433,41 @@ model Notification {
   @@index([recipientId], map: "IDX_Notification_RecipientId")
   @@index([createdAt], map: "IDX_Notification_CreatedAt")
   @@map("Notification")
+}
+
+// Equipment and shelf allocations belonging to one movement header.
+model MouvementEquipment {
+  // Prisma field names stay compatible with the existing NestJS code.
+  // @map/@@map align them with the physical SQL names shown in SSMS.
+  mouvementEquipmentId String       @id @default(dbgenerated("newid()")) @map("movementEquipmentId") @db.UniqueIdentifier
+  mouvementId          String       @map("movementId") @db.UniqueIdentifier
+  equipmentId          String       @db.UniqueIdentifier
+  rowNum               Int          @map("RowNum")
+
+  sourceShelfId        String?      @db.UniqueIdentifier
+  destinationShelfId   String?      @db.UniqueIdentifier
+  serialNumberId       String?      @db.UniqueIdentifier
+
+  // Physical SQL column: equipmentQuantity.
+  mouvementQuantity    Int          @map("equipmentQuantity")
+
+  // Canonical movement type FOR THIS ARTICLE LINE.
+  // Allowed canonical values written by new code: IN / OUT / TRANSFER.
+  mouvementStatus      String       @map("movementStatus") @db.VarChar(50)
+
+  mouvement            Mouvement    @relation(fields: [mouvementId], references: [mouvementId], onDelete: Cascade, onUpdate: NoAction, map: "FK_MovementEquipment_Mouvement")
+  equipment            Equipment    @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MovementEquipment_Equipment")
+  sourceShelf          Shelf?       @relation("MovementItemSource", fields: [sourceShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MovementEquipment_SourceShelf")
+  destinationShelf     Shelf?       @relation("MovementItemDestination", fields: [destinationShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MovementEquipment_DestinationShelf")
+  serialNumber         SerialNumber? @relation(fields: [serialNumberId], references: [serialNumberId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MovementEquipment_SerialNumber")
+
+  @@unique([mouvementId, rowNum], map: "UX_MovementEquipment_Movement_RowNum")
+  @@index([mouvementId], map: "IX_MovementEquipment_MovementId")
+  @@index([equipmentId], map: "IX_MovementEquipment_EquipmentId")
+  @@index([mouvementStatus], map: "IX_MovementEquipment_Status")
+  @@index([sourceShelfId], map: "IX_MovementEquipment_SourceShelfId")
+  @@index([destinationShelfId], map: "IX_MovementEquipment_DestinationShelfId")
+  @@index([serialNumberId], map: "IX_MovementEquipment_SerialNumberId")
+
+  @@map("MovementEquipment")
 }

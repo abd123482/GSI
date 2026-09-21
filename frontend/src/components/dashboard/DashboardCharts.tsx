@@ -46,6 +46,14 @@ export function DashboardCharts({ stats }: DashboardChartsProps) {
       fill: '#38bdf8',
       description: 'Déplacements inter-rayons',
     },
+    ...(movementOverview.mixedCount ? [{
+      name: 'Mixtes', count: movementOverview.mixedCount, fill: '#a78bfa',
+      description: 'Un document avec plusieurs directions',
+    }] : []),
+    ...(movementOverview.otherCount ? [{
+      name: 'Autres', count: movementOverview.otherCount, fill: '#aea69c',
+      description: 'Statuts historiques',
+    }] : []),
   ];
 
   const warehouseData = stockOverview.stockDistribution.map((s) => ({

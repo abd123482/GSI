@@ -1,100 +1,160 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
   Body,
+  Controller,
+  Delete,
+  Get,
   Param,
-  Query,
   ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
+
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard.js';
-import { PermissionsGuard } from '../auth/guards/permissions.guard.js';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator.js';
+import { PermissionsGuard } from '../auth/guards/permissions.guard.js';
+
 import { SerialNumberService } from './serialNumber.service.js';
+
 import type {
-  CreateSerialNumberDTO,
   CreateBatchSerialNumberDTO,
+  CreateSerialNumberDTO,
+  PaginationDTO,
+  SearchSerialNumberDTO,
   UpdateSerialNumberDTO,
   UpdateSerialNumberStatusDTO,
-  PaginationDTO,
 } from './dto/index.js';
 
 @UseGuards(ClerkAuthGuard, PermissionsGuard)
 @Controller(['serial-number', 'serial-numbers'])
 export class SerialNumberController {
-  constructor(private readonly serialNumberService: SerialNumberService) {}
+  constructor(
+    private readonly serialNumberService:
+      SerialNumberService,
+  ) { }
 
   @RequirePermissions('serial-number.create')
   @Post('batch')
-  async createBatchSerialNumbers(@Body() data: CreateBatchSerialNumberDTO) {
-    return this.serialNumberService.createBatchSerialNumbers(data);
+  createBatchSerialNumbers(
+    @Body() dto: CreateBatchSerialNumberDTO,
+  ) {
+    return this.serialNumberService
+      .createBatchSerialNumbers(dto);
   }
 
   @RequirePermissions('serial-number.create')
   @Post()
-  async createSerialNumber(@Body() data: CreateSerialNumberDTO) {
-    return this.serialNumberService.createSerialNumber(data);
+  createSerialNumber(
+    @Body() dto: CreateSerialNumberDTO,
+  ) {
+    return this.serialNumberService
+      .createSerialNumber(dto);
   }
 
+  /*
+   * Canonical paginated/search route.
+   *
+   * Examples:
+   * GET /serial-numbers?page=1&limit=20
+   * GET /serial-numbers?equipmentId=<uuid>
+   * GET /serial-numbers?serialNumberStatus=AVAILABLE
+   * GET /serial-numbers?serialNumberCode=ABC
+   */
   @RequirePermissions('serial-number.read')
   @Get()
-  async getAllSerialNumbers(@Query() query: PaginationDTO) {
-    return this.serialNumberService.getAllSerialNumbers(query);
-  }
-
-  @RequirePermissions('serial-number.read')
-  @Get(':id')
-  async getSerialNumberById(
-    @Query() query: PaginationDTO,
-    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  getSerialNumbers(
+    @Query() query: SearchSerialNumberDTO,
+    @Query() pagination: PaginationDTO,
   ) {
-    return this.serialNumberService.getSerialNumberById(query, id);
+    return this.serialNumberService.getSerialNumbers(
+      query,
+      pagination,
+    );
   }
 
+  /*
+   * Compatibility route for exact code lookup.
+   */
   @RequirePermissions('serial-number.read')
   @Get('code/:code')
-  async getSerialNumberByCode(
-    @Query() query: PaginationDTO,
-    @Param('serialNumberCode') serialNumberCode: string,
+  getSerialNumberByCode(
+    @Param('code') code: string,
   ) {
-    return this.serialNumberService.getSerialNumberByCode(query, serialNumberCode);
+    return this.serialNumberService
+      .getSerialNumberByCode(code);
   }
 
-  @RequirePermissions('serial-number.update')
-  @Patch(':id')
-  async updateSerialNumber(
-    @Body() data: UpdateSerialNumberDTO,
-    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-  ) {
-    return this.serialNumberService.updateSerialNumber(data, id);
-  }
-
+  /*
+   * Compatibility route for status filtering.
+   */
   @RequirePermissions('serial-number.read')
   @Get('status/:status')
-  async getSerialNumberByStatus(
-    @Query() query: PaginationDTO,
+  getSerialNumbersByStatus(
     @Param('status') status: string,
+    @Query() pagination: PaginationDTO,
   ) {
-    return this.serialNumberService.getSerialNumberByStatus(query, status);
+    return this.serialNumberService.getSerialNumbers(
+      {
+        serialNumberStatus: status,
+      },
+      pagination,
+    );
   }
 
   @RequirePermissions('serial-number.update')
   @Patch(':id/status')
-  async updateSerialNumberStatus(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-    @Body() data: UpdateSerialNumberStatusDTO,
+  updateSerialNumberStatus(
+    @Param(
+      'id',
+      new ParseUUIDPipe({ version: '4' }),
+    )
+    id: string,
+
+    @Body() dto: UpdateSerialNumberStatusDTO,
   ) {
-    return this.serialNumberService.updateSerialNumberStatus(id, data);
+    return this.serialNumberService
+      .updateSerialNumberStatus(id, dto);
+  }
+
+  @RequirePermissions('serial-number.read')
+  @Get(':id')
+  getSerialNumberById(
+    @Param(
+      'id',
+      new ParseUUIDPipe({ version: '4' }),
+    )
+    id: string,
+  ) {
+    return this.serialNumberService
+      .getSerialNumberById(id);
+  }
+
+  @RequirePermissions('serial-number.update')
+  @Patch(':id')
+  updateSerialNumber(
+    @Param(
+      'id',
+      new ParseUUIDPipe({ version: '4' }),
+    )
+    id: string,
+
+    @Body() dto: UpdateSerialNumberDTO,
+  ) {
+    return this.serialNumberService
+      .updateSerialNumber(id, dto);
   }
 
   @RequirePermissions('serial-number.delete')
   @Delete(':id')
-  async deleteSerialNumber(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  deleteSerialNumber(
+    @Param(
+      'id',
+      new ParseUUIDPipe({ version: '4' }),
+    )
+    id: string,
   ) {
-    return this.serialNumberService.deleteSerialNumber(id);
+    return this.serialNumberService
+      .deleteSerialNumber(id);
   }
 }

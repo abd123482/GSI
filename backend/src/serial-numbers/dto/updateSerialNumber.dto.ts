@@ -1,9 +1,29 @@
 import { z } from 'zod';
 
-export const updateSerialNumberSchema = z.object({
-  serialNumberCode: z.string().min(1, 'Serial number code cannot be empty').optional(),
-  equipmentId: z.string().uuid('Equipment ID must be a valid UUID').optional(),
-  serialNumberStatus: z.string().min(1, 'Serial number status cannot be empty').optional(),
-});
+export const updateSerialNumberSchema = z
+  .object({
+    serialNumberCode: z
+      .string()
+      .trim()
+      .min(1, 'Serial number code cannot be empty')
+      .max(200, 'Serial number code must not exceed 200 characters')
+      .optional(),
 
-export type UpdateSerialNumberDTO = z.infer<typeof updateSerialNumberSchema>;
+    serialNumberStatus: z
+      .string()
+      .trim()
+      .min(1, 'Serial number status cannot be empty')
+      .max(100, 'Serial number status must not exceed 100 characters')
+      .optional(),
+  })
+  .refine(
+    (data) =>
+      data.serialNumberCode !== undefined ||
+      data.serialNumberStatus !== undefined,
+    {
+      message: 'At least one editable field is required',
+    },
+  );
+
+export type UpdateSerialNumberDTO =
+  z.infer<typeof updateSerialNumberSchema>;

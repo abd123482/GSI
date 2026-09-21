@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
+import { PrismaModule } from '../prisma/prisma.module.js';
 import { EquipmentMovementController } from './equipmentMovement.controller.js';
 import { EquipmentMovementService } from './equipmentMovement.service.js';
-import { PrismaModule } from '../prisma/prisma.module.js';
 
 @Module({
   imports: [PrismaModule],
@@ -9,4 +9,4 @@ import { PrismaModule } from '../prisma/prisma.module.js';
   providers: [EquipmentMovementService],
   exports: [EquipmentMovementService],
 })
-export class EquipmentMovementModule {}
+export class EquipmentMovementModule { }

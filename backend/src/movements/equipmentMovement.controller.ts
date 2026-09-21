@@ -1,133 +1,63 @@
 import {
+  Body,
   Controller,
   Get,
-  Post,
-  Body,
   Param,
-  Query,
   ParseUUIDPipe,
+  Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard.js';
-import { PermissionsGuard } from '../auth/guards/permissions.guard.js';
-import { RequirePermissions } from '../auth/decorators/permissions.decorator.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { RequirePermissions } from '../auth/decorators/permissions.decorator.js';
+import { PermissionsGuard } from '../auth/guards/permissions.guard.js';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type.js';
-import { EquipmentMovementService } from './equipmentMovement.service.js';
 import type {
   CreateEquipmentMovementDTO,
   SearchEquipmentMovementDTO,
-  PaginationDTO,
 } from './dto/index.js';
+import { EquipmentMovementService } from './equipmentMovement.service.js';
 
 @UseGuards(ClerkAuthGuard, PermissionsGuard)
-@Controller(['equipment-movement', 'equipment-movements'])
+@Controller(['movements', 'equipment-movement', 'equipment-movements'])
 export class EquipmentMovementController {
   constructor(
-    private readonly equipmentMovementService: EquipmentMovementService,
+    private readonly movementService: EquipmentMovementService,
   ) { }
 
-  @RequirePermissions('movement.create')
-  @Post('batch')
-  async createBatchEquipmentMovements(@Body() dto: { items: CreateEquipmentMovementDTO[] }) {
-    return this.equipmentMovementService.createBatchEquipmentMovements(dto.items);
-  }
-
+  /**
+   * Canonical route: POST /movements
+   *
+   * One request creates one movement header and one or many article lines.
+   */
   @RequirePermissions('movement.create')
   @Post()
-  async createEquipmentMovement(
+  createMovement(
     @Body() dto: CreateEquipmentMovementDTO,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.equipmentMovementService.createEquipmentMovement(dto, user?.userId);
+    return this.movementService.createMovement(dto, user?.userId);
   }
 
+  /**
+   * Canonical route: GET /movements?page=1&limit=20
+   *
+   * Optional filters:
+   * movementType, equipmentId, serialNumberId,
+   * sourceShelfId, destinationShelfId.
+   */
   @RequirePermissions('movement.read')
   @Get()
-  async getAllEquipmentMovements(@Query() pagination: PaginationDTO) {
-    return this.equipmentMovementService.getAllEquipmentMovements(pagination);
-  }
-
-  @RequirePermissions('movement.read')
-  @Get('search')
-  async searchEquipmentMovements(
-    @Query() query: SearchEquipmentMovementDTO,
-    @Query() pagination: PaginationDTO,
-  ) {
-    return this.equipmentMovementService.searchEquipmentMovements(
-      query,
-      pagination,
-    );
-  }
-
-  @RequirePermissions('movement.read')
-  @Get('type/:type')
-  async getMovementsByType(
-    @Param('type') type: string,
-    @Query() pagination: PaginationDTO,
-  ) {
-    return this.equipmentMovementService.getMovementsByType(pagination, type);
-  }
-
-  @RequirePermissions('movement.read')
-  @Get('equipment/:equipmentId')
-  async getMovementsByEquipmentId(
-    @Param('equipmentId', new ParseUUIDPipe({ version: '4' }))
-    equipmentId: string,
-    @Query() pagination: PaginationDTO,
-  ) {
-    return this.equipmentMovementService.getMovementsByEquipmentId(
-      pagination,
-      equipmentId,
-    );
-  }
-
-  @RequirePermissions('movement.read')
-  @Get('serial-number/:serialNumberId')
-  async getMovementsBySerialNumberId(
-    @Param('serialNumberId', new ParseUUIDPipe({ version: '4' }))
-    serialNumberId: string,
-    @Query() pagination: PaginationDTO,
-  ) {
-    return this.equipmentMovementService.getMovementsBySerialNumberId(
-      pagination,
-      serialNumberId,
-    );
-  }
-
-  @RequirePermissions('movement.read')
-  @Get('source-shelf/:shelfId')
-  async getMovementsBySourceShelfId(
-    @Param('shelfId', new ParseUUIDPipe({ version: '4' })) shelfId: string,
-    @Query() pagination: PaginationDTO,
-  ) {
-    return this.equipmentMovementService.getMovementsBySourceShelfId(
-      pagination,
-      shelfId,
-    );
-  }
-
-  @RequirePermissions('movement.read')
-  @Get('destination-shelf/:shelfId')
-  async getMovementsByDestinationShelfId(
-    @Param('shelfId', new ParseUUIDPipe({ version: '4' })) shelfId: string,
-    @Query() pagination: PaginationDTO,
-  ) {
-    return this.equipmentMovementService.getMovementsByDestinationShelfId(
-      pagination,
-      shelfId,
-    );
+  getMovements(@Query() query: SearchEquipmentMovementDTO) {
+    return this.movementService.getMovements(query);
   }
 
   @RequirePermissions('movement.read')
   @Get(':id')
-  async getEquipmentMovementById(
-    @Query() pagination: PaginationDTO,
+  getMovementById(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ) {
-    return this.equipmentMovementService.getEquipmentMovementById(
-      pagination,
-      id,
-    );
+    return this.movementService.getMovementById(id);
   }
 }

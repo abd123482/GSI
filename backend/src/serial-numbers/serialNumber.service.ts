@@ -1,336 +1,522 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
 import {
-  CreateSerialNumberDTO,
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+
+import type { Prisma } from '../generated/prisma/client.js';
+import { PrismaService } from '../prisma/prisma.service.js';
+
+import {
+  type CreateSerialNumberDTO,
   createSerialNumberSchema,
-  CreateBatchSerialNumberDTO,
+  type CreateBatchSerialNumberDTO,
   createBatchSerialNumberSchema,
-  UpdateSerialNumberDTO,
+  type UpdateSerialNumberDTO,
   updateSerialNumberSchema,
-  UpdateSerialNumberStatusDTO,
+  type UpdateSerialNumberStatusDTO,
   updateSerialNumberStatusSchema,
-  PaginationDTO,
+  type SearchSerialNumberDTO,
+  searchSerialNumberSchema,
+  type PaginationDTO,
+  paginationSchema,
 } from './dto/index.js';
+
+const SERIAL_SELECT = {
+  serialNumberId: true,
+  serialNumberCode: true,
+  serialNumberStatus: true,
+  equipmentId: true,
+  shelfId: true,
+
+  equipment: {
+    select: {
+      equipmentId: true,
+      equipmentName: true,
+      hasSerialNumber: true,
+    },
+  },
+
+  shelf: {
+    select: {
+      shelfId: true,
+      shelfName: true,
+    },
+  },
+} satisfies Prisma.SerialNumberSelect;
 
 @Injectable()
 export class SerialNumberService {
   constructor(private readonly prisma: PrismaService) { }
 
-  async serialNumberExists(serialNumberCode: string): Promise<boolean> {
-    const totalSerialNumber = await this.prisma.serialNumber.findFirst({ where: { serialNumberCode } });
-    return totalSerialNumber != null;
+  private async getSerializedEquipmentOrThrow(
+    equipmentId: string,
+  ) {
+    const equipment = await this.prisma.equipment.findUnique({
+      where: {
+        equipmentId,
+      },
+      select: {
+        equipmentId: true,
+        equipmentName: true,
+        hasSerialNumber: true,
+      },
+    });
+
+    if (!equipment) {
+      throw new NotFoundException(
+        `Equipment with ID '${equipmentId}' not found`,
+      );
+    }
+
+    if (!equipment.hasSerialNumber) {
+      throw new BadRequestException(
+        'Serial numbers can only be created for serialized equipment',
+      );
+    }
+
+    return equipment;
   }
 
-  async createSerialNumber(data: CreateSerialNumberDTO) {
-    const validated = createSerialNumberSchema.parse(data);
+  private async assertSerialCodeAvailable(
+    serialNumberCode: string,
+    excludeSerialNumberId?: string,
+  ): Promise<void> {
+    const existing = await this.prisma.serialNumber.findFirst({
+      where: {
+        serialNumberCode,
 
-    // Verify equipment exists
-    const equipment = await this.prisma.equipment.findUnique({
-      where: { equipmentId: validated.equipmentId },
+        ...(excludeSerialNumberId && {
+          serialNumberId: {
+            not: excludeSerialNumberId,
+          },
+        }),
+      },
+      select: {
+        serialNumberId: true,
+      },
     });
-    if (!equipment) {
-      throw new NotFoundException(`Équipement introuvable (ID: ${validated.equipmentId})`);
-    }
 
-    // Check code uniqueness
-    const existing = await this.serialNumberExists(validated.serialNumberCode)
     if (existing) {
-      throw new BadRequestException(`Le numéro de série '${validated.serialNumberCode}' existe déjà`);
+      throw new BadRequestException(
+        `Serial number '${serialNumberCode}' already exists`,
+      );
     }
+  }
 
-    return await this.prisma.$transaction(async (tx) => {
-      const created = await tx.serialNumber.create({
+  async createSerialNumber(
+    dto: CreateSerialNumberDTO,
+  ) {
+    const data = createSerialNumberSchema.parse(dto);
+
+    await this.getSerializedEquipmentOrThrow(
+      data.equipmentId,
+    );
+
+    await this.assertSerialCodeAvailable(
+      data.serialNumberCode,
+    );
+
+    /*
+     * Serial identity is created without a shelf.
+     *
+     * A serial reaches/leaves/changes a physical shelf only through
+     * EquipmentMovementService.
+     *
+     * Equipment.equipmentQuantity for serialized equipment equals the number
+     * of SerialNumber records, therefore create/delete updates that total.
+     */
+    return this.prisma.$transaction(async (tx) => {
+      const serialNumber = await tx.serialNumber.create({
         data: {
-          serialNumberCode: validated.serialNumberCode,
-          equipmentId: validated.equipmentId,
-          shelfId: null, // Placed into shelves exclusively via movement logic
-          serialNumberStatus: validated.serialNumberStatus ?? 'AVAILABLE',
+          serialNumberCode: data.serialNumberCode,
+          serialNumberStatus:
+            data.serialNumberStatus ?? 'AVAILABLE',
+          equipmentId: data.equipmentId,
+          shelfId: null,
         },
-        include: {
-          shelf: {
-            select: { shelfId: true, shelfName: true },
+        select: SERIAL_SELECT,
+      });
+
+      await tx.equipment.update({
+        where: {
+          equipmentId: data.equipmentId,
+        },
+        data: {
+          equipmentQuantity: {
+            increment: 1,
           },
         },
       });
 
-      // Auto-increment parent equipment quantity
-      await tx.equipment.update({
-        where: { equipmentId: validated.equipmentId },
-        data: {
-          equipmentQuantity: { increment: 1 },
-        },
-      });
-
-      return created;
+      return serialNumber;
     });
   }
 
-  async createBatchSerialNumbers(data: CreateBatchSerialNumberDTO) {
-    const validated = createBatchSerialNumberSchema.parse(data);
+  async createBatchSerialNumbers(
+    dto: CreateBatchSerialNumberDTO,
+  ) {
+    const data = createBatchSerialNumberSchema.parse(dto);
 
-    // Verify equipment exists
-    const equipment = await this.prisma.equipment.findUnique({
-      where: { equipmentId: validated.equipmentId },
-    });
-    if (!equipment) {
-      throw new NotFoundException(`Équipement introuvable (ID: ${validated.equipmentId})`);
+    await this.getSerializedEquipmentOrThrow(
+      data.equipmentId,
+    );
+
+    /*
+     * Normalize/detect duplicates inside the request before touching the DB.
+     */
+    const normalizedCodes = data.serialNumberCodes.map(
+      (code) => code.trim(),
+    );
+
+    const uniqueCodes = new Set(normalizedCodes);
+
+    if (uniqueCodes.size !== normalizedCodes.length) {
+      throw new BadRequestException(
+        'Duplicate serial numbers exist inside the request',
+      );
     }
 
-    // Check uniqueness within the batch
-    const uniqueSet = new Set(validated.serialNumberCodes);
-    if (uniqueSet.size !== validated.serialNumberCodes.length) {
-      throw new BadRequestException('Certains numéros de série sont en double dans la liste fournie');
-    }
-
-    // Check uniqueness in the database
-    const existingInDb = await this.prisma.serialNumber.findMany({
+    /*
+     * One DB query instead of one existence query per serial.
+     */
+    const existing = await this.prisma.serialNumber.findMany({
       where: {
-        serialNumberCode: { in: validated.serialNumberCodes },
+        serialNumberCode: {
+          in: normalizedCodes,
+        },
       },
-      select: { serialNumberCode: true },
+      select: {
+        serialNumberCode: true,
+      },
     });
-    if (existingInDb.length > 0) {
-      const duplicates = existingInDb.map((s) => s.serialNumberCode).join(', ');
-      throw new BadRequestException(`Ces numéros de série existent déjà dans la base : ${duplicates}`);
+
+    if (existing.length > 0) {
+      throw new BadRequestException(
+        `Serial number(s) already exist: ${existing
+          .map((item) => item.serialNumberCode)
+          .join(', ')}`,
+      );
     }
 
-    const count = validated.serialNumberCodes.length;
+    const count = normalizedCodes.length;
 
-    if (validated.shelfId) {
-      const shelf = await this.prisma.shelf.findUnique({
-        where: { shelfId: validated.shelfId },
-      });
-      if (!shelf) {
-        throw new NotFoundException(`Emplacement avec l'identifiant '${validated.shelfId}' introuvable.`);
-      }
-    }
-
-    return await this.prisma.$transaction(async (tx) => {
-      // Bulk insert serial numbers (with shelfId if provided)
+    return this.prisma.$transaction(async (tx) => {
       await tx.serialNumber.createMany({
-        data: validated.serialNumberCodes.map((code) => ({
-          serialNumberCode: code,
-          equipmentId: validated.equipmentId,
-          shelfId: validated.shelfId ?? null,
-          serialNumberStatus: validated.serialNumberStatus ?? 'AVAILABLE',
+        data: normalizedCodes.map((serialNumberCode) => ({
+          serialNumberCode,
+          serialNumberStatus:
+            data.serialNumberStatus ?? 'AVAILABLE',
+          equipmentId: data.equipmentId,
+          shelfId: null,
         })),
       });
 
-      // Increment parent equipment quantity
       await tx.equipment.update({
-        where: { equipmentId: validated.equipmentId },
+        where: {
+          equipmentId: data.equipmentId,
+        },
         data: {
-          equipmentQuantity: { increment: count },
+          equipmentQuantity: {
+            increment: count,
+          },
         },
       });
-
-      // If shelfId is provided, place in shelf, increment shelfQuantity and create initial IN movements
-      if (validated.shelfId) {
-        const createdSerials = await tx.serialNumber.findMany({
-          where: {
-            equipmentId: validated.equipmentId,
-            serialNumberCode: { in: validated.serialNumberCodes },
-          },
-          select: { serialNumberId: true },
-        });
-
-        // Increment destination shelf quantity
-        await tx.shelf.update({
-          where: { shelfId: validated.shelfId },
-          data: {
-            shelfQuantity: { increment: count },
-          },
-        });
-
-        // Upsert equipmentShelfs record
-        const destEs = await tx.equipmentShelfs.findFirst({
-          where: {
-            equipmentId: validated.equipmentId,
-            shelfId: validated.shelfId,
-          },
-        });
-
-        if (destEs) {
-          await tx.equipmentShelfs.update({
-            where: { equipmentShelfId: destEs.equipmentShelfId },
-            data: {
-              equipmentQuantity: destEs.equipmentQuantity === null
-                ? count
-                : { increment: count },
-            },
-          });
-        } else {
-          await tx.equipmentShelfs.create({
-            data: {
-              equipmentId: validated.equipmentId,
-              shelfId: validated.shelfId,
-              equipmentQuantity: count,
-            },
-          });
-        }
-
-        // Create initial IN audit movements for each serial number
-        await tx.mouvement.createMany({
-          data: createdSerials.map((sn) => ({
-            equipmentId: validated.equipmentId,
-            serialNumberId: sn.serialNumberId,
-            sourceShelfId: null,
-            destinationShelfId: validated.shelfId,
-            mouvementQuantity: 1,
-            mouvementStatus: 'IN',
-          })),
-        });
-      }
 
       return {
         success: true,
         count,
-        equipmentId: validated.equipmentId,
-        shelfId: validated.shelfId ?? null,
+        equipmentId: data.equipmentId,
       };
     });
   }
 
-  async getAllSerialNumbers(paginationdto: PaginationDTO) {
-    const { limit, page } = paginationdto;
+  async getSerialNumbers(
+    query: SearchSerialNumberDTO,
+    pagination: PaginationDTO,
+  ) {
+    const filters = searchSerialNumberSchema.parse(
+      query ?? {},
+    );
+
+    const { page, limit } = paginationSchema.parse(
+      pagination ?? {},
+    );
+
+    const where: Prisma.SerialNumberWhereInput = {};
+
+    if (filters.serialNumberCode) {
+      where.serialNumberCode = {
+        contains: filters.serialNumberCode,
+      };
+    }
+
+    if (filters.serialNumberStatus) {
+      where.serialNumberStatus =
+        filters.serialNumberStatus;
+    }
+
+    if (filters.equipmentId) {
+      where.equipmentId = filters.equipmentId;
+    }
+
+    if (filters.shelfId) {
+      where.shelfId = filters.shelfId;
+    }
+
     const skip = (page - 1) * limit;
-    return await this.prisma.serialNumber.findMany({
-      skip,
-      take: limit,
-    })
+
+    const [serialNumbers, totalSerialNumbers] =
+      await Promise.all([
+        this.prisma.serialNumber.findMany({
+          where,
+          skip,
+          take: limit,
+          select: SERIAL_SELECT,
+          orderBy: [
+            {
+              serialNumberCode: 'asc',
+            },
+            {
+              serialNumberId: 'asc',
+            },
+          ],
+        }),
+
+        this.prisma.serialNumber.count({
+          where,
+        }),
+      ]);
+
+    return {
+      serialNumbers,
+      totalSerialNumbers,
+      totalPages:
+        Math.ceil(totalSerialNumbers / limit) || 1,
+      currentPage: page,
+      limit,
+    };
   }
 
-  async getSerialNumberById(paginationdto: PaginationDTO, id: string) {
-    const { limit, page } = paginationdto;
-    const skip = (page - 1) * limit;
-    return await this.prisma.serialNumber.findMany({
-      skip,
-      take: limit,
-      where: { serialNumberId: id }
-    })
+  async getSerialNumberById(id: string) {
+    const serialNumberId = id?.trim();
+
+    if (!serialNumberId) {
+      throw new BadRequestException(
+        'Serial number ID is required',
+      );
+    }
+
+    const serialNumber =
+      await this.prisma.serialNumber.findUnique({
+        where: {
+          serialNumberId,
+        },
+        select: SERIAL_SELECT,
+      });
+
+    if (!serialNumber) {
+      throw new NotFoundException(
+        `Serial number with ID '${serialNumberId}' not found`,
+      );
+    }
+
+    return serialNumber;
   }
 
-  async getSerialNumberByCode(paginationdto: PaginationDTO, serialNumberCode: string) {
-    const { limit, page } = paginationdto;
-    const skip = (page - 1) * limit;
-    return await this.prisma.serialNumber.findMany({
-      skip,
-      take: limit,
-      where: { serialNumberCode }
-    })
+  async getSerialNumberByCode(code: string) {
+    const serialNumberCode = code?.trim();
+
+    if (!serialNumberCode) {
+      throw new BadRequestException(
+        'Serial number code is required',
+      );
+    }
+
+    const serialNumber =
+      await this.prisma.serialNumber.findFirst({
+        where: {
+          serialNumberCode,
+        },
+        select: SERIAL_SELECT,
+      });
+
+    if (!serialNumber) {
+      throw new NotFoundException(
+        `Serial number '${serialNumberCode}' not found`,
+      );
+    }
+
+    return serialNumber;
   }
 
+  async updateSerialNumber(
+    id: string,
+    dto: UpdateSerialNumberDTO,
+  ) {
+    const serialNumberId = id?.trim();
 
-  async updateSerialNumber(serialNumberdto: UpdateSerialNumberDTO, id: string) {
-    const validatedData = updateSerialNumberSchema.parse(serialNumberdto);
+    if (!serialNumberId) {
+      throw new BadRequestException(
+        'Serial number ID is required',
+      );
+    }
 
-    const existingSerialNumber = await this.prisma.serialNumber.findUnique({
-      where: { serialNumberId: id },
-    });
+    const data = updateSerialNumberSchema.parse(dto);
 
-    if (!existingSerialNumber) {
-      throw new NotFoundException(`Numéro de série avec l'identifiant '${id}' introuvable.`);
+    const current =
+      await this.prisma.serialNumber.findUnique({
+        where: {
+          serialNumberId,
+        },
+        select: {
+          serialNumberId: true,
+          serialNumberCode: true,
+        },
+      });
+
+    if (!current) {
+      throw new NotFoundException(
+        `Serial number with ID '${serialNumberId}' not found`,
+      );
     }
 
     if (
-      validatedData.serialNumberCode &&
-      validatedData.serialNumberCode !== existingSerialNumber.serialNumberCode
+      data.serialNumberCode !== undefined &&
+      data.serialNumberCode !== current.serialNumberCode
     ) {
-      const codeTaken = await this.prisma.serialNumber.findFirst({
-        where: {
-          serialNumberCode: validatedData.serialNumberCode,
-          serialNumberId: { not: id },
-        },
-      });
-      if (codeTaken) {
-        throw new BadRequestException(
-          `Le numéro de série '${validatedData.serialNumberCode}' existe déjà.`,
-        );
-      }
+      await this.assertSerialCodeAvailable(
+        data.serialNumberCode,
+        serialNumberId,
+      );
     }
 
-    return await this.prisma.serialNumber.update({
-      where: { serialNumberId: id },
+    /*
+     * equipmentId and shelfId are intentionally not editable here.
+     *
+     * - equipment ownership is immutable after creation.
+     * - physical location changes only through MovementService.
+     */
+    return this.prisma.serialNumber.update({
+      where: {
+        serialNumberId,
+      },
       data: {
-        ...(validatedData.serialNumberCode !== undefined && {
-          serialNumberCode: validatedData.serialNumberCode,
+        ...(data.serialNumberCode !== undefined && {
+          serialNumberCode:
+            data.serialNumberCode,
         }),
-        ...(validatedData.serialNumberStatus !== undefined && {
-          serialNumberStatus: validatedData.serialNumberStatus,
-        }),
-        ...(validatedData.equipmentId !== undefined && {
-          equipmentId: validatedData.equipmentId,
+
+        ...(data.serialNumberStatus !== undefined && {
+          serialNumberStatus:
+            data.serialNumberStatus,
         }),
       },
-      include: {
-        shelf: true,
-        equipment: true,
-      },
+      select: SERIAL_SELECT,
     });
   }
 
-  async getSerialNumberByStatus(paginationdto: PaginationDTO, serialNumberStatus: string) {
-    const { limit, page } = paginationdto;
-    const skip = (page - 1) * limit;
-    return await this.prisma.serialNumber.findMany({
-      skip,
-      take: limit,
-      where: { serialNumberStatus },
-      include: {
-        shelf: true,
-        equipment: true,
-      },
-    });
-  }
+  async updateSerialNumberStatus(
+    id: string,
+    dto: UpdateSerialNumberStatusDTO,
+  ) {
+    const data =
+      updateSerialNumberStatusSchema.parse(dto);
 
-  async updateSerialNumberStatus(id: string, dto: UpdateSerialNumberStatusDTO) {
-    const validatedData = updateSerialNumberStatusSchema.parse(dto);
-
-    const existingSerialNumber = await this.prisma.serialNumber.findUnique({
-      where: { serialNumberId: id },
-    });
-
-    if (!existingSerialNumber) {
-      throw new NotFoundException(`Numéro de série avec l'identifiant '${id}' introuvable.`);
-    }
-
-    return await this.prisma.serialNumber.update({
-      where: { serialNumberId: id },
-      data: { serialNumberStatus: validatedData.serialNumberStatus },
-      include: {
-        shelf: true,
-        equipment: true,
-      },
+    return this.updateSerialNumber(id, {
+      serialNumberStatus:
+        data.serialNumberStatus,
     });
   }
 
   async deleteSerialNumber(id: string) {
-    const existingSerialNumber = await this.prisma.serialNumber.findUnique({
-      where: { serialNumberId: id },
-      include: {
-        equipment: true,
-      },
-    });
+    const serialNumberId = id?.trim();
 
-    if (!existingSerialNumber) {
-      throw new NotFoundException(`Numéro de série avec l'identifiant '${id}' introuvable.`);
+    if (!serialNumberId) {
+      throw new BadRequestException(
+        'Serial number ID is required',
+      );
     }
 
-    return await this.prisma.$transaction(async (tx) => {
-      // 1. Delete or unlink any movements associated with this serial number
-      await tx.mouvement.deleteMany({
-        where: { serialNumberId: id },
+    const serialNumber =
+      await this.prisma.serialNumber.findUnique({
+        where: {
+          serialNumberId,
+        },
+        select: {
+          serialNumberId: true,
+          serialNumberCode: true,
+          equipmentId: true,
+          shelfId: true,
+        },
       });
 
-      // 2. Delete the serial number
+    if (!serialNumber) {
+      throw new NotFoundException(
+        `Serial number with ID '${serialNumberId}' not found`,
+      );
+    }
+
+    /*
+     * A serial currently on a shelf must leave stock through an OUT movement.
+     * SerialNumberService must never secretly modify physical stock.
+     */
+    if (serialNumber.shelfId) {
+      throw new BadRequestException(
+        'This serial number is currently on a shelf. Create an OUT movement before deleting it.',
+      );
+    }
+
+    /*
+     * Never destroy movement history to make a serial deletable.
+     */
+    const [movementLine, legacyMovementHeader] =
+      await Promise.all([
+        this.prisma.mouvementEquipment.findFirst({
+          where: {
+            serialNumberId,
+          },
+          select: {
+            mouvementEquipmentId: true,
+          },
+        }),
+
+        this.prisma.mouvement.findFirst({
+          where: {
+            serialNumberId,
+          },
+          select: {
+            mouvementId: true,
+          },
+        }),
+      ]);
+
+    if (movementLine || legacyMovementHeader) {
+      throw new BadRequestException(
+        'This serial number has movement history and cannot be physically deleted',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
       const deleted = await tx.serialNumber.delete({
-        where: { serialNumberId: id },
+        where: {
+          serialNumberId,
+        },
+        select: SERIAL_SELECT,
       });
 
-      // 3. If equipment is serialized, decrement its equipmentQuantity by 1
-      if (existingSerialNumber.equipmentId && existingSerialNumber.equipment?.hasSerialNumber) {
-        await tx.equipment.update({
-          where: { equipmentId: existingSerialNumber.equipmentId },
+      if (serialNumber.equipmentId) {
+        /*
+         * Conditional decrement protects against an already-corrupt zero total.
+         */
+        const changed = await tx.equipment.updateMany({
+          where: {
+            equipmentId:
+              serialNumber.equipmentId,
+            equipmentQuantity: {
+              gt: 0,
+            },
+          },
           data: {
             equipmentQuantity: {
               decrement: 1,
@@ -338,29 +524,14 @@ export class SerialNumberService {
           },
         });
 
-        if (existingSerialNumber.shelfId) {
-          const shelfAllocation = await tx.equipmentShelfs.findFirst({
-            where: {
-              equipmentId: existingSerialNumber.equipmentId,
-              shelfId: existingSerialNumber.shelfId,
-            },
-            orderBy: { equipmentQuantity: 'desc' },
-          });
-          if (shelfAllocation && (shelfAllocation.equipmentQuantity ?? 0) > 0) {
-            await tx.equipmentShelfs.update({
-              where: { equipmentShelfId: shelfAllocation.equipmentShelfId },
-              data: {
-                equipmentQuantity: {
-                  decrement: 1,
-                },
-              },
-            });
-          }
+        if (changed.count !== 1) {
+          throw new BadRequestException(
+            'Equipment serialized quantity is inconsistent',
+          );
         }
       }
 
       return deleted;
     });
   }
-
 }

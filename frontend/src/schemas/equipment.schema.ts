@@ -1,55 +1,62 @@
 import { z } from 'zod';
 
-
+/**
+ * V3 Equipment creation is metadata-only.
+ *
+ * Physical quantity and shelf placement MUST NOT be created here.
+ * Standard stock enters through Movement IN.
+ * Serialized identities may optionally be created after the equipment metadata.
+ */
 export const createDirectEquipmentSchema = z
   .object({
     equipmentName: z
       .string()
+      .trim()
       .min(1, 'Le nom de l’article est requis')
-      .max(100, 'Le nom ne peut pas dépasser 100 caractères'),
+      .max(200, 'Le nom ne peut pas dépasser 200 caractères'),
+
     hasSerialNumber: z.boolean(),
-    equipmentQuantity: z.coerce
-      .number()
-      .int('La quantité doit être un nombre entier')
-      .min(0, 'La quantité ne peut pas être négative'),
-    minEquipmentQuantity: z.coerce
+
+    // React Hook Form already gives us a number via valueAsNumber.
+    // Avoid z.coerce/default here so resolver input/output types stay identical.
+    minEquipmentQuantity: z
       .number()
       .int('La quantité minimale doit être un entier')
-      .min(0, 'La quantité minimale ne peut pas être négative')
-      .optional(),
+      .min(0, 'La quantité minimale ne peut pas être négative'),
+
     serialNumbers: z
-      .array(z.string().min(1, 'Le numéro de série est requis'))
-      .nullable()
-      .optional(),
-    shelfId: z
-      .string()
-      .uuid('Identifiant d’emplacement invalide')
-      .nullable()
-      .optional()
-      .or(z.literal('')),
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1, 'Le numéro de série est requis')
+          .max(200, 'Le numéro de série ne peut pas dépasser 200 caractères'),
+      )
+      .max(1000, 'Un lot ne peut pas dépasser 1000 numéros de série'),
   })
   .superRefine((data, ctx) => {
-    if (data.hasSerialNumber) {
-      // Serial numbers are optional at creation (quantity defaults to 0). If provided, validate them.
-      if (data.serialNumbers && data.serialNumbers.length > 0) {
-        const trimmed = data.serialNumbers.map((s) => s.trim());
-        const hasEmpty = trimmed.some((s) => s.length === 0);
-        if (hasEmpty) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'Tous les numéros de série doivent être renseignés',
-            path: ['serialNumbers'],
-          });
-        }
-        const unique = new Set(trimmed.map((s) => s.toUpperCase()));
-        if (unique.size !== data.serialNumbers.length) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'Certains numéros de série sont en double dans la liste',
-            path: ['serialNumbers'],
-          });
-        }
-      }
+    if (!data.hasSerialNumber && data.serialNumbers.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['serialNumbers'],
+        message:
+          'Les numéros de série sont autorisés uniquement pour un article sérialisé.',
+      });
+      return;
+    }
+
+    if (!data.hasSerialNumber) return;
+
+    const normalized = data.serialNumbers.map((value) =>
+      value.trim().toUpperCase(),
+    );
+
+    if (new Set(normalized).size !== normalized.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['serialNumbers'],
+        message: 'Certains numéros de série sont en double dans la liste.',
+      });
     }
   });
 
@@ -57,35 +64,57 @@ export type CreateDirectEquipmentFormValues = z.infer<
   typeof createDirectEquipmentSchema
 >;
 
+/**
+ * V3 Equipment update:
+ * - name can change
+ * - minimum quantity can change
+ *
+ * Immutable here:
+ * - equipmentQuantity
+ * - hasSerialNumber
+ */
+export const updateEquipmentSchema = z
+  .object({
+    equipmentName: z
+      .string()
+      .trim()
+      .min(1, 'Le nom de l’article est requis')
+      .max(200, 'Le nom ne peut pas dépasser 200 caractères')
+      .optional(),
 
+    minEquipmentQuantity: z
+      .number()
+      .int('La quantité minimale doit être un entier')
+      .min(0, 'La quantité minimale ne peut pas être négative')
+      .optional(),
+  })
+  .refine(
+    (data) =>
+      data.equipmentName !== undefined ||
+      data.minEquipmentQuantity !== undefined,
+    {
+      message: 'Aucune modification à enregistrer.',
+    },
+  );
 
-export const updateEquipmentSchema = z.object({
-  equipmentName: z
-    .string()
-    .min(1, 'Le nom de l’article est requis')
-    .max(100, 'Le nom ne peut pas dépasser 100 caractères')
-    .optional(),
-  equipmentQuantity: z.coerce
-    .number()
-    .int('La quantité doit être un nombre entier')
-    .min(0, 'La quantité doit être supérieure ou égale à 0')
-    .optional(),
-  minEquipmentQuantity: z.coerce
-    .number()
-    .int('La quantité minimale doit être un entier')
-    .min(0, 'La quantité minimale ne peut pas être négative')
-    .optional(),
-  hasSerialNumber: z.boolean().optional(),
-});
-
-export type UpdateEquipmentFormValues = z.infer<typeof updateEquipmentSchema>;
+export type UpdateEquipmentFormValues = z.infer<
+  typeof updateEquipmentSchema
+>;
 
 export const updateSerialNumberSchema = z.object({
   serialNumberCode: z
     .string()
+    .trim()
     .min(1, 'Le code du numéro de série est requis')
-    .max(150, 'Le code ne peut pas dépasser 150 caractères'),
-  serialNumberStatus: z.string().min(1, 'Le statut est requis'),
+    .max(200, 'Le code ne peut pas dépasser 200 caractères'),
+
+  serialNumberStatus: z
+    .string()
+    .trim()
+    .min(1, 'Le statut est requis')
+    .max(100, 'Le statut ne peut pas dépasser 100 caractères'),
 });
 
-export type UpdateSerialNumberFormValues = z.infer<typeof updateSerialNumberSchema>;
+export type UpdateSerialNumberFormValues = z.infer<
+  typeof updateSerialNumberSchema
+>;

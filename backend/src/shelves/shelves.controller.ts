@@ -1,82 +1,150 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
   Body,
+  Controller,
+  Delete,
+  Get,
   Param,
-  Query,
   ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
+
 import { ClerkAuthGuard } from '../auth/clerk-auth.guard.js';
-import { PermissionsGuard } from '../auth/guards/permissions.guard.js';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator.js';
+import { PermissionsGuard } from '../auth/guards/permissions.guard.js';
+
 import { ShelfService } from './shelves.service.js';
+
 import type {
   CreateShelfDTO,
-  UpdateShelfDTO,
-  SearchShelfDTO,
   PaginationDTO,
+  SearchShelfDTO,
+  UpdateShelfDTO,
 } from './dto/index.js';
 
 @UseGuards(ClerkAuthGuard, PermissionsGuard)
 @Controller('shelves')
 export class ShelfController {
-  constructor(private readonly shelfService: ShelfService) {}
-
-  @RequirePermissions('shelf.create')
-  @Post()
-  async createShelf(@Body() dto: CreateShelfDTO) {
-    return this.shelfService.createShelf(dto);
-  }
+  constructor(
+    private readonly shelfService: ShelfService,
+  ) { }
 
   @RequirePermissions('shelf.read')
   @Get('search')
-  async searchShelves(
-    @Query() searchShelfDTO: SearchShelfDTO,
+  searchShelves(
+    @Query() query: SearchShelfDTO,
     @Query() pagination: PaginationDTO,
   ) {
-    return this.shelfService.searchShelves(searchShelfDTO, pagination);
+    return this.shelfService.searchShelves(
+      query,
+      pagination,
+    );
   }
 
   @RequirePermissions('shelf.read')
   @Get('name/:name')
-  async getShelfByName(
+  getShelfByName(
     @Param('name') name: string,
     @Query() pagination: PaginationDTO,
   ) {
-    return this.shelfService.getShelfByName(pagination, name);
+    return this.shelfService.getShelfByName(
+      name,
+      pagination,
+    );
+  }
+
+  @RequirePermissions('shelf.read')
+  @Get(':id/equipment')
+  getShelfEquipment(
+    @Param(
+      'id',
+      new ParseUUIDPipe({ version: '4' }),
+    )
+    id: string,
+
+    @Query() pagination: PaginationDTO,
+  ) {
+    return this.shelfService.getShelfEquipment(
+      id,
+      pagination,
+    );
+  }
+
+  @RequirePermissions('shelf.read')
+  @Get(':id/serial-numbers')
+  getShelfSerialNumbers(
+    @Param(
+      'id',
+      new ParseUUIDPipe({ version: '4' }),
+    )
+    id: string,
+
+    @Query() pagination: PaginationDTO,
+  ) {
+    return this.shelfService.getShelfSerialNumbers(
+      id,
+      pagination,
+    );
   }
 
   @RequirePermissions('shelf.read')
   @Get(':id')
-  async getShelfById(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Query() pagination: PaginationDTO,
+  getShelfById(
+    @Param(
+      'id',
+      new ParseUUIDPipe({ version: '4' }),
+    )
+    id: string,
   ) {
-    return this.shelfService.getShelfById(pagination, id);
+    return this.shelfService.getShelfById(id);
   }
 
   @RequirePermissions('shelf.read')
   @Get()
-  async getAllShelves(@Query() pagination: PaginationDTO) {
-    return this.shelfService.getAllShelves(pagination);
+  getAllShelves(
+    @Query() pagination: PaginationDTO,
+  ) {
+    return this.shelfService.getAllShelves(
+      pagination,
+    );
+  }
+
+  @RequirePermissions('shelf.create')
+  @Post()
+  createShelf(
+    @Body() dto: CreateShelfDTO,
+  ) {
+    return this.shelfService.createShelf(dto);
   }
 
   @RequirePermissions('shelf.update')
   @Patch(':id')
-  async updateShelf(
-    @Param('id', ParseUUIDPipe) id: string,
+  updateShelf(
+    @Param(
+      'id',
+      new ParseUUIDPipe({ version: '4' }),
+    )
+    id: string,
+
     @Body() dto: UpdateShelfDTO,
   ) {
-    return this.shelfService.updateShelf(dto, id);
+    return this.shelfService.updateShelf(
+      id,
+      dto,
+    );
   }
 
   @RequirePermissions('shelf.delete')
   @Delete(':id')
-  async deleteShelf(@Param('id', ParseUUIDPipe) id: string) {
+  deleteShelf(
+    @Param(
+      'id',
+      new ParseUUIDPipe({ version: '4' }),
+    )
+    id: string,
+  ) {
     return this.shelfService.deleteShelf(id);
   }
 }

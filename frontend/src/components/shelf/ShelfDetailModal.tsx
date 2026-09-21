@@ -1,32 +1,45 @@
 'use client';
 
-import { useState } from 'react';
-import { Shelf } from '@/types/shelf';
-import { getShelfVisualTheme } from './shelf-icons';
 import {
-  X,
-  Copy,
+  useEffect,
+  useState,
+} from 'react';
+import {
   Check,
-  Database,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Edit3,
   Hash,
   Layers,
-  ShieldCheck,
-  Code,
-  MapPin,
-  RefreshCw,
-  Edit3,
+  Loader2,
   Trash2,
   Warehouse,
+  X,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import {
+  toast,
+} from 'sonner';
+
+import type {
+  Shelf,
+} from '@/types/shelf';
+import {
+  useShelfEquipment,
+  useShelfSerialNumbers,
+} from '@/hooks/use-shelves';
 
 interface ShelfDetailModalProps {
   shelf: Shelf | null;
   isOpen: boolean;
   onClose: () => void;
   onRefresh?: () => void;
-  onOpenUpdate?: (shelf: Shelf) => void;
-  onOpenDelete?: (shelf: Shelf) => void;
+  onOpenUpdate?: (
+    shelf: Shelf,
+  ) => void;
+  onOpenDelete?: (
+    shelf: Shelf,
+  ) => void;
   canUpdateShelf?: boolean;
   canDeleteShelf?: boolean;
   isLoading?: boolean;
@@ -43,221 +56,408 @@ export function ShelfDetailModal({
   canDeleteShelf = true,
   isLoading = false,
 }: ShelfDetailModalProps) {
-  const [copiedId, setCopiedId] = useState(false);
+  const [
+    equipmentPage,
+    setEquipmentPage,
+  ] = useState(1);
 
-  if (!isOpen || !shelf) return null;
+  const [
+    serialPage,
+    setSerialPage,
+  ] = useState(1);
 
-  const visualTheme = getShelfVisualTheme(shelf.shelfName);
-  const IconComp = visualTheme.icon;
+  const [
+    copied,
+    setCopied,
+  ] = useState(false);
 
-  const handleCopyId = () => {
-    navigator.clipboard.writeText(shelf.shelfId);
-    setCopiedId(true);
-    toast.success('Identifiant copié dans le presse-papier !');
-    setTimeout(() => setCopiedId(false), 2000);
-  };
+  useEffect(() => {
+    setEquipmentPage(1);
+    setSerialPage(1);
+  }, [
+    shelf?.shelfId,
+    isOpen,
+  ]);
+
+  const equipmentQuery =
+    useShelfEquipment(
+      shelf?.shelfId,
+      equipmentPage,
+      20,
+      isOpen,
+    );
+
+  const serialQuery =
+    useShelfSerialNumbers(
+      shelf?.shelfId,
+      serialPage,
+      20,
+      isOpen,
+    );
+
+  if (
+    !isOpen ||
+    !shelf
+  ) {
+    return null;
+  }
+
+  async function copyId() {
+    await navigator.clipboard.writeText(
+      shelf!.shelfId,
+    );
+
+    setCopied(true);
+    toast.success('GUID copié');
+
+    setTimeout(
+      () =>
+        setCopied(false),
+      1500,
+    );
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-      {/* Document Card (#6b7b97 Slate Blue Theme) */}
-      <div
-        className="w-full max-w-xl bg-[#383330] border border-[#3f3a36] text-white rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="shelf-detail-title"
-      >
-        {/* Cover Banner */}
-        <div className="h-24 bg-[#2b2622] border-b border-[#3f3a36] relative flex items-end px-6 pb-0">
-          {/* Top Bar Actions */}
-          <div className="absolute top-3 right-3 flex items-center gap-1.5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-5 py-4">
+          <div>
+            <h2 className="text-base font-semibold">
+              {shelf.shelfName ??
+                'Emplacement sans nom'}
+            </h2>
+
+            <p className="mt-0.5 text-[10px] text-white/45">
+              Quantité physique en lecture seule
+            </p>
+          </div>
+
+          <div className="flex gap-1">
             {onRefresh && (
               <button
                 type="button"
                 onClick={onRefresh}
-                disabled={isLoading}
-                className="p-1.5 rounded-md bg-white/20 hover:bg-white/30 text-white transition-colors cursor-pointer border border-white/30"
-                title="Rafraîchir"
+                className="rounded p-2 text-white/60 hover:bg-white/10 hover:text-white"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                <Loader2
+                  className={`h-4 w-4 ${isLoading
+                      ? 'animate-spin'
+                      : ''
+                    }`}
+                />
               </button>
             )}
 
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-md bg-white/20 hover:bg-white/30 text-white transition-colors cursor-pointer border border-white/30"
-              aria-label="Fermer"
+              className="rounded p-2 text-white/60 hover:bg-white/10 hover:text-white"
             >
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </button>
           </div>
+        </header>
 
-          {/* Overlapping Icon Tile */}
-          <div
-            className="w-14 h-14 rounded-xl bg-[#2b2622] border-2 border-white/80 shadow-md flex items-center justify-center text-[#f7f5f0] translate-y-5"
-          >
-            <IconComp className="w-7 h-7" />
-          </div>
-        </div>
+        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <InfoBox
+              label="Quantité actuelle"
+              value={`${shelf.shelfQuantity} u.`}
+              icon={
+                <Hash className="h-3.5 w-3.5" />
+              }
+            />
 
-        {/* Modal Body */}
-        <div className="pt-8 px-6 pb-6 space-y-6">
-          {/* Title & Type Badge */}
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2
-                id="shelf-detail-title"
-                className="text-2xl font-semibold text-white tracking-tight"
-              >
-                {shelf.shelfName ?? 'Emplacement sans nom'}
-              </h2>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/40 text-emerald-200 border border-emerald-400/40">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Tuple Actif
-              </span>
-            </div>
-            <p className="text-xs text-white/80">
-              {visualTheme.label}
-            </p>
-          </div>
+            <InfoBox
+              label="Stock"
+              value={
+                shelf.stock?.stockName ??
+                shelf.stockId ??
+                'Aucun'
+              }
+              icon={
+                <Warehouse className="h-3.5 w-3.5" />
+              }
+            />
 
-          {/* Property Table */}
-          <div className="border border-[#3f3a36] rounded-lg divide-y divide-[#5a6f98] text-xs bg-[#2b2622]/70">
-            {/* Property: UUID */}
-            <div className="p-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-white/85 w-36 shrink-0">
-                <Database className="w-3.5 h-3.5 text-white" />
-                <span className="font-medium">Identifiant</span>
-              </div>
-              <div className="flex items-center gap-2 font-mono text-[11px] text-white min-w-0">
-                <span className="truncate">{shelf.shelfId}</span>
+            <div className="rounded-lg border border-[#3f3a36] bg-[#2b2622]/65 p-3">
+              <p className="text-[10px] uppercase tracking-wider text-white/40">
+                GUID
+              </p>
+
+              <div className="mt-2 flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate font-mono text-[10px]">
+                  {shelf.shelfId}
+                </span>
+
                 <button
                   type="button"
-                  onClick={handleCopyId}
-                  className="p-1 hover:bg-white/20 text-white/80 hover:text-white rounded transition-colors cursor-pointer shrink-0"
-                  title="Copier l'identifiant"
+                  onClick={copyId}
+                  className="text-white/50 hover:text-white"
                 >
-                  {copiedId ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-300" />
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-300" />
                   ) : (
-                    <Copy className="w-3.5 h-3.5" />
+                    <Copy className="h-3.5 w-3.5" />
                   )}
                 </button>
               </div>
             </div>
-
-            {/* Property: shelfName */}
-            <div className="p-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-white/85 w-36 shrink-0">
-                <Layers className="w-3.5 h-3.5 text-white" />
-                <span className="font-medium">Nom de l&apos;emplacement</span>
-              </div>
-              <div className="text-sm font-semibold text-white text-right">
-                {shelf.shelfName ?? 'Non défini'}
-              </div>
-            </div>
-
-            {/* Property: shelfQuantity */}
-            <div className="p-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-white/85 w-36 shrink-0">
-                <Hash className="w-3.5 h-3.5 text-white" />
-                <span className="font-medium">Capacité / Stock</span>
-              </div>
-              <div>
-                <span
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
-                    shelf.shelfQuantity > 0
-                      ? 'bg-emerald-950/40 text-emerald-200 border border-emerald-400/40'
-                      : 'bg-amber-950/40 text-amber-200 border border-amber-400/40'
-                  }`}
-                >
-                  <Hash className="w-3 h-3" />
-                  {shelf.shelfQuantity} {shelf.shelfQuantity > 1 ? 'unités enregistrées' : 'unité enregistrée'}
-                </span>
-              </div>
-            </div>
-
-            {/* Property: Stock */}
-            <div className="p-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-white/85 w-36 shrink-0">
-                <Warehouse className="w-3.5 h-3.5 text-white" />
-                <span className="font-medium">Stock / Entrepôt</span>
-              </div>
-              <div className="text-xs text-white font-medium flex items-center gap-1.5">
-                <span className="text-[#f7f5f0] font-semibold">
-                  {shelf.stock?.stockName ?? 'Stock Principal Yacine'}
-                </span>
-                {shelf.stockId && (
-                  <span className="font-mono text-[10px] text-white/70">
-                    ({shelf.stockId.slice(0, 8)}...)
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Property: Physical Location */}
-            <div className="p-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-white/85 w-36 shrink-0">
-                <MapPin className="w-3.5 h-3.5 text-white" />
-                <span className="font-medium">Emplacement dépôt</span>
-              </div>
-              <div className="text-xs text-white font-medium">
-                Zone Principale • Somépharm Workspace
-              </div>
-            </div>
           </div>
 
-          {/* Modal Footer */}
-          <div className="pt-3 border-t border-[#3f3a36] flex flex-wrap items-center justify-between gap-2.5">
+          <section className="overflow-hidden rounded-lg border border-[#3f3a36]">
+            <div className="border-b border-[#3f3a36] bg-[#2b2622] px-4 py-3">
+              <h3 className="text-xs font-semibold">
+                Articles présents
+              </h3>
+            </div>
+
+            {equipmentQuery.isLoading ? (
+              <Loading />
+            ) : (
+              <>
+                <div className="divide-y divide-[#3f3a36]">
+                  {(equipmentQuery.data?.allocations ?? []).map(
+                    (allocation) => (
+                      <div
+                        key={
+                          allocation.equipmentShelfId
+                        }
+                        className="flex items-center justify-between gap-3 px-4 py-3 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">
+                            {allocation.equipment?.equipmentName ??
+                              allocation.equipmentId ??
+                              'Article'}
+                          </p>
+
+                          <p className="mt-0.5 text-[9px] text-white/40">
+                            {allocation.equipment?.hasSerialNumber
+                              ? 'Sérialisé'
+                              : 'Standard'}
+                          </p>
+                        </div>
+
+                        <span className="font-mono font-semibold">
+                          {allocation.equipmentQuantity} u.
+                        </span>
+                      </div>
+                    ),
+                  )}
+
+                  {!equipmentQuery.data?.allocations?.length && (
+                    <Empty text="Aucun article sur cet emplacement." />
+                  )}
+                </div>
+
+                <Pager
+                  page={equipmentQuery.data?.currentPage ?? equipmentPage}
+                  totalPages={equipmentQuery.data?.totalPages ?? 1}
+                  onPage={setEquipmentPage}
+                />
+              </>
+            )}
+          </section>
+
+          <section className="overflow-hidden rounded-lg border border-[#3f3a36]">
+            <div className="border-b border-[#3f3a36] bg-[#2b2622] px-4 py-3">
+              <h3 className="text-xs font-semibold">
+                Numéros de série physiquement présents
+              </h3>
+            </div>
+
+            {serialQuery.isLoading ? (
+              <Loading />
+            ) : (
+              <>
+                <div className="divide-y divide-[#3f3a36]">
+                  {(serialQuery.data?.serialNumbers ?? []).map(
+                    (serial) => (
+                      <div
+                        key={
+                          serial.serialNumberId
+                        }
+                        className="flex items-center justify-between gap-3 px-4 py-3 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-mono font-medium">
+                            {serial.serialNumberCode ??
+                              serial.serialNumberId}
+                          </p>
+
+                          <p className="mt-0.5 truncate text-[9px] text-white/40">
+                            {serial.equipment?.equipmentName ??
+                              serial.equipmentId ??
+                              'Article'}
+                          </p>
+                        </div>
+
+                        <span className="text-[10px] text-white/50">
+                          {serial.serialNumberStatus ?? '—'}
+                        </span>
+                      </div>
+                    ),
+                  )}
+
+                  {!serialQuery.data?.serialNumbers?.length && (
+                    <Empty text="Aucun numéro de série présent." />
+                  )}
+                </div>
+
+                <Pager
+                  page={serialQuery.data?.currentPage ?? serialPage}
+                  totalPages={serialQuery.data?.totalPages ?? 1}
+                  onPage={setSerialPage}
+                />
+              </>
+            )}
+          </section>
+        </div>
+
+        <footer className="flex flex-wrap justify-end gap-2 border-t border-[#3f3a36] bg-[#2b2622] px-5 py-3">
+          {onOpenUpdate && (
             <button
               type="button"
-              onClick={handleCopyId}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 text-white border border-white/30 text-xs font-medium rounded-lg transition-colors cursor-pointer"
+              disabled={!canUpdateShelf}
+              onClick={() =>
+                onOpenUpdate(
+                  shelf,
+                )
+              }
+              className="inline-flex items-center gap-1.5 rounded border border-[#3f3a36] px-3 py-2 text-xs disabled:opacity-40"
             >
-              <Copy className="w-3.5 h-3.5 text-white" />
-              <span>Copier l'identifiant</span>
+              <Edit3 className="h-3.5 w-3.5" />
+              Modifier
             </button>
+          )}
 
-            <div className="flex items-center gap-2">
-              {/* Update Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (onOpenUpdate) onOpenUpdate(shelf);
-                }}
-                disabled={!canUpdateShelf}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 text-white border border-white/30 text-xs font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                title={canUpdateShelf ? "Modifier cet emplacement (shelf.update)" : "Permission 'shelf.update' manquante"}
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Modifier</span>
-              </button>
+          {onOpenDelete && (
+            <button
+              type="button"
+              disabled={!canDeleteShelf}
+              onClick={() =>
+                onOpenDelete(
+                  shelf,
+                )
+              }
+              className="inline-flex items-center gap-1.5 rounded border border-rose-500/30 px-3 py-2 text-xs text-rose-300 disabled:opacity-40"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Supprimer
+            </button>
+          )}
 
-              {/* Delete Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (onOpenDelete) onOpenDelete(shelf);
-                }}
-                disabled={!canDeleteShelf}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-600/90 hover:bg-red-600 text-white border border-red-400/40 text-xs font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                title={canDeleteShelf ? "Supprimer cet emplacement (shelf.delete)" : "Permission 'shelf.delete' manquante"}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Supprimer</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4.5 py-2 bg-[#2b2622] hover:bg-[#3f3a36] text-white text-xs font-medium rounded-lg border border-[#4d4742] shadow-xs transition-colors cursor-pointer"
-              >
-                Fermer
-              </button>
-            </div>
-          </div>
-        </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded bg-[#f7f5f0] px-4 py-2 text-xs font-medium text-[#2b2622]"
+          >
+            Fermer
+          </button>
+        </footer>
       </div>
+    </div>
+  );
+}
+
+function InfoBox({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-[#3f3a36] bg-[#2b2622]/65 p-3">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-white/40">
+        {icon}
+        {label}
+      </div>
+      <p className="mt-2 truncate text-xs font-medium">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function Loading() {
+  return (
+    <div className="flex items-center justify-center gap-2 py-6 text-xs text-white/45">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      Chargement...
+    </div>
+  );
+}
+
+function Empty({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <div className="px-4 py-6 text-center text-xs text-white/40">
+      {text}
+    </div>
+  );
+}
+
+function Pager({
+  page,
+  totalPages,
+  onPage,
+}: {
+  page: number;
+  totalPages: number;
+  onPage: (
+    page: number,
+  ) => void;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-2 border-t border-[#3f3a36] bg-[#2b2622]/50 px-4 py-2">
+      <button
+        type="button"
+        disabled={page <= 1}
+        onClick={() =>
+          onPage(
+            Math.max(
+              1,
+              page - 1,
+            ),
+          )
+        }
+        className="rounded border border-[#3f3a36] p-1.5 disabled:opacity-30"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+
+      <span className="font-mono text-[10px] text-white/45">
+        {page} /{' '}
+        {Math.max(
+          totalPages,
+          1,
+        )}
+      </span>
+
+      <button
+        type="button"
+        disabled={
+          page >= totalPages
+        }
+        onClick={() =>
+          onPage(
+            Math.min(
+              totalPages,
+              page + 1,
+            ),
+          )
+        }
+        className="rounded border border-[#3f3a36] p-1.5 disabled:opacity-30"
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }

@@ -28,6 +28,8 @@ export interface DashboardStatsResponse {
     inCount: number;
     outCount: number;
     transferCount: number;
+    mixedCount?: number;
+    otherCount?: number;
     recentMovements: Array<{
       mouvementId: string;
       mouvementStatus: string;
@@ -36,6 +38,15 @@ export interface DashboardStatsResponse {
       sourceShelfName: string | null;
       destinationShelfName: string | null;
       serialNumberCode: string | null;
+      items?: Array<{
+        mouvementEquipmentId: string;
+        mouvementStatus: string;
+        mouvementQuantity: number;
+        equipmentName: string;
+        sourceShelfName: string | null;
+        destinationShelfName: string | null;
+        serialNumberCode: string | null;
+      }>;
     }>;
   };
   inventoryOverview: {
@@ -123,8 +134,9 @@ export class DashboardService {
       }),
       this.prisma.mouvement.findMany({
         take: 8,
-        orderBy: { mouvementId: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { mouvementId: 'asc' }],
         include: {
+          items: { include: { equipment: true, sourceShelf: true, destinationShelf: true, serialNumber: true } },
           equipment: { select: { equipmentName: true } },
           sourceShelf: { select: { shelfName: true } },
           destinationShelf: { select: { shelfName: true } },
@@ -169,22 +181,35 @@ export class DashboardService {
     let inCount = 0;
     let outCount = 0;
     let transferCount = 0;
+    let mixedCount = 0;
+    let otherCount = 0;
     for (const group of movementsByType) {
       const status = group.mouvementStatus?.toUpperCase() || '';
       const count = group._count.mouvementId || 0;
       if (status === 'IN' || status === 'ENTRY') inCount += count;
-      else if (status === 'OUT') outCount += count;
+      else if (status === 'OUT' || status === 'EXIT') outCount += count;
       else if (status === 'TRANSFER') transferCount += count;
+      else if (status === 'MIXED') mixedCount += count;
+      else otherCount += count;
     }
 
     const recentMovements = recentMouvementsRaw.map((m) => ({
       mouvementId: m.mouvementId,
       mouvementStatus: m.mouvementStatus || 'TRANSFER',
-      mouvementQuantity: m.mouvementQuantity || 1,
-      equipmentName: m.equipment?.equipmentName || 'Article non spécifié',
-      sourceShelfName: m.sourceShelf?.shelfName || null,
-      destinationShelfName: m.destinationShelf?.shelfName || null,
-      serialNumberCode: m.serialNumber?.serialNumberCode || null,
+      mouvementQuantity: m.mouvementQuantity ?? 1,
+      equipmentName: (m.items.length ? [...new Set(m.items.map(item => item.equipment.equipmentName))].join(', ') : m.equipment?.equipmentName) || 'Article non spécifié',
+      sourceShelfName: (m.items.length ? [...new Set(m.items.map(item => item.sourceShelf?.shelfName).filter(Boolean))].join(', ') : m.sourceShelf?.shelfName) || null,
+      destinationShelfName: (m.items.length ? [...new Set(m.items.map(item => item.destinationShelf?.shelfName).filter(Boolean))].join(', ') : m.destinationShelf?.shelfName) || null,
+      serialNumberCode: m.items.length === 1 ? m.items[0].serialNumber?.serialNumberCode ?? null : m.serialNumber?.serialNumberCode ?? null,
+      items: m.items.map(item => ({
+        mouvementEquipmentId: item.mouvementEquipmentId,
+        mouvementStatus: item.mouvementStatus,
+        mouvementQuantity: item.mouvementQuantity,
+        equipmentName: item.equipment.equipmentName,
+        sourceShelfName: item.sourceShelf?.shelfName ?? null,
+        destinationShelfName: item.destinationShelf?.shelfName ?? null,
+        serialNumberCode: item.serialNumber?.serialNumberCode ?? null,
+      })),
     }));
 
     // Compute Inventory Stats
@@ -231,6 +256,8 @@ export class DashboardService {
         inCount,
         outCount,
         transferCount,
+        mixedCount,
+        otherCount,
         recentMovements,
       },
       inventoryOverview: {

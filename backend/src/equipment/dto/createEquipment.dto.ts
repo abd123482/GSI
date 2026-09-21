@@ -4,29 +4,17 @@ export const createEquipmentSchema = z.object({
   equipmentName: z
     .string()
     .trim()
-    .min(1, 'Le nom de l’équipement est requis')
-    .max(200, 'Le nom ne peut pas dépasser 200 caractères'),
+    .min(1, 'Equipment name is required')
+    .max(200, 'Equipment name must not exceed 200 characters'),
 
   hasSerialNumber: z.boolean(),
 
-  equipmentQuantity: z
-    .number()
-    .int('La quantité doit être un entier')
-    .nonnegative('La quantité ne peut pas être négative')
-    .optional()
-    .default(0),
-
   minEquipmentQuantity: z
     .number()
-    .int('La quantité minimale doit être un entier')
-    .nonnegative('La quantité minimale ne peut pas être négative')
-    .optional(),
-
-  shelfId: z
-    .string()
-    .uuid('L’identifiant de l’emplacement doit être un UUID valide')
-    .nullable()
-    .optional(),
+    .int('Minimum quantity must be an integer')
+    .nonnegative('Minimum quantity cannot be negative')
+    .optional()
+    .default(0),
 });
 
 export type CreateEquipmentDTO = z.infer<typeof createEquipmentSchema>;
