@@ -1,0 +1,544 @@
+###############################################################################
+# SOMIPHARM FINAL API SMOKE TEST
+###############################################################################
+# Requires a REST Client that supports named requests and response references.
+#
+# Fill tokens/user IDs first.
+# This test intentionally creates TEST data.
+# Run against local/staging only unless you explicitly want this data in live DB.
+#
+# The application backend currently protects these routes with Clerk.
+###############################################################################
+
+@api = http://localhost:3001
+
+# Admin / operator token with stock/shelf/equipment/serial/movement/inventory rights.
+@adminToken = PASTE_ADMIN_BEARER_TOKEN
+
+# Three DIFFERENT users for inventory counting.
+@c1Token = PASTE_C1_BEARER_TOKEN
+@c2Token = PASTE_C2_BEARER_TOKEN
+@c3Token = PASTE_C3_BEARER_TOKEN
+
+@c1UserId = PASTE_C1_INTERNAL_USER_ID
+@c2UserId = PASTE_C2_INTERNAL_USER_ID
+@c3UserId = PASTE_C3_INTERNAL_USER_ID
+
+###############################################################################
+# A. STOCK + SHELVES
+###############################################################################
+
+### Create active stock
+# @name createStock
+POST {{api}}/stocks
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "stockName": "SMOKE ACTIVE {{$timestamp}}",
+  "stockStatus": "ACTIVE"
+}
+
+### Create inactive stock for negative test
+# @name createInactiveStock
+POST {{api}}/stocks
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "stockName": "SMOKE INACTIVE {{$timestamp}}",
+  "stockStatus": "INACTIVE"
+}
+
+### Create Shelf A
+# @name createShelfA
+POST {{api}}/shelves
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "shelfName": "SMOKE-A-{{$timestamp}}",
+  "stockId": "{{createStock.response.body.$.stockId}}"
+}
+
+### Create Shelf B
+# @name createShelfB
+POST {{api}}/shelves
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "shelfName": "SMOKE-B-{{$timestamp}}",
+  "stockId": "{{createStock.response.body.$.stockId}}"
+}
+
+### EXPECT FAILURE: inactive stock cannot receive a new shelf
+POST {{api}}/shelves
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "shelfName": "SHOULD-FAIL-{{$timestamp}}",
+  "stockId": "{{createInactiveStock.response.body.$.stockId}}"
+}
+
+###############################################################################
+# B. EQUIPMENT + SERIAL IDENTITY
+###############################################################################
+
+### Create standard equipment
+# @name createStandard
+POST {{api}}/equipment
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "equipmentName": "SMOKE STANDARD {{$timestamp}}",
+  "hasSerialNumber": false,
+  "minEquipmentQuantity": 1,
+  "equipmentStatus": "ACTIVE"
+}
+
+### Create serialized equipment
+# @name createSerialized
+POST {{api}}/equipment
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "equipmentName": "SMOKE SERIALIZED {{$timestamp}}",
+  "hasSerialNumber": true,
+  "minEquipmentQuantity": 1,
+  "equipmentStatus": "ACTIVE"
+}
+
+### Create serial identity manually
+# @name createSerial
+POST {{api}}/serial-numbers
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "serialNumberCode": "SMOKE-SN-{{$timestamp}}",
+  "equipmentId": "{{createSerialized.response.body.$.equipmentId}}",
+  "serialNumberStatus": "AVAILABLE"
+}
+
+### Verify serial code/status
+GET {{api}}/serial-numbers/{{createSerial.response.body.$.serialNumberId}}
+Authorization: Bearer {{adminToken}}
+
+### Update serial STATUS only
+PATCH {{api}}/serial-numbers/{{createSerial.response.body.$.serialNumberId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "serialNumberStatus": "AVAILABLE"
+}
+
+### EXPECT FAILURE: serial code is immutable
+PATCH {{api}}/serial-numbers/{{createSerial.response.body.$.serialNumberId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "serialNumberCode": "ILLEGAL-CHANGE"
+}
+
+###############################################################################
+# C. MOVEMENT IN
+###############################################################################
+
+### IN standard 10 + serialized 1 to Shelf A
+# @name movementIn
+POST {{api}}/movements
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "movementType": "IN",
+  "destinationShelfId": "{{createShelfA.response.body.$.shelfId}}",
+  "items": [
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "movementQuantity": 10
+    },
+    {
+      "equipmentId": "{{createSerialized.response.body.$.equipmentId}}",
+      "serialNumberId": "{{createSerial.response.body.$.serialNumberId}}",
+      "movementQuantity": 1
+    }
+  ]
+}
+
+### Standard physical total should be 10
+GET {{api}}/equipment/{{createStandard.response.body.$.equipmentId}}
+Authorization: Bearer {{adminToken}}
+
+### Serialized physical/global total should follow backend V3 semantics
+GET {{api}}/equipment/{{createSerialized.response.body.$.equipmentId}}
+Authorization: Bearer {{adminToken}}
+
+### Serial should now be on Shelf A
+GET {{api}}/serial-numbers/{{createSerial.response.body.$.serialNumberId}}
+Authorization: Bearer {{adminToken}}
+
+###############################################################################
+# D. MOVEMENT TRANSFER
+###############################################################################
+
+### Transfer 4 standard + serial A -> B
+# @name movementTransfer
+POST {{api}}/movements
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "movementType": "TRANSFER",
+  "sourceShelfId": "{{createShelfA.response.body.$.shelfId}}",
+  "destinationShelfId": "{{createShelfB.response.body.$.shelfId}}",
+  "items": [
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "movementQuantity": 4
+    },
+    {
+      "equipmentId": "{{createSerialized.response.body.$.equipmentId}}",
+      "serialNumberId": "{{createSerial.response.body.$.serialNumberId}}",
+      "movementQuantity": 1
+    }
+  ]
+}
+
+### Standard allocations should be A=6, B=4
+GET {{api}}/equipment/{{createStandard.response.body.$.equipmentId}}/shelves
+Authorization: Bearer {{adminToken}}
+
+### Serial should now be on Shelf B
+GET {{api}}/serial-numbers/{{createSerial.response.body.$.serialNumberId}}
+Authorization: Bearer {{adminToken}}
+
+###############################################################################
+# E. MOVEMENT OUT
+###############################################################################
+
+### OUT 2 standard + serial from Shelf B
+# @name movementOut
+POST {{api}}/movements
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "movementType": "OUT",
+  "sourceShelfId": "{{createShelfB.response.body.$.shelfId}}",
+  "items": [
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "movementQuantity": 2
+    },
+    {
+      "equipmentId": "{{createSerialized.response.body.$.equipmentId}}",
+      "serialNumberId": "{{createSerial.response.body.$.serialNumberId}}",
+      "movementQuantity": 1
+    }
+  ]
+}
+
+### Standard total should now be 8
+GET {{api}}/equipment/{{createStandard.response.body.$.equipmentId}}
+Authorization: Bearer {{adminToken}}
+
+### Standard allocations should be A=6, B=2
+GET {{api}}/equipment/{{createStandard.response.body.$.equipmentId}}/shelves
+Authorization: Bearer {{adminToken}}
+
+### Serial should be unallocated (shelfId null)
+GET {{api}}/serial-numbers/{{createSerial.response.body.$.serialNumberId}}
+Authorization: Bearer {{adminToken}}
+
+###############################################################################
+# F. MOVEMENT NEGATIVE TESTS
+###############################################################################
+
+### EXPECT FAILURE: IN cannot have source
+POST {{api}}/movements
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "movementType": "IN",
+  "sourceShelfId": "{{createShelfA.response.body.$.shelfId}}",
+  "destinationShelfId": "{{createShelfB.response.body.$.shelfId}}",
+  "items": [
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "movementQuantity": 1
+    }
+  ]
+}
+
+### EXPECT FAILURE: transfer source == destination
+POST {{api}}/movements
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "movementType": "TRANSFER",
+  "sourceShelfId": "{{createShelfA.response.body.$.shelfId}}",
+  "destinationShelfId": "{{createShelfA.response.body.$.shelfId}}",
+  "items": [
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "movementQuantity": 1
+    }
+  ]
+}
+
+### EXPECT FAILURE: insufficient standard quantity
+POST {{api}}/movements
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "movementType": "OUT",
+  "sourceShelfId": "{{createShelfB.response.body.$.shelfId}}",
+  "items": [
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "movementQuantity": 999999
+    }
+  ]
+}
+
+###############################################################################
+# G. INVENTORY - PRIMARY MATCH TEST
+###############################################################################
+
+### Create one-unit inventory
+# @name createInventoryMatch
+POST {{api}}/inventory
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "title": "SMOKE PRIMARY MATCH {{$timestamp}}",
+  "typeInventory": "ByEquipment",
+  "policyVersion": 3,
+  "users": [
+    {
+      "userId": "{{c1UserId}}",
+      "responsibility": "PRIMARY_COUNTER_1"
+    },
+    {
+      "userId": "{{c2UserId}}",
+      "responsibility": "PRIMARY_COUNTER_2"
+    },
+    {
+      "userId": "{{c3UserId}}",
+      "responsibility": "FINAL_CONTROLLER"
+    }
+  ],
+  "equipmentIds": [
+    "{{createStandard.response.body.$.equipmentId}}"
+  ]
+}
+
+### Launch
+POST {{api}}/inventory/{{createInventoryMatch.response.body.$.inventoryId}}/launch
+Authorization: Bearer {{adminToken}}
+
+### C1 gets first task
+# @name c1MatchTasks
+GET {{api}}/inventory/my-tasks
+Authorization: Bearer {{c1Token}}
+
+### C1 submits physical total 8 on two shelves: A=6, B=2
+# @name c1MatchSubmit
+POST {{api}}/inventory/tasks/{{c1MatchTasks.response.body.$[0].attemptId}}/submit
+Authorization: Bearer {{c1Token}}
+Content-Type: application/json
+
+{
+  "observations": [
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "observedShelfId": "{{createShelfA.response.body.$.shelfId}}",
+      "quantityCalculated": 6
+    },
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "observedShelfId": "{{createShelfB.response.body.$.shelfId}}",
+      "quantityCalculated": 2
+    }
+  ]
+}
+
+### C2 task should now be available
+# @name c2MatchTasks
+GET {{api}}/inventory/my-tasks
+Authorization: Bearer {{c2Token}}
+
+### C2 submits same result -> PRIMARY_MATCH, no C3
+POST {{api}}/inventory/tasks/{{c2MatchTasks.response.body.$[0].attemptId}}/submit
+Authorization: Bearer {{c2Token}}
+Content-Type: application/json
+
+{
+  "observations": [
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "observedShelfId": "{{createShelfA.response.body.$.shelfId}}",
+      "quantityCalculated": 6
+    },
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "observedShelfId": "{{createShelfB.response.body.$.shelfId}}",
+      "quantityCalculated": 2
+    }
+  ]
+}
+
+### EXPECT: unit reconciliationStatus PRIMARY_MATCH
+GET {{api}}/inventory/{{createInventoryMatch.response.body.$.inventoryId}}/progress
+Authorization: Bearer {{adminToken}}
+
+### EXPECT: C3 has no task for this inventory/unit
+GET {{api}}/inventory/my-tasks
+Authorization: Bearer {{c3Token}}
+
+### Report: Accepted should equal C1, no C3 required
+GET {{api}}/inventory/{{createInventoryMatch.response.body.$.inventoryId}}/report
+Authorization: Bearer {{adminToken}}
+
+###############################################################################
+# H. INVENTORY - C3 REQUIRED TEST
+###############################################################################
+
+### Create second one-unit inventory
+# @name createInventoryC3
+POST {{api}}/inventory
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "title": "SMOKE C3 {{$timestamp}}",
+  "typeInventory": "ByEquipment",
+  "policyVersion": 3,
+  "users": [
+    {
+      "userId": "{{c1UserId}}",
+      "responsibility": "PRIMARY_COUNTER_1"
+    },
+    {
+      "userId": "{{c2UserId}}",
+      "responsibility": "PRIMARY_COUNTER_2"
+    },
+    {
+      "userId": "{{c3UserId}}",
+      "responsibility": "FINAL_CONTROLLER"
+    }
+  ],
+  "equipmentIds": [
+    "{{createStandard.response.body.$.equipmentId}}"
+  ]
+}
+
+### Launch
+POST {{api}}/inventory/{{createInventoryC3.response.body.$.inventoryId}}/launch
+Authorization: Bearer {{adminToken}}
+
+### C1 task
+# @name c1C3Tasks
+GET {{api}}/inventory/my-tasks
+Authorization: Bearer {{c1Token}}
+
+### C1 says A=6 B=2
+POST {{api}}/inventory/tasks/{{c1C3Tasks.response.body.$[0].attemptId}}/submit
+Authorization: Bearer {{c1Token}}
+Content-Type: application/json
+
+{
+  "observations": [
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "observedShelfId": "{{createShelfA.response.body.$.shelfId}}",
+      "quantityCalculated": 6
+    },
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "observedShelfId": "{{createShelfB.response.body.$.shelfId}}",
+      "quantityCalculated": 2
+    }
+  ]
+}
+
+### C2 task
+# @name c2C3Tasks
+GET {{api}}/inventory/my-tasks
+Authorization: Bearer {{c2Token}}
+
+### C2 intentionally disagrees: A=5 B=2
+POST {{api}}/inventory/tasks/{{c2C3Tasks.response.body.$[0].attemptId}}/submit
+Authorization: Bearer {{c2Token}}
+Content-Type: application/json
+
+{
+  "observations": [
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "observedShelfId": "{{createShelfA.response.body.$.shelfId}}",
+      "quantityCalculated": 5
+    },
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "observedShelfId": "{{createShelfB.response.body.$.shelfId}}",
+      "quantityCalculated": 2
+    }
+  ]
+}
+
+### EXPECT: THIRD_REQUIRED for this unit
+GET {{api}}/inventory/{{createInventoryC3.response.body.$.inventoryId}}/progress
+Authorization: Bearer {{adminToken}}
+
+### C3 task should now exist
+# @name c3Tasks
+GET {{api}}/inventory/my-tasks
+Authorization: Bearer {{c3Token}}
+
+### C3 resolves with A=6 B=2
+POST {{api}}/inventory/tasks/{{c3Tasks.response.body.$[0].attemptId}}/submit
+Authorization: Bearer {{c3Token}}
+Content-Type: application/json
+
+{
+  "observations": [
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "observedShelfId": "{{createShelfA.response.body.$.shelfId}}",
+      "quantityCalculated": 6
+    },
+    {
+      "equipmentId": "{{createStandard.response.body.$.equipmentId}}",
+      "observedShelfId": "{{createShelfB.response.body.$.shelfId}}",
+      "quantityCalculated": 2
+    }
+  ]
+}
+
+### EXPECT: THIRD_RESOLVED + accepted = C3
+GET {{api}}/inventory/{{createInventoryC3.response.body.$.inventoryId}}/progress
+Authorization: Bearer {{adminToken}}
+
+### Report should show C1, C2, C3, Accepted and comparisons
+GET {{api}}/inventory/{{createInventoryC3.response.body.$.inventoryId}}/report
+Authorization: Bearer {{adminToken}}
+
+### Finalize after all units reconciled
+POST {{api}}/inventory/{{createInventoryC3.response.body.$.inventoryId}}/finalize
+Authorization: Bearer {{adminToken}}
+
+### Verify inventory adjustment movement metadata
+GET {{api}}/movements?page=1&limit=50
+Authorization: Bearer {{adminToken}}

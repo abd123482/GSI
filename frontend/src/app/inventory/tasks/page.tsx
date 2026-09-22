@@ -1,194 +1,127 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
 import Link from 'next/link';
-import { ClipboardList, Loader2, PlayCircle, ArrowLeft, Package, Layers, MapPin } from 'lucide-react';
-import { useMyTasks } from '@/hooks/use-inventory';
-import { usePermissions } from '@/hooks/use-permissions';
+import {
+  ArrowLeft,
+  ClipboardList,
+  Loader2,
+  PlayCircle,
+} from 'lucide-react';
 
-export default function MyTasksPage() {
-  const { isSignedIn, isLoaded } = useAuth();
-  const { user, authUser, isLoading: isUserLoading } = usePermissions();
-  const currentUserId = user?.userId || authUser?.userId;
-  
-  const { data: tasks, isLoading: isTasksLoading } = useMyTasks(currentUserId);
+import {
+  useMyTasks,
+} from '@/hooks/use-inventory';
 
-  if (!isLoaded || isUserLoading || isTasksLoading) {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-[#2b2622] text-[#f7f5f0]">
-        <div className="flex items-center gap-2 text-xs font-mono text-[#aea69c]">
-          <Loader2 className="w-4 h-4 animate-spin text-[#f7f5f0]" />
-          <span>Chargement de vos tâches...</span>
-        </div>
-      </main>
-    );
+function purposeLabel(
+  purpose: string,
+) {
+  if (purpose === 'PRIMARY_1') {
+    return 'Contrôleur 1';
   }
 
-  if (!isSignedIn) {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-[#2b2622] text-[#f7f5f0]">
-        <span className="text-sm">Connectez-vous pour voir vos tâches.</span>
-      </main>
-    );
+  if (purpose === 'PRIMARY_2') {
+    return 'Contrôleur 2';
   }
+
+  return 'Contrôleur 3';
+}
+
+export default function MyInventoryTasksPage() {
+  const tasksQuery =
+    useMyTasks();
+
+  const tasks =
+    tasksQuery.data ?? [];
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-[#f7f5f0] flex flex-col">
-      <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#3f3a36]">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs text-[#aea69c] mb-1 font-mono">
-              <Link href="/inventory" className="hover:text-[#f7f5f0] transition-colors flex items-center gap-1">
-                <ArrowLeft className="w-3 h-3" />
-                Retour aux inventaires
-              </Link>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-normal tracking-tight text-[#f7f5f0]">
-              Mes Tâches d'Inventaire
+    <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-white">
+      <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-6">
+        <div className="flex items-center gap-3 border-b border-[#3f3a36] pb-4">
+          <Link
+            href="/inventory"
+            className="rounded border border-[#3f3a36] p-2 text-[#aea69c] hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+
+          <div>
+            <h1 className="text-xl font-semibold">
+              Mes tâches d’inventaire
             </h1>
-            <p className="text-xs text-[#c9c0ad]">
-              Liste des comptages et adjudications qui vous sont assignés avec leurs articles et emplacements.
+
+            <p className="mt-1 text-xs text-[#aea69c]">
+              C3 apparaît uniquement sur les unités où C1 et C2 diffèrent.
             </p>
           </div>
         </div>
 
-        {!tasks || tasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 border border-dashed border-[#3f3a36] rounded-[4px] bg-[#2f2a26]">
-            <ClipboardList className="w-8 h-8 text-[#5c544d] mb-3" />
-            <p className="text-sm text-[#aea69c]">Aucune tâche en attente.</p>
+        {tasksQuery.isLoading ? (
+          <div className="flex min-h-56 items-center justify-center gap-2 text-xs text-[#aea69c]">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Chargement des tâches...
+          </div>
+        ) : tasks.length === 0 ? (
+          <div className="flex min-h-56 flex-col items-center justify-center rounded border border-dashed border-[#4a4540] bg-[#2f2a26] p-6 text-center">
+            <ClipboardList className="h-7 w-7 text-[#8c827a]" />
+
+            <p className="mt-3 text-sm font-medium">
+              Aucune tâche disponible
+            </p>
+
+            <p className="mt-1 text-xs text-[#8c827a]">
+              Les prochaines unités apparaîtront lorsqu’elles seront débloquées.
+            </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {tasks.map((task: any) => {
-              const isByEquipment = task.unit?.inventory?.typeInventory === 'ByEquipment';
-              const equipment = task.unit?.equipment;
-              const shelf = task.unit?.shelf;
-              const eqShelves = equipment?.equipmentShelfs || [];
-              const totalShelfUnits = (shelf?.equipmentShelfs || []).reduce(
-                (sum: number, es: any) => sum + (Number(es.equipmentQuantity) || 0),
-                0
-              );
-              const displayShelfQty = totalShelfUnits > 0 ? totalShelfUnits : (shelf?.shelfQuantity ?? 0);
-
-              return (
-                <div
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {tasks.map(
+              (task) => (
+                <article
                   key={task.attemptId}
-                  className="p-4 rounded-[4px] border border-[#3f3a36] bg-[#2f2a26] flex flex-col justify-between hover:border-[#aea69c] transition-colors space-y-4"
+                  className="rounded-lg border border-[#3f3a36] bg-[#2f2a26] p-4"
                 >
-                  <div className="space-y-3">
-                    {/* Card Header: Inventory Title + Badges */}
-                    <div className="flex justify-between items-start gap-2">
-                      <div>
-                        <h3 className="font-semibold text-sm text-[#f7f5f0]">
-                          {task.unit?.inventory?.title || 'Inventaire sans titre'}
-                        </h3>
-                        <span className="text-[10px] font-mono text-[#aea69c]">
-                          {isByEquipment ? 'Mode: Par Article' : 'Mode: Par Emplacement'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-[2px] bg-[#383330] text-[#aea69c] border border-[#3f3a36]">
-                          {task.purpose === 'INITIAL' ? 'COMPTAGE' : 'ADJUDICATION'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Equipment / Target Section */}
-                    {isByEquipment && equipment && (
-                      <div className="p-3 bg-[#26221f] rounded-[3px] border border-[#3f3a36] space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <Package className="w-3.5 h-3.5 text-[#10b981] shrink-0" />
-                            <span className="text-xs font-medium text-[#f7f5f0] line-clamp-1">
-                              {equipment.equipmentName}
-                            </span>
-                          </div>
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#383330] text-[#aea69c] border border-[#3f3a36]">
-                            Comptage à l'aveugle
-                          </span>
-                        </div>
-
-                        {/* Shelves List for this Equipment */}
-                        <div className="space-y-1 pt-1 border-t border-[#3f3a36]/60">
-                          <span className="text-[10px] font-mono text-[#aea69c] uppercase flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-[#10b981]" />
-                            Emplacements à vérifier ({eqShelves.length}) :
-                          </span>
-                          {eqShelves.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5 pt-0.5">
-                              {eqShelves.map((es: any) => (
-                                <span
-                                  key={es.equipmentShelfId || es.shelfId}
-                                  className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#383330] border border-[#3f3a36] text-[#f7f5f0] flex items-center gap-1"
-                                >
-                                  <span>{es.shelf?.shelfName || 'Emplacement'}</span>
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-[10px] text-[#8c827a] italic">
-                              Stock global non encore réparti sur emplacement spécifique.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ByShelf Target Section */}
-                    {!isByEquipment && shelf && (
-                      <div className="p-3 bg-[#26221f] rounded-[3px] border border-[#3f3a36] space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <Layers className="w-3.5 h-3.5 text-[#10b981] shrink-0" />
-                            <span className="text-xs font-medium text-[#f7f5f0]">
-                              Emplacement : {shelf.shelfName}
-                            </span>
-                          </div>
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#383330] text-[#aea69c] border border-[#3f3a36]">
-                            Comptage à l'aveugle
-                          </span>
-                        </div>
-
-                        {shelf.equipmentShelfs && shelf.equipmentShelfs.length > 0 && (
-                          <div className="space-y-1 pt-1 border-t border-[#3f3a36]/60">
-                            <span className="text-[10px] font-mono text-[#aea69c] uppercase">
-                              Articles attendus sur cet emplacement ({shelf.equipmentShelfs.length}) :
-                            </span>
-                            <div className="flex flex-wrap gap-1.5 pt-0.5">
-                              {shelf.equipmentShelfs.map((es: any) => (
-                                <span
-                                  key={es.equipmentShelfId || es.equipmentId}
-                                  className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#383330] border border-[#3f3a36] text-[#f7f5f0]"
-                                >
-                                  {es.equipment?.equipmentName}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between text-xs text-[#aea69c] pt-1">
-                      <span>Statut: <strong className="text-[#f7f5f0]">{task.status}</strong></span>
-                      <span className="font-mono text-[10px]">
-                        {task.sequence === 0 ? '1er Contrôleur' : task.sequence === 1 ? '2ème Contrôleur' : 'Contrôleur Final'}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span
+                        className={`rounded border px-2 py-1 text-[10px] font-semibold ${
+                          task.purpose === 'FINAL_RECOUNT'
+                            ? 'border-violet-400/30 bg-violet-950/20 text-violet-200'
+                            : 'border-sky-400/25 bg-sky-950/20 text-sky-200'
+                        }`}
+                      >
+                        {purposeLabel(task.purpose)}
                       </span>
+
+                      <h2 className="mt-3 text-sm font-semibold">
+                        {task.unit.inventory.title}
+                      </h2>
+
+                      <p className="mt-1 text-xs text-[#aea69c]">
+                        Unité #{task.unit.unitOrder + 1}
+                      </p>
                     </div>
+
+                    <span className="rounded border border-[#3f3a36] bg-[#383330] px-2 py-1 text-[10px] text-[#c9c0ad]">
+                      {task.status}
+                    </span>
                   </div>
 
-                  <div className="pt-3 border-t border-[#3f3a36] flex justify-end gap-2">
-                    <Link
-                      href={`/inventory/tasks/${task.attemptId}`}
-                      className="inline-flex items-center gap-2 text-xs bg-[#f7f5f0] text-[#2b2622] px-3.5 py-1.5 rounded-[3px] font-medium transition-colors hover:bg-[#dad2c1] shadow-xs cursor-pointer"
-                    >
-                      <PlayCircle className="w-3.5 h-3.5" />
-                      Exécuter
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
+                  {task.purpose === 'FINAL_RECOUNT' && (
+                    <p className="mt-3 rounded border border-violet-400/20 bg-violet-950/10 p-2.5 text-[10px] text-violet-100">
+                      C1 et C2 ont produit des résultats différents sur cette unité. Votre comptage C3 devient le résultat accepté.
+                    </p>
+                  )}
+
+                  <Link
+                    href={`/inventory/tasks/${task.attemptId}`}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded bg-[#f7f5f0] px-3 py-2 text-xs font-semibold text-[#2b2622]"
+                  >
+                    <PlayCircle className="h-3.5 w-3.5" />
+                    Ouvrir la tâche
+                  </Link>
+                </article>
+              ),
+            )}
           </div>
         )}
       </div>

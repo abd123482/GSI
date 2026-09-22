@@ -1,171 +1,241 @@
-import { describe, expect, it, vi } from 'vitest';
+import {
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+
 import { SerialNumberService } from './serialNumber.service.js';
 
 const equipmentId =
   '11111111-1111-4111-8111-111111111111';
+
 const serialId =
   '22222222-2222-4222-8222-222222222222';
+
 const shelfId =
   '33333333-3333-4333-8333-333333333333';
 
-function createDeleteHarness(
+function createHarness(
   serial: {
     serialNumberId: string;
     serialNumberCode: string;
-    equipmentId: string | null;
+    equipmentId: string;
     shelfId: string | null;
   },
 ) {
-  const tx = {
-    serialNumber: {
-      delete: vi.fn().mockResolvedValue({
-        ...serial,
-        serialNumberStatus: 'AVAILABLE',
-        equipment: null,
-        shelf: null,
-      }),
-    },
-    equipment: {
-      updateMany: vi.fn().mockResolvedValue({
-        count: 1,
-      }),
-    },
-  };
-
   const prisma = {
     serialNumber: {
-      findUnique: vi.fn().mockResolvedValue(serial),
+      findUnique: vi.fn()
+        .mockResolvedValue(
+          serial,
+        ),
+
+      findFirst: vi.fn(),
+
+      findMany: vi.fn()
+        .mockResolvedValue([]),
+
+      create: vi.fn(),
+
+      createMany: vi.fn(),
+
+      update: vi.fn(),
+
+      delete: vi.fn()
+        .mockResolvedValue({
+          ...serial,
+          serialNumberStatus:
+            'AVAILABLE',
+          equipment: null,
+          shelf: null,
+        }),
     },
+
+    equipment: {
+      findUnique: vi.fn()
+        .mockResolvedValue({
+          equipmentId,
+          equipmentName:
+            'Serialized',
+          hasSerialNumber: true,
+          equipmentStatus:
+            'ACTIVE',
+        }),
+    },
+
     mouvementEquipment: {
-      findFirst: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn()
+        .mockResolvedValue(null),
     },
+
     mouvement: {
-      findFirst: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn()
+        .mockResolvedValue(null),
     },
-    $transaction: vi.fn(
-      async (callback: (client: typeof tx) => unknown) =>
-        callback(tx),
-    ),
   };
 
   return {
-    service: new SerialNumberService(prisma as any),
     prisma,
-    tx,
+    service:
+      new SerialNumberService(
+        prisma as any,
+      ),
   };
 }
 
-describe('SerialNumberService V3', () => {
-  it('refuses physical deletion while a serial is still on a shelf', async () => {
-    const { service, prisma } = createDeleteHarness({
-      serialNumberId: serialId,
-      serialNumberCode: 'SN-1',
-      equipmentId,
-      shelfId,
-    });
-
-    await expect(
-      service.deleteSerialNumber(serialId),
-    ).rejects.toThrow('Create an OUT movement');
-
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-  });
-
-  it('refuses deletion when movement history exists', async () => {
-    const { service, prisma } = createDeleteHarness({
-      serialNumberId: serialId,
-      serialNumberCode: 'SN-1',
-      equipmentId,
-      shelfId: null,
-    });
-
-    prisma.mouvementEquipment.findFirst.mockResolvedValue({
-      mouvementEquipmentId: 'history',
-    });
-
-    await expect(
-      service.deleteSerialNumber(serialId),
-    ).rejects.toThrow('movement history');
-
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-  });
-
-  it('deletes an unused serial and decrements serialized equipment total', async () => {
-    const { service, tx } = createDeleteHarness({
-      serialNumberId: serialId,
-      serialNumberCode: 'SN-1',
-      equipmentId,
-      shelfId: null,
-    });
-
-    await service.deleteSerialNumber(serialId);
-
-    expect(tx.serialNumber.delete).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          serialNumberId: serialId,
-        },
-      }),
-    );
-
-    expect(tx.equipment.updateMany).toHaveBeenCalledWith({
-      where: {
+describe(
+  'SerialNumberService V3',
+  () => {
+    it('refuses deletion while serial is on a shelf', async () => {
+      const {
+        service,
+        prisma,
+      } = createHarness({
+        serialNumberId:
+          serialId,
+        serialNumberCode:
+          'SN-1',
         equipmentId,
-        equipmentQuantity: {
-          gt: 0,
-        },
-      },
-      data: {
-        equipmentQuantity: {
-          decrement: 1,
-        },
-      },
-    });
-  });
+        shelfId,
+      });
 
-  it('rejects deletion if serialized equipment quantity is inconsistent', async () => {
-    const { service, tx } = createDeleteHarness({
-      serialNumberId: serialId,
-      serialNumberCode: 'SN-1',
-      equipmentId,
-      shelfId: null,
+      await expect(
+        service.deleteSerialNumber(
+          serialId,
+        ),
+      ).rejects.toThrow(
+        'Create an OUT movement',
+      );
+
+      expect(
+        prisma.serialNumber
+          .delete,
+      ).not.toHaveBeenCalled();
     });
 
-    tx.equipment.updateMany.mockResolvedValue({
-      count: 0,
+    it('refuses deletion when movement history exists', async () => {
+      const {
+        service,
+        prisma,
+      } = createHarness({
+        serialNumberId:
+          serialId,
+        serialNumberCode:
+          'SN-1',
+        equipmentId,
+        shelfId: null,
+      });
+
+      prisma.mouvementEquipment
+        .findFirst
+        .mockResolvedValue({
+          mouvementEquipmentId:
+            'history',
+        });
+
+      await expect(
+        service.deleteSerialNumber(
+          serialId,
+        ),
+      ).rejects.toThrow(
+        'movement history',
+      );
+
+      expect(
+        prisma.serialNumber
+          .delete,
+      ).not.toHaveBeenCalled();
     });
 
-    await expect(
-      service.deleteSerialNumber(serialId),
-    ).rejects.toThrow('quantity is inconsistent');
-  });
+    it('deletes unused serial identity without changing equipment quantity', async () => {
+      const {
+        service,
+        prisma,
+      } = createHarness({
+        serialNumberId:
+          serialId,
+        serialNumberCode:
+          'SN-1',
+        equipmentId,
+        shelfId: null,
+      });
 
-  it('rejects duplicate codes inside a batch before opening a transaction', async () => {
-    const prisma = {
-      equipment: {
-        findUnique: vi.fn().mockResolvedValue({
-          equipmentId,
-          equipmentName: 'Serialized',
-          hasSerialNumber: true,
+      await service.deleteSerialNumber(
+        serialId,
+      );
+
+      expect(
+        prisma.serialNumber
+          .delete,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            serialNumberId:
+              serialId,
+          },
         }),
-      },
-      serialNumber: {
-        findMany: vi.fn(),
-      },
-      $transaction: vi.fn(),
-    };
+      );
 
-    const service =
-      new SerialNumberService(prisma as any);
+      expect(
+        prisma.equipment,
+      ).not.toHaveProperty(
+        'update',
+      );
+    });
 
-    await expect(
-      service.createBatchSerialNumbers({
+    it('rejects duplicate codes inside a batch before insert', async () => {
+      const {
+        service,
+        prisma,
+      } = createHarness({
+        serialNumberId:
+          serialId,
+        serialNumberCode:
+          'SN-1',
         equipmentId,
-        serialNumberCodes: ['SN-X', 'SN-X'],
-      }),
-    ).rejects.toThrow('Duplicate serial numbers');
+        shelfId: null,
+      });
 
-    expect(prisma.$transaction)
-      .not.toHaveBeenCalled();
-  });
-});
+      await expect(
+        service.createBatchSerialNumbers({
+          equipmentId,
+          serialNumberCodes: [
+            'SN-X',
+            'SN-X',
+          ],
+        }),
+      ).rejects.toThrow(
+        'Duplicate serial numbers',
+      );
+
+      expect(
+        prisma.serialNumber
+          .createMany,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('does not allow serial code editing after creation', async () => {
+      const {
+        service,
+      } = createHarness({
+        serialNumberId:
+          serialId,
+        serialNumberCode:
+          'SN-1',
+        equipmentId,
+        shelfId: null,
+      });
+
+      await expect(
+        service.updateSerialNumber(
+          serialId,
+          {
+            serialNumberCode:
+              'SN-CHANGED',
+          } as any,
+        ),
+      ).rejects.toThrow();
+    });
+  },
+);

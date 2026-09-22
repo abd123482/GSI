@@ -5,4 +5,4 @@ export const assignThirdUserSchema = z.object({
   notes: z.string().optional(),
 });
 
-export type AssignThirdUserDTO = z.infer<typeof assignThirdUserSchema>;
+export type AssignThirdUserDTO = z.input<typeof assignThirdUserSchema>;

@@ -1,13 +1,30 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useApi } from './use-api';
-import { useEffect, useRef } from 'react';
-import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
+'use client';
+
+import {
+  useEffect,
+  useRef,
+} from 'react';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
+import {
+  useRouter,
+} from 'next/navigation';
+import {
+  toast,
+} from 'sonner';
+
+import {
+  useApi,
+} from './use-api';
 
 export interface AppNotification {
   notificationId: string;
   recipientId: string;
   eventType: string;
+
   payload: {
     title?: string;
     message?: string;
@@ -19,130 +36,242 @@ export interface AppNotification {
     submittedBy?: string;
     createdAt?: string;
   };
+
   createdAt: string;
   readAt: string | null;
+}
+
+function notificationDestination(
+  notification: AppNotification,
+) {
+  if (
+    notification.payload?.taskId
+  ) {
+    return `/inventory/tasks/${notification.payload.taskId}`;
+  }
+
+  const taskLikeEvents =
+    new Set([
+      'INVENTORY_TASK_AVAILABLE',
+      'INVENTORY_COUNT_REQUIRED',
+      'INVENTORY_THIRD_COUNT_REQUIRED',
+      'INVENTORY_TASK_REMINDER',
+      'TASK',
+      'INVENTORY_ADJUDICATION_ASSIGNED',
+      'INVENTORY_ADJUDICATION_REQUIRED',
+    ]);
+
+  if (
+    taskLikeEvents.has(
+      notification.eventType,
+    )
+  ) {
+    return '/inventory/tasks';
+  }
+
+  if (
+    notification.payload?.inventoryId
+  ) {
+    return `/inventory/${notification.payload.inventoryId}/report`;
+  }
+
+  return '/inventory/tasks';
 }
 
 export function useNotifications() {
   const api = useApi();
   const router = useRouter();
-  const knownIdsRef = useRef<Set<string>>(new Set());
-  const isInitialLoadRef = useRef(true);
 
-  const query = useQuery<AppNotification[]>({
-    queryKey: ['notifications'],
-    queryFn: async () => {
-      const res = await api.get('/notifications');
-      return res.data;
-    },
-    refetchInterval: 5000, // Poll every 5 seconds for live notification delivery
-    staleTime: 4000,
-  });
+  const knownIdsRef =
+    useRef<Set<string>>(
+      new Set(),
+    );
 
-  // Watch for new notifications to trigger live toast
+  const isInitialLoadRef =
+    useRef(true);
+
+  const query =
+    useQuery<AppNotification[]>({
+      queryKey: [
+        'notifications',
+      ],
+
+      queryFn: async () => {
+        const response =
+          await api.get<AppNotification[]>(
+            '/notifications',
+          );
+
+        return response.data;
+      },
+
+      refetchInterval:
+        5_000,
+
+      staleTime:
+        4_000,
+    });
+
   useEffect(() => {
-    if (!query.data) return;
-
-    if (isInitialLoadRef.current) {
-      // First load: just record existing IDs
-      query.data.forEach((n) => knownIdsRef.current.add(n.notificationId));
-      isInitialLoadRef.current = false;
+    if (!query.data) {
       return;
     }
 
-    // Subsequent polls: check for newly arrived unread notifications
-    for (const n of query.data) {
-      if (!knownIdsRef.current.has(n.notificationId)) {
-        knownIdsRef.current.add(n.notificationId);
-
-        if (!n.readAt) {
-          const title = n.payload?.title || 'Nouvelle tâche d’inventaire';
-          const msg = n.payload?.message || 'Une nouvelle notification vous est parvenue.';
-          const taskId = n.payload?.taskId;
-          const unitId = n.payload?.unitId;
-          const inventoryId = n.payload?.inventoryId;
-
-          const isTask =
-            n.eventType === 'INVENTORY_TASK_AVAILABLE' ||
-            n.eventType === 'INVENTORY_COUNT_REQUIRED' ||
-            n.eventType === 'INVENTORY_THIRD_COUNT_REQUIRED' ||
-            n.eventType === 'TASK';
-
-          const isAdjudication =
-            n.eventType === 'INVENTORY_ADJUDICATION_ASSIGNED' ||
-            n.eventType === 'INVENTORY_ADJUDICATION_REQUIRED';
-
-          const destination =
-            taskId
-              ? `/inventory/tasks/${taskId}`
-              : isAdjudication && unitId
-              ? `/inventory/adjudicate/${unitId}`
-              : isTask
-              ? `/inventory/tasks`
-              : unitId
-              ? `/inventory/adjudicate/${unitId}`
-              : inventoryId
-              ? `/inventory/${inventoryId}`
-              : '/inventory/tasks';
-
-          toast.info(title, {
-            description: msg,
-            duration: 8000,
-            action: destination
-              ? {
-                  label: 'Ouvrir la tâche',
-                  onClick: () => router.push(destination),
-                }
-              : undefined,
-          });
-
-        }
+    if (
+      isInitialLoadRef.current
+    ) {
+      for (
+        const notification of
+        query.data
+      ) {
+        knownIdsRef.current.add(
+          notification.notificationId,
+        );
       }
+
+      isInitialLoadRef.current =
+        false;
+
+      return;
     }
-  }, [query.data, router]);
+
+    for (
+      const notification of
+      query.data
+    ) {
+      if (
+        knownIdsRef.current.has(
+          notification.notificationId,
+        )
+      ) {
+        continue;
+      }
+
+      knownIdsRef.current.add(
+        notification.notificationId,
+      );
+
+      if (
+        notification.readAt
+      ) {
+        continue;
+      }
+
+      const destination =
+        notificationDestination(
+          notification,
+        );
+
+      toast.info(
+        notification.payload?.title ??
+          'Nouvelle tâche d’inventaire',
+        {
+          description:
+            notification.payload?.message ??
+            'Une nouvelle notification vous est parvenue.',
+
+          duration: 8_000,
+
+          action: {
+            label: 'Ouvrir',
+            onClick: () =>
+              router.push(
+                destination,
+              ),
+          },
+        },
+      );
+    }
+  }, [
+    query.data,
+    router,
+  ]);
 
   return query;
 }
 
 export function useUnreadNotificationsCount() {
   const api = useApi();
-  return useQuery<{ count: number }>({
-    queryKey: ['notifications', 'unread-count'],
+
+  return useQuery<{
+    count: number;
+  }>({
+    queryKey: [
+      'notifications',
+      'unread-count',
+    ],
+
     queryFn: async () => {
-      const res = await api.get('/notifications/unread-count');
-      return res.data;
+      const response =
+        await api.get<{
+          count: number;
+        }>(
+          '/notifications/unread-count',
+        );
+
+      return response.data;
     },
-    refetchInterval: 5000,
-    staleTime: 4000,
+
+    refetchInterval:
+      5_000,
+
+    staleTime:
+      4_000,
   });
 }
 
 export function useMarkNotificationRead() {
-  const queryClient = useQueryClient();
+  const queryClient =
+    useQueryClient();
+
   const api = useApi();
 
   return useMutation({
-    mutationFn: async (notificationId: string) => {
-      const res = await api.patch(`/notifications/${notificationId}/read`);
-      return res.data;
+    mutationFn: async (
+      notificationId: string,
+    ) => {
+      const response =
+        await api.patch(
+          `/notifications/${notificationId}/read`,
+        );
+
+      return response.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: [
+          'notifications',
+        ],
+      });
     },
   });
 }
 
 export function useMarkAllNotificationsRead() {
-  const queryClient = useQueryClient();
+  const queryClient =
+    useQueryClient();
+
   const api = useApi();
 
   return useMutation({
-    mutationFn: async () => {
-      const res = await api.patch('/notifications/mark-all-read');
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    },
+    mutationFn:
+      async () => {
+        const response =
+          await api.patch(
+            '/notifications/mark-all-read',
+          );
+
+        return response.data;
+      },
+
+    onSuccess:
+      async () => {
+        await queryClient.invalidateQueries({
+          queryKey: [
+            'notifications',
+          ],
+        });
+      },
   });
 }

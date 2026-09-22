@@ -6,19 +6,29 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
-import { toast } from 'sonner';
+import {
+  useCallback,
+  useState,
+} from 'react';
+import {
+  toast,
+} from 'sonner';
 
-import { useApi } from './use-api';
-import { usePermissions } from './use-permissions';
+import {
+  useApi,
+} from './use-api';
+import {
+  usePermissions,
+} from './use-permissions';
+
 import {
   EquipmentService,
-  REQUIRED_EQUIPMENT_READ_PERMISSION,
 } from '@/services/equipment.service';
+
 import type {
-  Equipment,
+  CreateEquipmentDirectInput,
   EquipmentPaginationQuery,
-  EquipmentWithShelvesResponse,
+  UpdateEquipmentInput,
 } from '@/types/equipment';
 
 interface UseEquipmentsOptions
@@ -31,336 +41,312 @@ export function useEquipments(
   options?: UseEquipmentsOptions,
 ) {
   const api = useApi();
-  const queryClient = useQueryClient();
-  const { permissions, hasPermission } =
-    usePermissions();
+  const queryClient =
+    useQueryClient();
 
-  const [page, setPage] = useState<number>(
+  const {
+    permissions,
+  } = usePermissions();
+
+  const [
+    page,
+    setPage,
+  ] = useState(
     options?.page ?? 1,
   );
-  const [limit, setLimit] = useState<number>(
+
+  const [
+    limit,
+    setLimit,
+  ] = useState(
     options?.limit ?? 10,
   );
-  const [searchTerm, setSearchTerm] =
-    useState<string>(
-      options?.initialSearch ?? '',
-    );
 
-  const canReadEquipment = hasPermission(
-    REQUIRED_EQUIPMENT_READ_PERMISSION,
+  const [
+    searchTerm,
+    setSearchTerm,
+  ] = useState(
+    options?.initialSearch ??
+      '',
   );
 
-  const equipmentsQuery = useQuery({
-    queryKey: [
-      'equipments',
-      {
-        page,
-        limit,
-        searchTerm,
-      },
-    ],
-    queryFn: async () => {
-      if (searchTerm.trim()) {
-        return EquipmentService.searchEquipments(
-          api,
-          searchTerm.trim(),
-          {
-            page,
-            limit,
-          },
-        );
-      }
+  const [
+    equipmentStatus,
+    setEquipmentStatus,
+  ] = useState(
+    options?.equipmentStatus,
+  );
 
-      return EquipmentService.getAllEquipments(
-        api,
+  const [
+    hasSerialNumber,
+    setHasSerialNumber,
+  ] = useState<
+    boolean | undefined
+  >(
+    options?.hasSerialNumber,
+  );
+
+  const equipmentsQuery =
+    useQuery({
+      queryKey: [
+        'equipments',
         {
           page,
           limit,
+          searchTerm,
+          equipmentStatus,
+          hasSerialNumber,
         },
-      );
-    },
-    enabled: options?.enabled ?? true,
-    placeholderData: keepPreviousData,
-    staleTime: 30_000,
-  });
+      ],
 
-  const fetchEquipmentById = async (
-    id: string,
-  ): Promise<Equipment> => {
-    return EquipmentService.getEquipmentById(
-      api,
-      id,
-    );
-  };
+      queryFn: () => {
+        const filtered =
+          Boolean(
+            searchTerm.trim(),
+          ) ||
+          equipmentStatus !==
+            undefined ||
+          hasSerialNumber !==
+            undefined;
 
-  const fetchEquipmentShelves = async (
-    id: string,
-  ): Promise<EquipmentWithShelvesResponse> => {
-    return EquipmentService.getEquipmentShelves(
-      api,
-      id,
-      permissions,
-    );
-  };
+        return filtered
+          ? EquipmentService.searchEquipments(
+              api,
+              {
+                page,
+                limit,
+                equipmentName:
+                  searchTerm.trim() ||
+                  undefined,
+                equipmentStatus,
+                hasSerialNumber,
+              },
+            )
+          : EquipmentService.getAllEquipments(
+              api,
+              {
+                page,
+                limit,
+              },
+            );
+      },
 
-  const updateEquipmentMutation = useMutation({
-    mutationFn: async ({
-      id,
-      input,
-    }: {
-      id: string;
-      input: {
-        equipmentName?: string;
-        equipmentQuantity?: number;
-        minEquipmentQuantity?: number;
-        hasSerialNumber?: boolean;
-      };
-    }) => {
-      /*
-       * This compatibility shape is intentionally kept until
-       * EditEquipmentModal is simplified in the next frontend step.
-       *
-       * Backend V3 only applies equipmentName/minEquipmentQuantity.
-       */
-      return EquipmentService.updateEquipment(
-        api,
-        id,
-        input,
-        permissions,
-      );
-    },
+      enabled:
+        options?.enabled ??
+        true,
 
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({
-        queryKey: ['equipments'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['shelves'],
-      });
+      placeholderData:
+        keepPreviousData,
 
-      toast.success('Article mis à jour', {
-        description: `L'article "${data.equipmentName}" a été actualisé.`,
-      });
-    },
+      staleTime: 20_000,
+    });
 
-    onError: (error: Error) => {
-      toast.error('Erreur de mise à jour', {
-        description:
-          error?.message ||
-          'Impossible de modifier cet article.',
-      });
-    },
-  });
-
-  const deleteEquipmentMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return EquipmentService.deleteEquipment(
-        api,
-        id,
-        permissions,
-      );
-    },
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['equipments'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['shelves'],
-      });
-
-      toast.success('Article supprimé');
-    },
-
-    onError: (error: Error) => {
-      toast.error('Erreur de suppression', {
-        description:
-          error?.message ||
-          'Impossible de supprimer cet article.',
-      });
-    },
-  });
-
-  /**
-   * Kept temporarily because the current Equipment page still uses
-   * these actions. They will move fully to use-serial-numbers.ts later.
-   */
-  const updateSerialNumberMutation =
+  const createMutation =
     useMutation({
-      mutationFn: async ({
+      mutationFn: (
+        input: CreateEquipmentDirectInput,
+      ) =>
+        EquipmentService.createEquipmentDirect(
+          api,
+          input,
+          permissions,
+        ),
+
+      onSuccess:
+        async (equipment) => {
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: [
+                'equipments',
+              ],
+            }),
+            queryClient.invalidateQueries({
+              queryKey: [
+                'serial-numbers',
+              ],
+            }),
+          ]);
+
+          toast.success(
+            'Article créé',
+            {
+              description:
+                equipment.equipmentName ??
+                'Nouvel article',
+            },
+          );
+        },
+    });
+
+  const updateMutation =
+    useMutation({
+      mutationFn: ({
         id,
         input,
       }: {
         id: string;
-        input: {
-          serialNumberCode?: string;
-          serialNumberStatus?: string;
-        };
-      }) => {
-        return EquipmentService.updateSerialNumber(
+        input: UpdateEquipmentInput;
+      }) =>
+        EquipmentService.updateEquipment(
           api,
           id,
           input,
           permissions,
-        );
-      },
+        ),
 
-      onSuccess: () => {
-        queryClient.invalidateQueries({
-          queryKey: ['equipments'],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ['serial-numbers'],
-        });
+      onSuccess:
+        async (equipment) => {
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: [
+                'equipments',
+              ],
+            }),
+            queryClient.invalidateQueries({
+              queryKey: [
+                'equipment',
+                equipment.equipmentId,
+              ],
+            }),
+            queryClient.invalidateQueries({
+              queryKey: [
+                'serial-numbers',
+              ],
+            }),
+          ]);
 
-        toast.success(
-          'Numéro de série mis à jour',
-        );
-      },
-
-      onError: (error: Error) => {
-        toast.error('Erreur de mise à jour', {
-          description:
-            error?.message ||
-            'Impossible de modifier le numéro de série.',
-        });
-      },
+          toast.success(
+            'Article modifié',
+          );
+        },
     });
 
-  const deleteSerialNumberMutation =
+  const deleteMutation =
     useMutation({
-      mutationFn: async (id: string) => {
-        return EquipmentService.deleteSerialNumber(
+      mutationFn: (
+        id: string,
+      ) =>
+        EquipmentService.deleteEquipment(
           api,
           id,
           permissions,
-        );
-      },
+        ),
 
-      onSuccess: () => {
-        queryClient.invalidateQueries({
-          queryKey: ['equipments'],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ['serial-numbers'],
-        });
-        queryClient.invalidateQueries({
-          queryKey: ['shelves'],
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({
+          queryKey: [
+            'equipments',
+          ],
         });
 
         toast.success(
-          'Numéro de série supprimé',
+          'Article supprimé',
         );
-      },
-
-      onError: (error: Error) => {
-        toast.error('Erreur de suppression', {
-          description:
-            error?.message ||
-            'Impossible de supprimer le numéro de série.',
-        });
       },
     });
 
-  const createEquipmentMutation = useMutation({
-    mutationFn: async (
-      input: import('@/types/equipment').CreateEquipmentDirectInput,
-    ) => {
-      return EquipmentService.createEquipmentDirect(
-        api,
-        input,
-        permissions,
-      );
-    },
-
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({
-        queryKey: ['equipments'],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['serial-numbers'],
-      });
-
-      toast.success(
-        'Article créé avec succès !',
-        {
-          description: `L'article "${data.equipmentName}" a été créé.`,
-        },
-      );
-    },
-
-    onError: (error: Error) => {
-      toast.error(
-        'Erreur lors de la création',
-        {
-          description:
-            error?.message ||
-            'Impossible de créer l’article.',
-        },
-      );
-    },
-  });
-
-  const handleSearchChange = useCallback(
-    (query: string) => {
-      setSearchTerm(query);
-      setPage(1);
-    },
-    [],
-  );
+  const handleSearch =
+    useCallback(
+      (value: string) => {
+        setSearchTerm(
+          value,
+        );
+        setPage(1);
+      },
+      [],
+    );
 
   return {
     equipments:
-      equipmentsQuery.data?.equipments ?? [],
+      equipmentsQuery.data
+        ?.equipments ?? [],
+
     totalEquipments:
-      equipmentsQuery.data?.totalEquipments ??
-      0,
+      equipmentsQuery.data
+        ?.totalEquipments ?? 0,
+
     totalPages:
-      equipmentsQuery.data?.totalPages ?? 1,
+      equipmentsQuery.data
+        ?.totalPages ?? 1,
+
     currentPage: page,
     limit,
     searchTerm,
+    equipmentStatus,
+    hasSerialNumber,
 
-    setSearchTerm: handleSearchChange,
+    setSearchTerm:
+      handleSearch,
+
+    setEquipmentStatus: (
+      value:
+        | 'ACTIVE'
+        | 'INACTIVE'
+        | undefined,
+    ) => {
+      setEquipmentStatus(
+        value,
+      );
+      setPage(1);
+    },
+
+    setHasSerialNumber: (
+      value:
+        | boolean
+        | undefined,
+    ) => {
+      setHasSerialNumber(
+        value,
+      );
+      setPage(1);
+    },
+
     setPage,
     setLimit,
 
-    isLoading: equipmentsQuery.isLoading,
+    isLoading:
+      equipmentsQuery.isLoading,
     isFetching:
       equipmentsQuery.isFetching,
-    isError: equipmentsQuery.isError,
-    error: equipmentsQuery.error,
-    refetch: equipmentsQuery.refetch,
+    isError:
+      equipmentsQuery.isError,
+    error:
+      equipmentsQuery.error,
+    refetch:
+      equipmentsQuery.refetch,
 
-    getEquipmentById: fetchEquipmentById,
+    getEquipmentById:
+      (
+        id: string,
+      ) =>
+        EquipmentService.getEquipmentById(
+          api,
+          id,
+        ),
+
     getEquipmentShelves:
-      fetchEquipmentShelves,
-
-    canReadEquipment,
+      (
+        id: string,
+      ) =>
+        EquipmentService.getEquipmentShelves(
+          api,
+          id,
+          permissions,
+        ),
 
     createEquipment:
-      createEquipmentMutation.mutateAsync,
+      createMutation.mutateAsync,
     isCreatingEquipment:
-      createEquipmentMutation.isPending,
+      createMutation.isPending,
 
     updateEquipment:
-      updateEquipmentMutation.mutateAsync,
+      updateMutation.mutateAsync,
     isUpdating:
-      updateEquipmentMutation.isPending,
+      updateMutation.isPending,
 
     deleteEquipment:
-      deleteEquipmentMutation.mutateAsync,
+      deleteMutation.mutateAsync,
     isDeleting:
-      deleteEquipmentMutation.isPending,
-
-    updateSerialNumber:
-      updateSerialNumberMutation.mutateAsync,
-    isUpdatingSerialNumber:
-      updateSerialNumberMutation.isPending,
-
-    deleteSerialNumber:
-      deleteSerialNumberMutation.mutateAsync,
-    isDeletingSerialNumber:
-      deleteSerialNumberMutation.isPending,
+      deleteMutation.isPending,
   };
 }

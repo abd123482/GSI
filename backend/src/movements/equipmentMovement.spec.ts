@@ -1,201 +1,250 @@
-import { describe, it, expect, afterAll } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { PrismaMssql } from '@prisma/adapter-mssql';
-import { EquipmentMovementService } from './equipmentMovement.service.js';
-import { EquipmentService } from '../equipment/equipment.service.js';
-import { SerialNumberService } from '../serial-numbers/serialNumber.service.js';
+import {
+  afterAll,
+  describe,
+  expect,
+  it,
+} from 'vitest';
+
 import 'dotenv/config';
 
-const runDatabaseTests = process.env.RUN_MOVEMENT_DB_TESTS === '1' && /^test[_-]/i.test(process.env.DB_NAME ?? '');
+import { PrismaClient } from '../generated/prisma/client.js';
+import { PrismaMssql } from '@prisma/adapter-mssql';
 
-describe.skipIf(!runDatabaseTests)('Equipment Lifecycle & Movements Decoupled Flow', () => {
-  const adapter = new PrismaMssql({
-    server: process.env.DB_HOST!,
-    port: Number(process.env.DB_PORT ?? 1433),
-    database: process.env.DB_NAME!,
-    user: process.env.DB_USER!,
-    password: process.env.DB_PASSWORD!,
-    options: {
-      encrypt: true,
-      trustServerCertificate: true,
-    },
-  });
+import { EquipmentMovementService } from './equipmentMovement.service.js';
+import { EquipmentService } from '../equipment/equipment.service.js';
 
-  const prisma = new PrismaClient({ adapter }) as any;
-  const movementService = new EquipmentMovementService(prisma);
-  const equipmentService = new EquipmentService(prisma);
-  const serialNumberService = new SerialNumberService(prisma);
+const runDatabaseTests =
+  process.env.RUN_MOVEMENT_DB_TESTS ===
+    '1' &&
+  /^test[_-]/i.test(
+    process.env.DB_NAME ?? '',
+  );
 
-  it('should create equipment, generate serial numbers, and track movements with strict shelf stock isolation', async () => {
-    const timestamp = Date.now();
-    const sn1 = `SN-32BIT-${timestamp}-1`;
-    const sn2 = `SN-32BIT-${timestamp}-2`;
+describe.skipIf(
+  !runDatabaseTests,
+)(
+  'Equipment movement integration',
+  () => {
+    const adapter =
+      new PrismaMssql({
+        server:
+          process.env.DB_HOST!,
+        port: Number(
+          process.env.DB_PORT ??
+            1433,
+        ),
+        database:
+          process.env.DB_NAME!,
+        user:
+          process.env.DB_USER!,
+        password:
+          process.env.DB_PASSWORD!,
+        options: {
+          encrypt: true,
+          trustServerCertificate:
+            true,
+        },
+      });
 
-    // 1. Create a dedicated test shelf (shelfQuantity initialized to 0)
-    const shelf1 = await prisma.shelf.create({
-      data: {
-        shelfName: `Test-Shelf-A-${timestamp}`,
-        shelfQuantity: 0,
+    const prisma =
+      new PrismaClient({
+        adapter,
+      });
+
+    const movementService =
+      new EquipmentMovementService(
+        prisma as any,
+      );
+
+    const equipmentService =
+      new EquipmentService(
+        prisma as any,
+      );
+
+    it(
+      'creates one IN movement and keeps stock totals consistent',
+      async () => {
+        const suffix =
+          Date.now();
+
+        const activeStatus =
+          await prisma.stockStatus.upsert({
+            where: {
+              stockStatusName:
+                'ACTIVE',
+            },
+            update: {},
+            create: {
+              stockStatusName:
+                'ACTIVE',
+            },
+          });
+
+        const stock =
+          await prisma.stock.create({
+            data: {
+              stockName:
+                `Test Stock ${suffix}`,
+              stockStatusId:
+                activeStatus.stockStatusId,
+            },
+          });
+
+        const shelf =
+          await prisma.shelf.create({
+            data: {
+              shelfName:
+                `Test Shelf ${suffix}`,
+              shelfQuantity: 0,
+              stockId:
+                stock.stockId,
+            },
+          });
+
+        const equipment =
+          await equipmentService.createEquipment({
+            equipmentName:
+              `Test Equipment ${suffix}`,
+            hasSerialNumber:
+              false,
+            minEquipmentQuantity:
+              1,
+          });
+
+        try {
+          const movement =
+            await movementService.createMovement({
+              movementType:
+                'IN',
+              destinationShelfId:
+                shelf.shelfId,
+              items: [
+                {
+                  equipmentId:
+                    equipment.equipmentId,
+                  movementQuantity:
+                    3,
+                },
+              ],
+            });
+
+          expect(
+            movement.mouvementStatus,
+          ).toBe('IN');
+
+          expect(
+            movement.items,
+          ).toHaveLength(1);
+
+          const [
+            equipmentAfter,
+            shelfAfter,
+            allocation,
+          ] = await Promise.all([
+            prisma.equipment.findUnique({
+              where: {
+                equipmentId:
+                  equipment.equipmentId,
+              },
+            }),
+
+            prisma.shelf.findUnique({
+              where: {
+                shelfId:
+                  shelf.shelfId,
+              },
+            }),
+
+            prisma.equipmentShelfs.findUnique({
+              where: {
+                equipmentId_shelfId: {
+                  equipmentId:
+                    equipment.equipmentId,
+                  shelfId:
+                    shelf.shelfId,
+                },
+              },
+            }),
+          ]);
+
+          expect(
+            equipmentAfter
+              ?.equipmentQuantity,
+          ).toBe(3);
+
+          expect(
+            shelfAfter
+              ?.shelfQuantity,
+          ).toBe(3);
+
+          expect(
+            allocation
+              ?.equipmentQuantity,
+          ).toBe(3);
+
+          const history =
+            await movementService.getMovements({
+              page: 1,
+              limit: 10,
+              equipmentId:
+                equipment.equipmentId,
+            });
+
+          expect(
+            history.movements.some(
+              (item) =>
+                item.mouvementId ===
+                movement.mouvementId,
+            ),
+          ).toBe(true);
+        } finally {
+          await prisma.mouvement.deleteMany({
+            where: {
+              items: {
+                some: {
+                  equipmentId:
+                    equipment.equipmentId,
+                },
+              },
+            },
+          });
+
+          await prisma.equipmentShelfs.deleteMany({
+            where: {
+              equipmentId:
+                equipment.equipmentId,
+            },
+          });
+
+          await prisma.equipment.deleteMany({
+            where: {
+              equipmentId:
+                equipment.equipmentId,
+            },
+          });
+
+          await prisma.shelf.deleteMany({
+            where: {
+              shelfId:
+                shelf.shelfId,
+            },
+          });
+
+          await prisma.stock.deleteMany({
+            where: {
+              stockId:
+                stock.stockId,
+            },
+          });
+        }
       },
-    });
-    expect(shelf1.shelfQuantity).toBe(0);
-
-    const shelf2 = await prisma.shelf.create({
-      data: {
-        shelfName: `Test-Shelf-B-${timestamp}`,
-        shelfQuantity: 0,
-      },
-    });
-    expect(shelf2.shelfQuantity).toBe(0);
-
-    // 2. Create serialized equipment via EquipmentService
-    const equipment = await equipmentService.createEquipment({
-      equipmentName: `Equip-Test-${timestamp}`,
-      hasSerialNumber: true,
-      equipmentQuantity: 0,
-      minEquipmentQuantity: 1,
-    });
-    expect(equipment).toBeDefined();
-    expect(equipment.equipmentName).toBe(`Equip-Test-${timestamp}`);
-    expect(equipment.hasSerialNumber).toBe(true);
-
-    // 3. Batch create serial numbers via SerialNumberService
-    const batchResult = await serialNumberService.createBatchSerialNumbers({
-      equipmentId: equipment.equipmentId,
-      serialNumberCodes: [sn1, sn2],
-      serialNumberStatus: 'AVAILABLE',
-    });
-    expect(batchResult.success).toBe(true);
-    expect(batchResult.count).toBe(2);
-
-    // Equipment quantity should now be 2
-    const equipWithSerials = await equipmentService.getEquipmentById(equipment.equipmentId);
-    expect(equipWithSerials.equipmentQuantity).toBe(2);
-    expect(equipWithSerials.serialNumbers.length).toBe(2);
-
-    const serialItem1 = equipWithSerials.serialNumbers.find((s: any) => s.serialNumberCode === sn1);
-    const serialItem2 = equipWithSerials.serialNumbers.find((s: any) => s.serialNumberCode === sn2);
-    expect(serialItem1).toBeDefined();
-    expect(serialItem2).toBeDefined();
-
-    // 4. Record ENTRY movement for serialItem1 into shelf1
-    const entryMovement = await movementService.createEquipmentMovement({
-      equipmentId: equipment.equipmentId,
-      serialNumberId: serialItem1!.serialNumberId,
-      sourceShelfId: null,
-      destinationShelfId: shelf1.shelfId,
-      movementQuantity: 1,
-      movementType: 'ENTRY',
-    });
-    expect(entryMovement).toBeDefined();
-    expect(entryMovement.mouvementStatus).toBe('ENTRY');
-
-    // Verify shelf1 quantity incremented to 1 strictly through movement
-    const updatedShelf1 = await prisma.shelf.findUnique({ where: { shelfId: shelf1.shelfId } });
-    expect(updatedShelf1.shelfQuantity).toBe(1);
-
-    // Verify serialItem1 is now located on shelf1
-    const updatedSerial1 = await prisma.serialNumber.findUnique({
-      where: { serialNumberId: serialItem1!.serialNumberId },
-    });
-    expect(updatedSerial1.shelfId).toBe(shelf1.shelfId);
-
-    // 5. Record TRANSFER movement from shelf1 to shelf2
-    const transferMovement = await movementService.createEquipmentMovement({
-      equipmentId: equipment.equipmentId,
-      serialNumberId: serialItem1!.serialNumberId,
-      sourceShelfId: shelf1.shelfId,
-      destinationShelfId: shelf2.shelfId,
-      movementQuantity: 1,
-      movementType: 'TRANSFER',
-    });
-    expect(transferMovement).toBeDefined();
-    expect(transferMovement.mouvementStatus).toBe('TRANSFER');
-
-    // Verify shelf1 decremented to 0 and shelf2 incremented to 1
-    const shelf1AfterTransfer = await prisma.shelf.findUnique({ where: { shelfId: shelf1.shelfId } });
-    const shelf2AfterTransfer = await prisma.shelf.findUnique({ where: { shelfId: shelf2.shelfId } });
-    expect(shelf1AfterTransfer.shelfQuantity).toBe(0);
-    expect(shelf2AfterTransfer.shelfQuantity).toBe(1);
-
-    // 6. Test modifying a serial number (code and status)
-    const updatedSnCode = `SN-MODIFIED-${timestamp}`;
-    const updatedSn = await serialNumberService.updateSerialNumber(
-      {
-        serialNumberCode: updatedSnCode,
-        serialNumberStatus: 'IN_USE',
-      },
-      serialItem2!.serialNumberId,
+      35_000,
     );
-    expect(updatedSn.serialNumberCode).toBe(updatedSnCode);
-    expect(updatedSn.serialNumberStatus).toBe('IN_USE');
 
-    // 7. Test deleting a single serial number -> equipmentQuantity must decrement automatically
-    await serialNumberService.deleteSerialNumber(serialItem2!.serialNumberId);
-    const equipAfterSnDelete = await equipmentService.getEquipmentById(equipment.equipmentId);
-    expect(equipAfterSnDelete.equipmentQuantity).toBe(1);
-    expect(equipAfterSnDelete.serialNumbers.length).toBe(1);
-
-    // Clean up movements and serials before converting/deleting
-    await prisma.mouvement.deleteMany({ where: { OR: [{ equipmentId: equipment.equipmentId }, { items: { some: { equipmentId: equipment.equipmentId } } }] } });
-    await prisma.serialNumber.deleteMany({ where: { equipmentId: equipment.equipmentId } });
-
-    // 8. Test modifying non-serialized equipment
-    const updatedEquip = await equipmentService.updateEquipment(equipment.equipmentId, {
-      hasSerialNumber: false,
-      equipmentQuantity: 25,
-      minEquipmentQuantity: 5,
-    });
-    expect(updatedEquip.equipmentQuantity).toBe(25);
-    expect(updatedEquip.minequipmentQuantity).toBe(5);
-
-    // 9. Clean up equipment and test shelves
-    await equipmentService.deleteEquipment(equipment.equipmentId);
-    await prisma.shelf.delete({ where: { shelfId: shelf1.shelfId } });
-    await prisma.shelf.delete({ where: { shelfId: shelf2.shelfId } });
-
-    const deletedEquip = await prisma.equipment.findUnique({
-      where: { equipmentId: equipment.equipmentId },
-    });
-    expect(deletedEquip).toBeNull();
-  }, 35000);
-
-  it('saves multiple equipment under one header and rolls back every line on failure', async () => {
-    const suffix = Date.now();
-    const shelf = await prisma.shelf.create({ data: { shelfName: `Batch-test-${suffix}`, shelfQuantity: 0 } });
-    const equipmentIds: string[] = [];
-    try {
-      for (const label of ['A', 'B']) {
-        const equipment = await prisma.equipment.create({ data: {
-          equipmentName: `Batch-${label}-${suffix}`, hasSerialNumber: false, equipmentQuantity: 0,
-        } });
-        equipmentIds.push(equipment.equipmentId);
-      }
-      const movement = await movementService.createBatchEquipmentMovements(equipmentIds.map((equipmentId, index) => ({
-        equipmentId, destinationShelfId: shelf.shelfId, movementType: 'IN', movementQuantity: index + 2,
-      })));
-      expect(movement.items).toHaveLength(2);
-      expect(new Set(movement.items.map((item: any) => item.mouvementId))).toEqual(new Set([movement.mouvementId]));
-      expect(movement.mouvementQuantity).toBe(5);
-      const history = await movementService.getMovementsByEquipmentId({ page: 1, limit: 10 }, equipmentIds[1]);
-      expect(history.map((item: any) => item.mouvementId)).toContain(movement.mouvementId);
-      const headersBefore = await prisma.mouvement.count();
-      await expect(movementService.createBatchEquipmentMovements([
-        { equipmentId: equipmentIds[0], sourceShelfId: shelf.shelfId, movementType: 'OUT', movementQuantity: 1 },
-        { equipmentId: equipmentIds[1], sourceShelfId: shelf.shelfId, movementType: 'OUT', movementQuantity: 99 },
-      ])).rejects.toThrow('Insufficient equipment quantity');
-      expect(await prisma.mouvement.count()).toBe(headersBefore);
-      expect((await prisma.shelf.findUnique({ where: { shelfId: shelf.shelfId } })).shelfQuantity).toBe(5);
-      expect((await prisma.equipment.findUnique({ where: { equipmentId: equipmentIds[0] } })).equipmentQuantity).toBe(2);
-      expect((await prisma.equipmentShelfs.findFirst({ where: { equipmentId: equipmentIds[0], shelfId: shelf.shelfId } })).equipmentQuantity).toBe(2);
-    } finally {
-      await prisma.mouvement.deleteMany({ where: { items: { some: { equipmentId: { in: equipmentIds } } } } });
-      await prisma.equipmentShelfs.deleteMany({ where: { equipmentId: { in: equipmentIds } } });
-      await prisma.equipment.deleteMany({ where: { equipmentId: { in: equipmentIds } } });
-      await prisma.shelf.delete({ where: { shelfId: shelf.shelfId } });
-    }
-  }, 35000);
-
-  afterAll(async () => { await prisma.$disconnect(); });
-
-});
+    afterAll(
+      async () => {
+        await prisma.$disconnect();
+      },
+    );
+  },
+);

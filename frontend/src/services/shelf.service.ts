@@ -1,20 +1,14 @@
-import type {
-  AxiosInstance,
-} from 'axios';
-import {
-  isAxiosError,
-} from 'axios';
+import type { AxiosInstance } from 'axios';
+import { isAxiosError } from 'axios';
 
-import {
-  createShelfSchema,
-  updateShelfSchema,
-} from '@/schemas/shelf.schema';
+import { createShelfSchema, updateShelfSchema } from '@/schemas/shelf.schema';
 import type {
   CreateShelfInput,
   PaginatedShelfEquipmentResponse,
   PaginatedShelfSerialNumbersResponse,
   PaginatedShelvesResponse,
   Shelf,
+  ShelfContents,
   ShelfPaginationQuery,
   UpdateShelfInput,
 } from '@/types/shelf';
@@ -24,23 +18,13 @@ import {
   ShelfValidationException,
 } from './shelf.errors';
 
-export const REQUIRED_CREATE_PERMISSION =
-  'shelf.create';
-export const REQUIRED_READ_PERMISSION =
-  'shelf.read';
-export const REQUIRED_UPDATE_PERMISSION =
-  'shelf.update';
-export const REQUIRED_DELETE_PERMISSION =
-  'shelf.delete';
+export const REQUIRED_CREATE_PERMISSION = 'shelf.create';
+export const REQUIRED_READ_PERMISSION = 'shelf.read';
+export const REQUIRED_UPDATE_PERMISSION = 'shelf.update';
+export const REQUIRED_DELETE_PERMISSION = 'shelf.delete';
 
-function ensurePermission(
-  permissions: string[] | undefined,
-  permission: string,
-) {
-  if (
-    permissions &&
-    !permissions.includes(permission)
-  ) {
+function ensurePermission(permissions: string[] | undefined, permission: string) {
+  if (permissions && !permissions.includes(permission)) {
     throw new InsufficientPermissionException(
       permission,
       `Permission '${permission}' requise.`,
@@ -48,39 +32,14 @@ function ensurePermission(
   }
 }
 
-function messageFrom(
-  error: unknown,
-  fallback: string,
-) {
-  if (
-    isAxiosError(error)
-  ) {
-    const message =
-      error.response?.data?.message;
-
-    if (
-      Array.isArray(message)
-    ) {
-      return message.join(', ');
-    }
-
-    if (
-      typeof message ===
-      'string' &&
-      message
-    ) {
-      return message;
-    }
-
-    return (
-      error.message ||
-      fallback
-    );
+function messageFrom(error: unknown, fallback: string) {
+  if (isAxiosError(error)) {
+    const message = error.response?.data?.message;
+    if (Array.isArray(message)) return message.join(', ');
+    if (typeof message === 'string' && message) return message;
+    return error.message || fallback;
   }
-
-  return error instanceof Error
-    ? error.message
-    : fallback;
+  return error instanceof Error ? error.message : fallback;
 }
 
 function throwShelfError(
@@ -89,47 +48,28 @@ function throwShelfError(
   permission?: string,
 ): never {
   if (isAxiosError(error)) {
-    if (
-      error.response?.status ===
-      403 &&
-      permission
-    ) {
+    if (error.response?.status === 403 && permission) {
       throw new InsufficientPermissionException(
         permission,
-        messageFrom(
-          error,
-          `Permission '${permission}' requise.`,
-        ),
+        messageFrom(error, `Permission '${permission}' requise.`),
       );
     }
-
     throw new ShelfServiceException(
-      messageFrom(
-        error,
-        fallback,
-      ),
+      messageFrom(error, fallback),
       error.response?.status,
       error.response?.data,
     );
   }
 
   if (
-    error instanceof
-    InsufficientPermissionException ||
-    error instanceof
-    ShelfValidationException ||
-    error instanceof
-    ShelfServiceException
+    error instanceof InsufficientPermissionException ||
+    error instanceof ShelfValidationException ||
+    error instanceof ShelfServiceException
   ) {
     throw error;
   }
 
-  throw new ShelfServiceException(
-    messageFrom(
-      error,
-      fallback,
-    ),
-  );
+  throw new ShelfServiceException(messageFrom(error, fallback));
 }
 
 export class ShelfService {
@@ -138,58 +78,22 @@ export class ShelfService {
     input: CreateShelfInput,
     userPermissions?: string[],
   ): Promise<Shelf> {
-    ensurePermission(
-      userPermissions,
-      REQUIRED_CREATE_PERMISSION,
-    );
-
-    const validation =
-      createShelfSchema.safeParse(
-        input,
-      );
-
+    ensurePermission(userPermissions, REQUIRED_CREATE_PERMISSION);
+    const validation = createShelfSchema.safeParse(input);
     if (!validation.success) {
-      const fields:
-        Record<
-          string,
-          string[]
-        > = {};
-
-      for (
-        const issue of
-        validation.error.issues
-      ) {
-        const field =
-          issue.path.join('.') ||
-          'form';
-
-        (
-          fields[field] ??= []
-        ).push(issue.message);
+      const fields: Record<string, string[]> = {};
+      for (const issue of validation.error.issues) {
+        const field = issue.path.join('.') || 'form';
+        (fields[field] ??= []).push(issue.message);
       }
-
-      throw new ShelfValidationException(
-        'Données d’emplacement invalides.',
-        fields,
-      );
+      throw new ShelfValidationException('Données d’emplacement invalides.', fields);
     }
 
     try {
-      const response =
-        await client.post<Shelf>(
-          '/shelves',
-          {
-            shelfName:
-              validation.data
-                .shelfName,
-
-            stockId:
-              validation.data.stockId === ''
-                ? null
-                : validation.data.stockId ?? null,
-          },
-        );
-
+      const response = await client.post<Shelf>('/shelves', {
+        shelfName: validation.data.shelfName,
+        stockId: validation.data.stockId,
+      });
       return response.data;
     } catch (error: unknown) {
       throwShelfError(
@@ -205,29 +109,12 @@ export class ShelfService {
     params?: ShelfPaginationQuery,
   ): Promise<PaginatedShelvesResponse> {
     try {
-      const response =
-        await client.get<PaginatedShelvesResponse>(
-          '/shelves',
-          {
-            params: {
-              page:
-                params?.page ??
-                1,
-
-              limit:
-                params?.limit ??
-                10,
-            },
-          },
-        );
-
+      const response = await client.get<PaginatedShelvesResponse>('/shelves', {
+        params: { page: params?.page ?? 1, limit: params?.limit ?? 12 },
+      });
       return response.data;
     } catch (error: unknown) {
-      throwShelfError(
-        error,
-        'Impossible de récupérer les emplacements.',
-        REQUIRED_READ_PERMISSION,
-      );
+      throwShelfError(error, 'Impossible de récupérer les emplacements.', REQUIRED_READ_PERMISSION);
     }
   }
 
@@ -237,50 +124,25 @@ export class ShelfService {
     params?: ShelfPaginationQuery,
   ): Promise<PaginatedShelvesResponse> {
     try {
-      const response =
-        await client.get<PaginatedShelvesResponse>(
-          '/shelves/search',
-          {
-            params: {
-              shelfName:
-                name.trim(),
-              page:
-                params?.page ??
-                1,
-              limit:
-                params?.limit ??
-                10,
-            },
-          },
-        );
-
+      const response = await client.get<PaginatedShelvesResponse>('/shelves/search', {
+        params: {
+          shelfName: name.trim(),
+          page: params?.page ?? 1,
+          limit: params?.limit ?? 12,
+        },
+      });
       return response.data;
     } catch (error: unknown) {
-      throwShelfError(
-        error,
-        'Échec de la recherche d’emplacements.',
-        REQUIRED_READ_PERMISSION,
-      );
+      throwShelfError(error, 'Échec de la recherche d’emplacements.', REQUIRED_READ_PERMISSION);
     }
   }
 
-  static async getShelfById(
-    client: AxiosInstance,
-    id: string,
-  ): Promise<Shelf> {
+  static async getShelfById(client: AxiosInstance, id: string): Promise<Shelf> {
     try {
-      const response =
-        await client.get<Shelf>(
-          `/shelves/${id}`,
-        );
-
+      const response = await client.get<Shelf>(`/shelves/${id}`);
       return response.data;
     } catch (error: unknown) {
-      throwShelfError(
-        error,
-        `Emplacement '${id}' introuvable ou inaccessible.`,
-        REQUIRED_READ_PERMISSION,
-      );
+      throwShelfError(error, 'Emplacement introuvable ou inaccessible.', REQUIRED_READ_PERMISSION);
     }
   }
 
@@ -290,46 +152,16 @@ export class ShelfService {
     data: UpdateShelfInput,
     userPermissions?: string[],
   ): Promise<Shelf> {
-    ensurePermission(
-      userPermissions,
-      REQUIRED_UPDATE_PERMISSION,
-    );
-
-    const validation =
-      updateShelfSchema.safeParse(
-        data,
-      );
-
+    ensurePermission(userPermissions, REQUIRED_UPDATE_PERMISSION);
+    const validation = updateShelfSchema.safeParse(data);
     if (!validation.success) {
-      throw new ShelfValidationException(
-        'Données de mise à jour non valides.',
-      );
+      throw new ShelfValidationException('Données de mise à jour non valides.');
     }
-
     try {
-      const payload = {
-        ...validation.data,
-        ...(validation.data.stockId !== undefined && {
-          stockId:
-            validation.data.stockId === ''
-              ? null
-              : validation.data.stockId,
-        }),
-      };
-
-      const response =
-        await client.patch<Shelf>(
-          `/shelves/${id}`,
-          payload,
-        );
-
+      const response = await client.patch<Shelf>(`/shelves/${id}`, validation.data);
       return response.data;
     } catch (error: unknown) {
-      throwShelfError(
-        error,
-        'Erreur lors de la mise à jour de l’emplacement.',
-        REQUIRED_UPDATE_PERMISSION,
-      );
+      throwShelfError(error, 'Erreur lors de la mise à jour de l’emplacement.', REQUIRED_UPDATE_PERMISSION);
     }
   }
 
@@ -338,24 +170,12 @@ export class ShelfService {
     id: string,
     userPermissions?: string[],
   ): Promise<Shelf> {
-    ensurePermission(
-      userPermissions,
-      REQUIRED_DELETE_PERMISSION,
-    );
-
+    ensurePermission(userPermissions, REQUIRED_DELETE_PERMISSION);
     try {
-      const response =
-        await client.delete<Shelf>(
-          `/shelves/${id}`,
-        );
-
+      const response = await client.delete<Shelf>(`/shelves/${id}`);
       return response.data;
     } catch (error: unknown) {
-      throwShelfError(
-        error,
-        'Erreur lors de la suppression de l’emplacement.',
-        REQUIRED_DELETE_PERMISSION,
-      );
+      throwShelfError(error, 'Erreur lors de la suppression de l’emplacement.', REQUIRED_DELETE_PERMISSION);
     }
   }
 
@@ -365,34 +185,15 @@ export class ShelfService {
     pagination: ShelfPaginationQuery = {},
     userPermissions?: string[],
   ): Promise<PaginatedShelfEquipmentResponse> {
-    ensurePermission(
-      userPermissions,
-      REQUIRED_READ_PERMISSION,
-    );
-
+    ensurePermission(userPermissions, REQUIRED_READ_PERMISSION);
     try {
-      const response =
-        await client.get<PaginatedShelfEquipmentResponse>(
-          `/shelves/${id}/equipment`,
-          {
-            params: {
-              page:
-                pagination.page ??
-                1,
-              limit:
-                pagination.limit ??
-                20,
-            },
-          },
-        );
-
+      const response = await client.get<PaginatedShelfEquipmentResponse>(
+        `/shelves/${id}/equipment`,
+        { params: { page: pagination.page ?? 1, limit: pagination.limit ?? 100 } },
+      );
       return response.data;
     } catch (error: unknown) {
-      throwShelfError(
-        error,
-        'Impossible de charger les articles de cet emplacement.',
-        REQUIRED_READ_PERMISSION,
-      );
+      throwShelfError(error, 'Impossible de charger les articles de cet emplacement.', REQUIRED_READ_PERMISSION);
     }
   }
 
@@ -402,34 +203,57 @@ export class ShelfService {
     pagination: ShelfPaginationQuery = {},
     userPermissions?: string[],
   ): Promise<PaginatedShelfSerialNumbersResponse> {
-    ensurePermission(
-      userPermissions,
-      REQUIRED_READ_PERMISSION,
-    );
-
+    ensurePermission(userPermissions, REQUIRED_READ_PERMISSION);
     try {
-      const response =
-        await client.get<PaginatedShelfSerialNumbersResponse>(
-          `/shelves/${id}/serial-numbers`,
-          {
-            params: {
-              page:
-                pagination.page ??
-                1,
-              limit:
-                pagination.limit ??
-                20,
-            },
-          },
-        );
-
+      const response = await client.get<PaginatedShelfSerialNumbersResponse>(
+        `/shelves/${id}/serial-numbers`,
+        { params: { page: pagination.page ?? 1, limit: pagination.limit ?? 100 } },
+      );
       return response.data;
     } catch (error: unknown) {
-      throwShelfError(
-        error,
-        'Impossible de charger les numéros de série de cet emplacement.',
-        REQUIRED_READ_PERMISSION,
-      );
+      throwShelfError(error, 'Impossible de charger les numéros de série de cet emplacement.', REQUIRED_READ_PERMISSION);
     }
+  }
+
+  static async getAllShelfEquipment(
+    client: AxiosInstance,
+    id: string,
+    userPermissions?: string[],
+  ) {
+    const first = await this.getShelfEquipment(client, id, { page: 1, limit: 100 }, userPermissions);
+    if (first.totalPages <= 1) return first.allocations;
+    const rest = await Promise.all(
+      Array.from({ length: first.totalPages - 1 }, (_, index) =>
+        this.getShelfEquipment(client, id, { page: index + 2, limit: 100 }, userPermissions),
+      ),
+    );
+    return [...first.allocations, ...rest.flatMap((page) => page.allocations)];
+  }
+
+  static async getAllShelfSerialNumbers(
+    client: AxiosInstance,
+    id: string,
+    userPermissions?: string[],
+  ) {
+    const first = await this.getShelfSerialNumbers(client, id, { page: 1, limit: 100 }, userPermissions);
+    if (first.totalPages <= 1) return first.serialNumbers;
+    const rest = await Promise.all(
+      Array.from({ length: first.totalPages - 1 }, (_, index) =>
+        this.getShelfSerialNumbers(client, id, { page: index + 2, limit: 100 }, userPermissions),
+      ),
+    );
+    return [...first.serialNumbers, ...rest.flatMap((page) => page.serialNumbers)];
+  }
+
+  static async getShelfContents(
+    client: AxiosInstance,
+    id: string,
+    userPermissions?: string[],
+  ): Promise<ShelfContents> {
+    const [allocations, serialNumbers] = await Promise.all([
+      this.getAllShelfEquipment(client, id, userPermissions),
+      this.getAllShelfSerialNumbers(client, id, userPermissions),
+    ]);
+    return { allocations, serialNumbers };
   }
 }

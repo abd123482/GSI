@@ -28,21 +28,21 @@ model Permission {
 }
 
 model User {
-  userId         String                  @id(map: "PK_User") @default(dbgenerated("newid()"), map: "DF__User__userId__467D75B8") @db.UniqueIdentifier
-  userName       String                  @default("yacine", map: "DF__User__userName__477199F1") @db.VarChar(50)
-  userEmail      String                  @db.VarChar(100)
-  hashPassword   String?                 @db.VarChar(255)
-  roleId         String?                 @db.UniqueIdentifier
-  userStatus     String                  @default("ACTIVE", map: "DF__User__userStatus__4865BE2A") @db.VarChar(50)
-  clerkUserId    String?                 @unique(map: "idx_user_clerkUserId_unique", where: raw("([clerkUserId] IS NOT NULL)")) @db.VarChar(255)
-  Inventory_User Inventory_User[]
-  sessions       Session[]
-  orders         Order[]
-  attempts       InventoryCountAttempt[]
-  notifications  Notification[]
-  movementsCreated Mouvement[]         @relation("MovementCreatedByUser")
+  userId           String                        @id(map: "PK_User") @default(dbgenerated("newid()"), map: "DF__User__userId__467D75B8") @db.UniqueIdentifier
+  userName         String                        @default("yacine", map: "DF__User__userName__477199F1") @db.VarChar(50)
+  userEmail        String                        @db.VarChar(100)
+  hashPassword     String?                       @db.VarChar(255)
+  roleId           String?                       @db.UniqueIdentifier
+  userStatus       String                        @default("ACTIVE", map: "DF__User__userStatus__4865BE2A") @db.VarChar(50)
+  clerkUserId      String?                       @unique(map: "idx_user_clerkUserId_unique", where: raw("([clerkUserId] IS NOT NULL)")) @db.VarChar(255)
+  Inventory_User   Inventory_User[]
+  sessions         Session[]
+  orders           Order[]
+  attempts         InventoryCountAttempt[]
+  notifications    Notification[]
+  movementsCreated Mouvement[]                   @relation("MovementCreatedByUser")
   issuesResolved   InventoryInvestigationIssue[] @relation("IssueResolvedByUser")
-  role           Role?                   @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction, map: "FK_User_Role")
+  role             Role?                         @relation(fields: [roleId], references: [roleId], onDelete: NoAction, onUpdate: NoAction, map: "FK_User_Role")
 
   @@map("User")
 }
@@ -58,13 +58,14 @@ model Session {
 }
 
 model Equipment {
-  movementItems MouvementEquipment[]
-  equipmentId          String               @id(map: "PK_Equipment") @unique(map: "UX_Equipment_EquipmentId") @default(dbgenerated("newid()"), map: "DF__Equipment__equip__1E6F845E") @db.UniqueIdentifier
-  equipmentName        String               @unique(map: "UX_Equipment_EquipmentName") @db.VarChar(200)
+  movementItems        MouvementEquipment[]
+  equipmentId          String                            @id(map: "PK_Equipment") @unique(map: "UX_Equipment_EquipmentId") @default(dbgenerated("newid()"), map: "DF__Equipment__equip__1E6F845E") @db.UniqueIdentifier
+  equipmentName        String                            @unique(map: "UX_Equipment_EquipmentName") @db.VarChar(200)
   hasSerialNumber      Boolean
   equipmentQuantity    Int
-  minequipmentQuantity Int                  @default(0, map: "DF__Equipment__mineq__1F63A897")
-  equipmentShelfId     String?              @db.UniqueIdentifier
+  minequipmentQuantity Int                               @default(0, map: "DF__Equipment__mineq__1F63A897")
+  equipmentStatus      String                            @default("ACTIVE", map: "DF_Equipment_EquipmentStatus") @db.VarChar(30)
+  equipmentShelfId     String?                           @db.UniqueIdentifier
   equipmentMouvements  EquipmentMouvement[]
   equipmentShelfs      EquipmentShelfs[]
   mouvements           Mouvement[]
@@ -79,48 +80,53 @@ model Equipment {
   @@index([hasSerialNumber], map: "IDX_Equipment_HasSerialNumber")
   @@index([minequipmentQuantity], map: "IDX_Equipment_MinEquipmentQuantity")
   @@index([equipmentName], map: "IX_Equipment_EquipmentName")
+  @@index([equipmentStatus], map: "IX_Equipment_Status")
   @@map("Equipment")
 }
 
 model SerialNumber {
-  movementItems MouvementEquipment[]
-  serialNumberId      String      @id(map: "PK_SerialNumber") @default(dbgenerated("newid()"), map: "DF__SerialNum__seria__22401542") @db.UniqueIdentifier
-  serialNumberCode    String?     @db.VarChar(200)
-  serialNumberStatus  String?     @db.VarChar(100)
-  equipmentId         String?     @db.UniqueIdentifier
-  shelfId             String?     @db.UniqueIdentifier
+  movementItems       MouvementEquipment[]
+  serialNumberId      String                        @id(map: "PK_SerialNumber") @default(dbgenerated("newid()"), map: "DF__SerialNum__seria__22401542") @db.UniqueIdentifier
+  serialNumberCode    String                        @unique(map: "UX_SerialNumber_Code") @db.VarChar(200)
+  serialNumberStatus  String                        @default("AVAILABLE", map: "DF_SerialNumber_Status") @db.VarChar(100)
+  equipmentId         String                        @db.UniqueIdentifier
+  shelfId             String?                       @db.UniqueIdentifier
   mouvements          Mouvement[]
   orders              Order[]
   investigationIssues InventoryInvestigationIssue[]
-  equipment           Equipment?  @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_SerialNumber_Equipment")
-  shelf               Shelf?      @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_SerialNumber_Shelf")
+  equipment           Equipment                     @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_SerialNumber_Equipment")
+  shelf               Shelf?                        @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_SerialNumber_Shelf")
 
   @@index([serialNumberCode], map: "IDX_SerialNumber_SerialNumberCode")
   @@index([serialNumberId], map: "IDX_SerialNumber_SerialNumberId")
+  @@index([equipmentId, shelfId], map: "IX_SerialNumber_Equipment_Shelf")
+  @@index([shelfId], map: "IX_SerialNumber_ShelfId")
+  @@index([serialNumberStatus], map: "IX_SerialNumber_Status")
   @@map("SerialNumber")
 }
 
 model Shelf {
-  movementSources MouvementEquipment[] @relation("MovementItemSource")
-  movementDestinations MouvementEquipment[] @relation("MovementItemDestination")
-  shelfId               String            @id(map: "PK_Shelf") @default(dbgenerated("newid()"), map: "DF__Shelf__shelfId__29E1370A") @db.UniqueIdentifier
-  shelfName             String?           @db.VarChar(100)
-  shelfQuantity         Int?
-  stockId               String?           @db.UniqueIdentifier
+  movementSources       MouvementEquipment[]              @relation("MovementItemSource")
+  movementDestinations  MouvementEquipment[]              @relation("MovementItemDestination")
+  shelfId               String                            @id(map: "PK_Shelf") @default(dbgenerated("newid()"), map: "DF__Shelf__shelfId__29E1370A") @db.UniqueIdentifier
+  shelfName             String?                           @db.VarChar(100)
+  shelfQuantity         Int                               @default(0, map: "DF_Shelf_ShelfQuantity")
+  stockId               String                            @db.UniqueIdentifier
   equipmentShelfs       EquipmentShelfs[]
-  sourceMouvements      Mouvement[]       @relation("SourceShelf")
-  destinationMouvements Mouvement[]       @relation("DestinationShelf")
+  sourceMouvements      Mouvement[]                       @relation("SourceShelf")
+  destinationMouvements Mouvement[]                       @relation("DestinationShelf")
   serialNumbers         SerialNumber[]
   orders                Order[]
   serialSnapshots       Inventory_SerialNumber_Snapshot[]
-  expectedIssues        InventoryInvestigationIssue[] @relation("ExpectedShelf")
-  observedIssues        InventoryInvestigationIssue[] @relation("ObservedShelf")
-  resolutionIssues      InventoryInvestigationIssue[] @relation("ResolutionShelf")
-  stock                 Stock?            @relation(fields: [stockId], references: [stockId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Shelf_Stock")
+  expectedIssues        InventoryInvestigationIssue[]     @relation("ExpectedShelf")
+  observedIssues        InventoryInvestigationIssue[]     @relation("ObservedShelf")
+  resolutionIssues      InventoryInvestigationIssue[]     @relation("ResolutionShelf")
+  stock                 Stock                             @relation(fields: [stockId], references: [stockId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Shelf_Stock")
 
   @@index([shelfId], map: "INDEX_Shelf_ShelfId")
   @@index([shelfName], map: "INDEX_Shelf_ShelfName")
   @@index([shelfQuantity], map: "INDEX_Shelf_ShelfQuantity")
+  @@index([stockId], map: "IX_Shelf_StockId")
   @@map("Shelf")
 }
 
@@ -133,64 +139,71 @@ model StockStatus {
 }
 
 model Stock {
-  stockId       String       @id(map: "PK__Stock__CBAD876353C2F93A") @default(dbgenerated("newid()"), map: "DF__Stock__stockId__69C6B1F5") @db.UniqueIdentifier
-  stockName     String?      @db.VarChar(100)
-  stockStatusId String?      @db.UniqueIdentifier
+  stockId       String      @id(map: "PK__Stock__CBAD876353C2F93A") @default(dbgenerated("newid()"), map: "DF__Stock__stockId__69C6B1F5") @db.UniqueIdentifier
+  stockName     String?     @db.VarChar(100)
+  stockStatusId String      @db.UniqueIdentifier
   shelves       Shelf[]
-  stockStatus   StockStatus? @relation(fields: [stockStatusId], references: [stockStatusId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Stock_StockStatus")
+  stockStatus   StockStatus @relation(fields: [stockStatusId], references: [stockStatusId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Stock_StockStatus")
 
   @@index([stockId], map: "Stock_StockId")
   @@index([stockName], map: "Stock_StockName")
+  @@index([stockStatusId], map: "IX_Stock_StockStatusId")
   @@map("Stock")
 }
 
 model Mouvement {
-  items                MouvementEquipment[]
-  mouvementId          String               @id(map: "mouvementId") @default(dbgenerated("newid()"), map: "DF__Mouvement__mouve__2DB1C7EE") @db.UniqueIdentifier
+  items       MouvementEquipment[]
+  mouvementId String               @id(map: "mouvementId") @default(dbgenerated("newid()"), map: "DF__Mouvement__mouve__2DB1C7EE") @db.UniqueIdentifier
 
   // Header summary only. Child lines in MovementEquipment are authoritative.
   // If all child lines have the same type this is IN / OUT / TRANSFER.
   // If child lines have different types this is MIXED.
-  mouvementStatus      String?              @db.VarChar(50)
+  mouvementStatus String? @db.VarChar(50)
 
   // Sum of child line quantities.
-  mouvementQuantity    Int?                 @map("movementQuantity")
+  mouvementQuantity Int? @map("movementQuantity")
 
   // Legacy compatibility fields. New multi-line movements keep these NULL.
   // A single-line movement may mirror its child values here.
-  equipmentId          String?              @db.UniqueIdentifier
-  sourceShelfId        String?              @db.UniqueIdentifier
-  destinationShelfId   String?              @db.UniqueIdentifier
-  serialNumberId       String?              @db.UniqueIdentifier
+  equipmentId        String? @db.UniqueIdentifier
+  sourceShelfId      String? @db.UniqueIdentifier
+  destinationShelfId String? @db.UniqueIdentifier
+  serialNumberId     String? @db.UniqueIdentifier
 
-  createdAt            DateTime?            @default(dbgenerated("sysdatetime()"))
-  createdByUserId      String?              @db.UniqueIdentifier
+  createdAt       DateTime? @default(dbgenerated("sysdatetime()"))
+  createdByUserId String?   @db.UniqueIdentifier
 
-  createdByUser        User?                @relation("MovementCreatedByUser", fields: [createdByUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Mouvement_CreatedByUser")
-  serialNumber         SerialNumber?        @relation(fields: [serialNumberId], references: [serialNumberId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Mouvement_SerialNumber")
-  sourceShelf          Shelf?               @relation("SourceShelf", fields: [sourceShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Mouvement_Shelfsource")
-  equipment            Equipment?           @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MouvementEequipment")
-  destinationShelf     Shelf?               @relation("DestinationShelf", fields: [destinationShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_SerialNumber_Shelfdestination")
+  // Inventory adjustment audit fields added in SQL Server.
+  inventoryId String? @db.UniqueIdentifier
+  origin      String  @default("USER", map: "DF_Mouvement_Origin") @db.VarChar(30)
+  reason      String? @db.NVarChar(1000)
+
+  createdByUser    User?         @relation("MovementCreatedByUser", fields: [createdByUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Mouvement_CreatedByUser")
+  inventory        Inventory?    @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Mouvement_Inventory")
+  serialNumber     SerialNumber? @relation(fields: [serialNumberId], references: [serialNumberId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Mouvement_SerialNumber")
+  sourceShelf      Shelf?        @relation("SourceShelf", fields: [sourceShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Mouvement_Shelfsource")
+  equipment        Equipment?    @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MouvementEequipment")
+  destinationShelf Shelf?        @relation("DestinationShelf", fields: [destinationShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_SerialNumber_Shelfdestination")
 
   @@index([equipmentId], map: "IDX_Mouvement_EquipmentId")
   @@index([createdAt, mouvementId], map: "IX_Mouvement_CreatedAt_Id")
   @@index([mouvementStatus], map: "IX_Mouvement_Status")
+  @@index([inventoryId], map: "IX_Mouvement_InventoryId")
   @@map("Mouvement")
 }
 
 model EquipmentShelfs {
-  equipmentShelfId  String     @id(map: "PK_EquipmentShelfs") @default(dbgenerated("newid()"), map: "DF__Equipment__equip__2610A626") @db.UniqueIdentifier
-  equipmentQuantity Int?
-  equipmentId       String?    @db.UniqueIdentifier
-  shelfId           String?    @db.UniqueIdentifier
-  equipment         Equipment? @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_EquipmentShelfs_Equipment")
-  shelf             Shelf?     @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_EquipmentShelfs_Shelf")
+  equipmentShelfId  String    @id(map: "PK_EquipmentShelfs") @default(dbgenerated("newid()"), map: "DF__Equipment__equip__2610A626") @db.UniqueIdentifier
+  equipmentQuantity Int       @default(0, map: "DF_EquipmentShelfs_Quantity")
+  equipmentId       String    @db.UniqueIdentifier
+  shelfId           String    @db.UniqueIdentifier
+  equipment         Equipment @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_EquipmentShelfs_Equipment")
+  shelf             Shelf     @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_EquipmentShelfs_Shelf")
 
   // One equipment can have only one allocation row per shelf.
-  @@unique([equipmentId, shelfId], map: "UX_EquipmentShelfs_Equipment_Shelf", where: raw("([equipmentId] IS NOT NULL AND [shelfId] IS NOT NULL)"))
+  @@unique([equipmentId, shelfId], map: "UX_EquipmentShelfs_Equipment_Shelf")
   @@index([equipmentId], map: "IX_EquipmentShelfs_EquipmentId")
   @@index([shelfId], map: "IX_EquipmentShelfs_ShelfId")
-
   @@map("EquipmentShelfs")
 }
 
@@ -238,6 +251,9 @@ model Inventory {
   workUnits           InventoryWorkUnit[]
   serialSnapshots     Inventory_SerialNumber_Snapshot[]
   investigationIssues InventoryInvestigationIssue[]
+  adjustmentMovements Mouvement[]
+
+  @@index([status], map: "IX_Inventory_Status")
 }
 
 model Inventory_User {
@@ -250,6 +266,7 @@ model Inventory_User {
   User           User      @relation(fields: [userId], references: [userId], onUpdate: NoAction, map: "FK__Inventory__userI__00AA174D")
 
   @@id([inventoryId, userId], map: "PK__Inventor__280E1DCDF3168EB2")
+  @@unique([inventoryId, sequence], map: "UX_Inventory_User_Inventory_Sequence")
 }
 
 model sysdiagrams {
@@ -309,6 +326,11 @@ model InventoryWorkUnit {
   version     Int     @default(0)
   coverage    String? @db.NVarChar(Max) // JSON describing coverage metadata
 
+  // Per-unit reconciliation fields added in SQL Server.
+  reconciliationStatus String    @default("PENDING", map: "DF_InventoryWorkUnit_ReconciliationStatus") @db.VarChar(30)
+  acceptedAttemptId    String?   @db.UniqueIdentifier
+  reconciledAt         DateTime? @db.DateTime2
+
   // Merged Discrepancy Fields
   discrepancyType       String? @db.VarChar(100)
   discrepancyState      String? @db.VarChar(50)
@@ -317,10 +339,14 @@ model InventoryWorkUnit {
   discrepancyActorId    String? @db.UniqueIdentifier
   discrepancyReason     String? @db.NVarChar(1000)
 
-  inventory Inventory               @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "FK_WorkUnit_Inventory")
-  attempts  InventoryCountAttempt[]
+  inventory       Inventory               @relation(fields: [inventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "FK_WorkUnit_Inventory")
+  attempts        InventoryCountAttempt[] @relation("UnitAttempts")
+  acceptedAttempt InventoryCountAttempt?  @relation("AcceptedAttempt", fields: [acceptedAttemptId], references: [attemptId], onDelete: NoAction, onUpdate: NoAction, map: "FK_InventoryWorkUnit_AcceptedAttempt")
 
   @@index([inventoryId], map: "IDX_WorkUnit_InventoryId")
+  @@index([equipmentId, inventoryId], map: "IX_InventoryWorkUnit_Equipment_Inventory")
+  @@index([shelfId, inventoryId], map: "IX_InventoryWorkUnit_Shelf_Inventory")
+  @@index([inventoryId, reconciliationStatus], map: "IX_InventoryWorkUnit_Reconciliation")
   @@map("InventoryWorkUnit")
 }
 
@@ -337,10 +363,12 @@ model InventoryCountAttempt {
   version              Int       @default(0)
   linkedPriorAttemptId String?   @db.UniqueIdentifier
 
-  unit         InventoryWorkUnit @relation(fields: [unitId], references: [unitId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Attempt_WorkUnit")
-  assignedUser User              @relation(fields: [assignedUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Attempt_User")
-  orders       Order[]
+  unit                InventoryWorkUnit   @relation("UnitAttempts", fields: [unitId], references: [unitId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Attempt_WorkUnit")
+  acceptedByWorkUnits InventoryWorkUnit[] @relation("AcceptedAttempt")
+  assignedUser        User                @relation(fields: [assignedUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Attempt_User")
+  orders              Order[]
 
+  @@unique([unitId, sequence], map: "UX_InventoryCountAttempt_Unit_Sequence")
   @@index([unitId], map: "IDX_Attempt_UnitId")
   @@index([assignedUserId], map: "IDX_Attempt_UserId")
   @@map("InventoryCountAttempt")
@@ -439,27 +467,30 @@ model Notification {
 model MouvementEquipment {
   // Prisma field names stay compatible with the existing NestJS code.
   // @map/@@map align them with the physical SQL names shown in SSMS.
-  mouvementEquipmentId String       @id @default(dbgenerated("newid()")) @map("movementEquipmentId") @db.UniqueIdentifier
-  mouvementId          String       @map("movementId") @db.UniqueIdentifier
-  equipmentId          String       @db.UniqueIdentifier
-  rowNum               Int          @map("RowNum")
+  mouvementEquipmentId String @id @default(dbgenerated("newid()")) @map("movementEquipmentId") @db.UniqueIdentifier
+  mouvementId          String @map("movementId") @db.UniqueIdentifier
+  equipmentId          String @db.UniqueIdentifier
+  rowNum               Int    @map("RowNum")
 
-  sourceShelfId        String?      @db.UniqueIdentifier
-  destinationShelfId   String?      @db.UniqueIdentifier
-  serialNumberId       String?      @db.UniqueIdentifier
+  sourceShelfId      String? @db.UniqueIdentifier
+  destinationShelfId String? @db.UniqueIdentifier
+  serialNumberId     String? @db.UniqueIdentifier
 
   // Physical SQL column: equipmentQuantity.
-  mouvementQuantity    Int          @map("equipmentQuantity")
+  mouvementQuantity Int @map("equipmentQuantity")
 
   // Canonical movement type FOR THIS ARTICLE LINE.
   // Allowed canonical values written by new code: IN / OUT / TRANSFER.
-  mouvementStatus      String       @map("movementStatus") @db.VarChar(50)
+  mouvementStatus String @map("movementStatus") @db.VarChar(50)
 
-  mouvement            Mouvement    @relation(fields: [mouvementId], references: [mouvementId], onDelete: Cascade, onUpdate: NoAction, map: "FK_MovementEquipment_Mouvement")
-  equipment            Equipment    @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MovementEquipment_Equipment")
-  sourceShelf          Shelf?       @relation("MovementItemSource", fields: [sourceShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MovementEquipment_SourceShelf")
-  destinationShelf     Shelf?       @relation("MovementItemDestination", fields: [destinationShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MovementEquipment_DestinationShelf")
-  serialNumber         SerialNumber? @relation(fields: [serialNumberId], references: [serialNumberId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MovementEquipment_SerialNumber")
+  // Historical equipment type at movement time.
+  equipmentTypeSnapshot String @default("STANDARD", map: "DF_MovementEquipment_TypeSnapshot") @db.VarChar(20)
+
+  mouvement        Mouvement     @relation(fields: [mouvementId], references: [mouvementId], onDelete: Cascade, onUpdate: NoAction, map: "FK_MovementEquipment_Mouvement")
+  equipment        Equipment     @relation(fields: [equipmentId], references: [equipmentId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MovementEquipment_Equipment")
+  sourceShelf      Shelf?        @relation("MovementItemSource", fields: [sourceShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MovementEquipment_SourceShelf")
+  destinationShelf Shelf?        @relation("MovementItemDestination", fields: [destinationShelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MovementEquipment_DestinationShelf")
+  serialNumber     SerialNumber? @relation(fields: [serialNumberId], references: [serialNumberId], onDelete: NoAction, onUpdate: NoAction, map: "FK_MovementEquipment_SerialNumber")
 
   @@unique([mouvementId, rowNum], map: "UX_MovementEquipment_Movement_RowNum")
   @@index([mouvementId], map: "IX_MovementEquipment_MovementId")
@@ -468,6 +499,5 @@ model MouvementEquipment {
   @@index([sourceShelfId], map: "IX_MovementEquipment_SourceShelfId")
   @@index([destinationShelfId], map: "IX_MovementEquipment_DestinationShelfId")
   @@index([serialNumberId], map: "IX_MovementEquipment_SerialNumberId")
-
   @@map("MovementEquipment")
 }

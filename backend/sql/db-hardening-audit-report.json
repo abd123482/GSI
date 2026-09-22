@@ -1,0 +1,112 @@
+{
+  "generatedAt": "2026-09-22T20:27:52.832Z",
+  "identity": {
+    "currentServer": "DESKTOP-H8RGDSS",
+    "currentDatabase": "yacinedb",
+    "loginName": "admin_semepharm"
+  },
+  "summary": {
+    "totalChecks": 5,
+    "passedChecks": 2,
+    "errorChecks": 2,
+    "warningChecks": 1
+  },
+  "checks": [
+    {
+      "code": "SCHEMA_TABLES",
+      "title": "Required application tables are present",
+      "severity": "ERROR",
+      "count": 12,
+      "passed": false,
+      "details": [
+        "Stock",
+        "StockStatus",
+        "Shelf",
+        "Equipment",
+        "EquipmentShelfs",
+        "SerialNumber",
+        "Mouvement",
+        "MovementEquipment",
+        "Inventory",
+        "InventoryWorkUnit",
+        "InventoryCountAttempt",
+        "Order"
+      ],
+      "note": null
+    },
+    {
+      "code": "SCHEMA_COLUMNS",
+      "title": "Required hardened columns are present",
+      "severity": "ERROR",
+      "count": 12,
+      "passed": false,
+      "details": [
+        "Equipment.equipmentStatus",
+        "InventoryWorkUnit.acceptedAttemptId",
+        "InventoryWorkUnit.reconciledAt",
+        "InventoryWorkUnit.reconciliationStatus",
+        "Mouvement.inventoryId",
+        "Mouvement.origin",
+        "Mouvement.reason",
+        "MovementEquipment.equipmentTypeSnapshot",
+        "Shelf.stockId",
+        "Stock.stockStatusId",
+        "SerialNumber.serialNumberStatus",
+        "SerialNumber.shelfId"
+      ],
+      "note": null
+    },
+    {
+      "code": "HARDENING_TRIGGERS",
+      "title": "Expected hardening triggers are present and enabled",
+      "severity": "WARN",
+      "count": 6,
+      "passed": false,
+      "details": [
+        {
+          "name": "TR_Shelf_RequireActiveStock",
+          "state": "MISSING"
+        },
+        {
+          "name": "TR_EquipmentShelfs_RequireActiveStock",
+          "state": "MISSING"
+        },
+        {
+          "name": "TR_Mouvement_RequireActiveStocks",
+          "state": "MISSING"
+        },
+        {
+          "name": "TR_SerialNumber_Guards",
+          "state": "MISSING"
+        },
+        {
+          "name": "TR_InventoryWorkUnit_AcceptedAttempt",
+          "state": "MISSING"
+        },
+        {
+          "name": "TR_MovementEquipment_MatchHeader",
+          "state": "MISSING"
+        }
+      ],
+      "note": "Missing triggers are not installed automatically by this audit. Review before applying a hardening patch."
+    },
+    {
+      "code": "FK_DISABLED_OR_UNTRUSTED",
+      "title": "Foreign keys are enabled and trusted",
+      "severity": "ERROR",
+      "count": 0,
+      "passed": true,
+      "details": [],
+      "note": null
+    },
+    {
+      "code": "CHECK_DISABLED_OR_UNTRUSTED",
+      "title": "Check constraints are enabled and trusted",
+      "severity": "WARN",
+      "count": 0,
+      "passed": true,
+      "details": [],
+      "note": null
+    }
+  ]
+}

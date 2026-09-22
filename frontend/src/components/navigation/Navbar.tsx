@@ -29,9 +29,11 @@ import {
 import {
   usePermissions,
 } from '@/hooks/use-permissions';
+
 import {
   NotificationBell,
 } from './NotificationBell';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -92,8 +94,7 @@ export function Navbar() {
   const stockAreaActive =
     active.stocks ||
     active.shelves ||
-    active.equipment ||
-    active.movements;
+    active.equipment;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[#3f3a36] bg-[#2b2622]/95 backdrop-blur-md">
@@ -113,15 +114,10 @@ export function Navbar() {
             />
 
             <span
-              className="
-    text-[20px]
-    font-light
-    tracking-[0.12em]
-    text-[#f7f5f0]
-    whitespace-nowrap
-  "
+              className="whitespace-nowrap text-[20px] font-light tracking-[0.12em] text-[#f7f5f0]"
               style={{
-                fontFamily: 'Roboto, Arial, sans-serif',
+                fontFamily:
+                  'Roboto, Arial, sans-serif',
               }}
             >
               GSI
@@ -133,10 +129,11 @@ export function Navbar() {
           <nav className="hidden items-center gap-1 sm:flex">
             <DropdownMenu>
               <DropdownMenuTrigger
-                className={`flex items-center gap-2 rounded-[3px] px-2.5 py-1.5 text-xs font-medium ${stockAreaActive
-                  ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
-                  : 'text-[#c9c0ad] hover:bg-[#383330]/70 hover:text-[#f7f5f0]'
-                  }`}
+                className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs font-medium ${
+                  stockAreaActive
+                    ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
+                    : 'text-[#c9c0ad] hover:bg-[#383330]/70 hover:text-[#f7f5f0]'
+                }`}
               >
                 <Warehouse className="h-3.5 w-3.5" />
                 Stocks
@@ -149,37 +146,52 @@ export function Navbar() {
               >
                 <NavItem
                   href="/stocks"
-                  icon={<Warehouse className="h-3.5 w-3.5" />}
+                  icon={
+                    <Warehouse className="h-3.5 w-3.5" />
+                  }
                   text="Vue d'ensemble"
                 />
+
                 <NavItem
                   href="/shelves"
-                  icon={<Layers className="h-3.5 w-3.5" />}
+                  icon={
+                    <Layers className="h-3.5 w-3.5" />
+                  }
                   text="Emplacements"
                 />
+
                 <NavItem
                   href="/equipment"
-                  icon={<Cpu className="h-3.5 w-3.5" />}
+                  icon={
+                    <Cpu className="h-3.5 w-3.5" />
+                  }
                   text="Articles"
                 />
-
-                {permissions.canReadMovement && (
-                  <NavItem
-                    href="/movements"
-                    icon={<ArrowRightLeft className="h-3.5 w-3.5" />}
-                    text="Mouvements"
-                  />
-                )}
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {permissions.canReadMovement && (
+              <Link
+                href="/movements"
+                className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs font-medium ${
+                  active.movements
+                    ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
+                    : 'text-[#c9c0ad] hover:bg-[#383330]/70 hover:text-[#f7f5f0]'
+                }`}
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5" />
+                Mouvements
+              </Link>
+            )}
 
             {permissions.canReadInventory && (
               <Link
                 href="/inventory"
-                className={`flex items-center gap-2 rounded-[3px] px-2.5 py-1.5 text-xs font-medium ${active.inventory
-                  ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
-                  : 'text-[#c9c0ad] hover:bg-[#383330]/70 hover:text-[#f7f5f0]'
-                  }`}
+                className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs font-medium ${
+                  active.inventory
+                    ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
+                    : 'text-[#c9c0ad] hover:bg-[#383330]/70 hover:text-[#f7f5f0]'
+                }`}
               >
                 <ClipboardList className="h-3.5 w-3.5" />
                 Inventaires
@@ -190,11 +202,11 @@ export function Navbar() {
 
         <div className="flex items-center gap-3">
           {isSignedIn && (
-            <div className="hidden items-center gap-1.5 rounded-[3px] border border-[#3f3a36] bg-[#383330] px-2.5 py-1 font-mono text-[11px] text-[#c9c0ad] md:flex">
+            <div className="hidden items-center gap-1.5 rounded border border-[#3f3a36] bg-[#383330] px-2.5 py-1 font-mono text-[11px] text-[#c9c0ad] md:flex">
               {permissions.isAdmin ||
-                permissions.canCreateEquipment ||
-                permissions.canCreateMovement ||
-                permissions.canCreateShelf ? (
+              permissions.canCreateEquipment ||
+              permissions.canCreateMovement ||
+              permissions.canCreateShelf ? (
                 <>
                   <ShieldCheck className="h-3 w-3 text-emerald-400" />
                   <span className="text-[#f7f5f0]">
@@ -204,7 +216,9 @@ export function Navbar() {
               ) : (
                 <>
                   <ShieldAlert className="h-3 w-3 text-amber-400" />
-                  <span>Lecture</span>
+                  <span>
+                    Lecture
+                  </span>
                 </>
               )}
             </div>
@@ -221,11 +235,15 @@ export function Navbar() {
               <UserButton>
                 <UserButton.MenuItems>
                   <UserButton.Action label="manageAccount" />
+
                   <UserButton.Link
                     label="Rôles & Accès"
-                    labelIcon={<Users className="h-4 w-4" />}
+                    labelIcon={
+                      <Users className="h-4 w-4" />
+                    }
                     href="/users"
                   />
+
                   <UserButton.Action label="signOut" />
                 </UserButton.MenuItems>
               </UserButton>
@@ -233,7 +251,7 @@ export function Navbar() {
           ) : (
             <Link
               href="/sign-in"
-              className="rounded-[3px] bg-[#f7f5f0] px-3 py-1.5 text-xs font-medium text-[#2b2622]"
+              className="rounded bg-[#f7f5f0] px-3 py-1.5 text-xs font-medium text-[#2b2622]"
             >
               Connexion
             </Link>
@@ -262,29 +280,53 @@ export function Navbar() {
         <div className="space-y-1 border-t border-[#3f3a36] bg-[#2b2622] px-4 py-3 sm:hidden">
           <MobileLink
             href="/stocks"
-            text="Vue d'ensemble"
+            text="Stocks"
             active={active.stocks}
-            close={() => setMobileOpen(false)}
+            close={() =>
+              setMobileOpen(
+                false,
+              )
+            }
           />
+
           <MobileLink
             href="/shelves"
             text="Emplacements"
-            active={active.shelves}
-            close={() => setMobileOpen(false)}
+            active={
+              active.shelves
+            }
+            close={() =>
+              setMobileOpen(
+                false,
+              )
+            }
           />
+
           <MobileLink
             href="/equipment"
             text="Articles"
-            active={active.equipment}
-            close={() => setMobileOpen(false)}
+            active={
+              active.equipment
+            }
+            close={() =>
+              setMobileOpen(
+                false,
+              )
+            }
           />
 
           {permissions.canReadMovement && (
             <MobileLink
               href="/movements"
               text="Mouvements"
-              active={active.movements}
-              close={() => setMobileOpen(false)}
+              active={
+                active.movements
+              }
+              close={() =>
+                setMobileOpen(
+                  false,
+                )
+              }
             />
           )}
 
@@ -292,8 +334,14 @@ export function Navbar() {
             <MobileLink
               href="/inventory"
               text="Inventaires"
-              active={active.inventory}
-              close={() => setMobileOpen(false)}
+              active={
+                active.inventory
+              }
+              close={() =>
+                setMobileOpen(
+                  false,
+                )
+              }
             />
           )}
         </div>
@@ -339,10 +387,11 @@ function MobileLink({
     <Link
       href={href}
       onClick={close}
-      className={`block rounded-[3px] p-2 text-xs font-medium ${active
-        ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
-        : 'text-[#c9c0ad] hover:bg-[#383330]'
-        }`}
+      className={`block rounded p-2 text-xs font-medium ${
+        active
+          ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
+          : 'text-[#c9c0ad] hover:bg-[#383330]'
+      }`}
     >
       {text}
     </Link>

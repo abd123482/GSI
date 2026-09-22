@@ -1,33 +1,27 @@
-import type {
-  SerialNumber,
-} from './equipment';
+import type { SerialNumber } from './equipment';
 
 export interface Shelf {
   shelfId: string;
   shelfName: string | null;
-
-  /**
-   * Aggregate physical units currently stored on this shelf.
-   * Read-only from Shelf CRUD. MovementService owns physical changes.
-   */
   shelfQuantity: number;
-
-  stockId?: string | null;
-
+  stockId: string;
   stock?: {
     stockId: string;
     stockName: string | null;
+    stockStatus?: {
+      stockStatusName: 'ACTIVE' | 'INACTIVE';
+    } | null;
   } | null;
 }
 
 export interface CreateShelfInput {
   shelfName: string;
-  stockId?: string | null;
+  stockId: string;
 }
 
 export interface UpdateShelfInput {
   shelfName?: string;
-  stockId?: string | null;
+  stockId?: string;
 }
 
 export interface ShelfPaginationQuery {
@@ -45,16 +39,16 @@ export interface PaginatedShelvesResponse {
 
 export interface ShelfEquipmentAllocation {
   equipmentShelfId: string;
-  equipmentId: string | null;
-  shelfId: string | null;
+  equipmentId: string;
+  shelfId: string;
   equipmentQuantity: number;
-
   equipment?: {
     equipmentId: string;
     equipmentName: string | null;
     hasSerialNumber: boolean;
     equipmentQuantity: number;
     minequipmentQuantity: number;
+    equipmentStatus?: string;
   } | null;
 }
 
@@ -72,4 +66,9 @@ export interface PaginatedShelfSerialNumbersResponse {
   totalPages: number;
   currentPage: number;
   limit: number;
+}
+
+export interface ShelfContents {
+  allocations: ShelfEquipmentAllocation[];
+  serialNumbers: SerialNumber[];
 }

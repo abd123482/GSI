@@ -1,46 +1,76 @@
 import { z } from 'zod';
 
-const optionalQueryBoolean = z.preprocess((value) => {
-  if (value === undefined || value === null || value === '') {
-    return undefined;
-  }
+const optionalQueryBoolean =
+  z.preprocess((value) => {
+    if (
+      value === undefined ||
+      value === null ||
+      value === ''
+    ) {
+      return undefined;
+    }
 
-  if (typeof value === 'boolean') {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const normalized =
+        value
+          .trim()
+          .toLowerCase();
+
+      if (normalized === 'true') {
+        return true;
+      }
+
+      if (normalized === 'false') {
+        return false;
+      }
+    }
+
     return value;
-  }
+  }, z.boolean().optional());
 
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
+export const searchEquipmentSchema =
+  z.object({
+    equipmentName: z
+      .string()
+      .trim()
+      .optional(),
 
-    if (normalized === 'true') return true;
-    if (normalized === 'false') return false;
-  }
+    hasSerialNumber:
+      optionalQueryBoolean,
 
-  return value;
-}, z.boolean().optional());
+    equipmentStatus: z
+      .enum([
+        'ACTIVE',
+        'INACTIVE',
+      ])
+      .optional(),
 
-export const searchEquipmentSchema = z.object({
-  equipmentName: z.string().trim().optional(),
+    equipmentQuantity: z.coerce
+      .number()
+      .int()
+      .nonnegative()
+      .optional(),
 
-  hasSerialNumber: optionalQueryBoolean,
+    minEquipmentQuantity: z.coerce
+      .number()
+      .int()
+      .nonnegative()
+      .optional(),
 
-  equipmentQuantity: z.coerce
-    .number()
-    .int()
-    .nonnegative()
-    .optional(),
+    shelfId: z
+      .string()
+      .uuid()
+      .optional(),
 
-  minEquipmentQuantity: z.coerce
-    .number()
-    .int()
-    .nonnegative()
-    .optional(),
+    equipmentShelfId: z
+      .string()
+      .uuid()
+      .optional(),
+  });
 
-  // Preferred filter: actual shelf ID.
-  shelfId: z.string().uuid().optional(),
-
-  // Backward-compatible filter for an EquipmentShelfs row ID.
-  equipmentShelfId: z.string().uuid().optional(),
-});
-
-export type SearchEquipmentDTO = z.infer<typeof searchEquipmentSchema>;
+export type SearchEquipmentDTO =
+  z.infer<typeof searchEquipmentSchema>;

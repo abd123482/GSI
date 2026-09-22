@@ -1,232 +1,395 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
 import {
-  CreateStockDTO,
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+
+import type { Prisma } from '../generated/prisma/client.js';
+import { PrismaService } from '../prisma/prisma.service.js';
+
+import {
+  type CreateStockDTO,
   createStockSchema,
-  UpdateStockDTO,
+  type UpdateStockDTO,
   updateStockSchema,
-  SearchStockDTO,
+  type SearchStockDTO,
   searchStockSchema,
-  PaginationDTO,
+  type PaginationDTO,
   paginationSchema,
 } from './dto/index.js';
 
+type AllowedStockStatus = 'ACTIVE' | 'INACTIVE';
+
 @Injectable()
 export class StockService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+  ) {}
 
-  async existStock(stockName: string): Promise<boolean> {
-    const stock = await this.prisma.stock.findFirst({
-      where: { stockName },
-    });
-    return stock !== null;
-  }
-
-  async resolveStockStatus(statusInput?: string) {
-    if (!statusInput) {
-      const defaultStatus = await this.prisma.stockStatus.findFirst({
-        where: { stockStatusName: 'ACTIVE' },
-      });
-      return defaultStatus;
-    }
-
-    const normalizedInput = statusInput.trim();
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalizedInput);
-
-    const foundStatus = await this.prisma.stockStatus.findFirst({
-      where: isUuid
-        ? {
-            OR: [
-              { stockStatusId: normalizedInput },
-              { stockStatusName: normalizedInput },
-            ],
-          }
-        : {
-            OR: [
-              { stockStatusName: normalizedInput },
-              { stockStatusName: normalizedInput.toUpperCase() },
-            ],
-          },
+  private async assertStockNameAvailable(
+    stockName: string,
+    excludeStockId?: string,
+  ): Promise<void> {
+    const existing = await this.prisma.stock.findFirst({
+      where: {
+        stockName,
+        ...(excludeStockId
+          ? {
+              stockId: {
+                not: excludeStockId,
+              },
+            }
+          : {}),
+      },
+      select: {
+        stockId: true,
+      },
     });
 
-    if (!foundStatus) {
-      throw new BadRequestException(`Statut de stock invalide : '${statusInput}' n'existe pas`);
-    }
-
-    return foundStatus;
-  }
-
-  async createStock(dto: CreateStockDTO) {
-    // 1. Validate inputs using Zod
-    const validated = createStockSchema.parse(dto);
-
-    // 2. Check if stock already exists
-    const existing = await this.existStock(validated.stockName);
     if (existing) {
-      throw new BadRequestException('Stock with this name already exists');
+      throw new BadRequestException(
+        `Stock '${stockName}' already exists`,
+      );
     }
-
-    // 3. Resolve stock status from StockStatus table
-    const statusRecord = await this.resolveStockStatus(validated.stockStatus);
-
-    // 4. Create new tuple inside Stock table without manual quantity
-    return await this.prisma.stock.create({
-      data: {
-        stockName: validated.stockName,
-        stockStatusId: statusRecord?.stockStatusId ?? null,
-      },
-      include: {
-        stockStatus: true,
-        _count: {
-          select: { shelves: true },
-        },
-      },
-    });
   }
 
-  async updateStock(dto: UpdateStockDTO, id: string) {
-    // 1. Validate inputs using Zod
-    const validated = updateStockSchema.parse(dto);
-
-    // 2. Check if stock exists
-    const existingStock = await this.prisma.stock.findUnique({
-      where: { stockId: id },
-    });
-    if (!existingStock) {
-      throw new NotFoundException(`Stock with ID '${id}' not found`);
-    }
-
-    // 3. If name is being updated, verify uniqueness
-    if (validated.stockName && validated.stockName !== existingStock.stockName) {
-      const nameTaken = await this.existStock(validated.stockName);
-      if (nameTaken) {
-        throw new BadRequestException('Stock with this name already exists');
-      }
-    }
-
-    // 4. If status is being updated, resolve against StockStatus table
-    let statusId: string | undefined = undefined;
-    if (validated.stockStatus !== undefined) {
-      const resolvedStatus = await this.resolveStockStatus(validated.stockStatus);
-      statusId = resolvedStatus?.stockStatusId;
-    }
-
-    // 5. Update stock tuple
-    return await this.prisma.stock.update({
-      where: { stockId: id },
-      data: {
-        ...(validated.stockName !== undefined && { stockName: validated.stockName }),
-        ...(statusId !== undefined && { stockStatusId: statusId }),
-      },
-      include: {
-        stockStatus: true,
-        _count: {
-          select: { shelves: true },
+  private async resolveStockStatus(
+    statusInput: AllowedStockStatus,
+  ) {
+    const status =
+      await this.prisma.stockStatus.findUnique({
+        where: {
+          stockStatusName: statusInput,
         },
-      },
-    });
+        select: {
+          stockStatusId: true,
+          stockStatusName: true,
+        },
+      });
+
+    if (!status) {
+      throw new BadRequestException(
+        `Stock status '${statusInput}' is not configured in the database`,
+      );
+    }
+
+    return status;
   }
 
-  async getStockById(id: string) {
-    const stock = await this.prisma.stock.findUnique({
-      where: { stockId: id },
-      include: {
-        stockStatus: true,
-        shelves: {
-          take: 100,
-          orderBy: { shelfName: 'asc' },
+  private async getStockOrThrow(
+    stockId: string,
+  ) {
+    const stock =
+      await this.prisma.stock.findUnique({
+        where: {
+          stockId,
         },
-        _count: {
-          select: { shelves: true },
+        include: {
+          stockStatus: true,
+          _count: {
+            select: {
+              shelves: true,
+            },
+          },
         },
-      },
-    });
+      });
 
     if (!stock) {
-      throw new NotFoundException(`Stock with ID '${id}' not found`);
+      throw new NotFoundException(
+        `Stock with ID '${stockId}' not found`,
+      );
     }
 
     return stock;
   }
 
-  async searchStocks(searchStockDTO: SearchStockDTO, pagination: PaginationDTO) {
-    const parsedPagination = paginationSchema.parse(pagination ?? {});
-    const validatedSearch = searchStockSchema.parse(searchStockDTO ?? {});
+  async createStock(
+    dto: CreateStockDTO,
+  ) {
+    const validated =
+      createStockSchema.parse(dto);
 
-    const page = parsedPagination.page;
-    const limit = parsedPagination.limit;
+    await this.assertStockNameAvailable(
+      validated.stockName,
+    );
+
+    const status =
+      await this.resolveStockStatus(
+        validated.stockStatus ?? 'ACTIVE',
+      );
+
+    return this.prisma.stock.create({
+      data: {
+        stockName: validated.stockName,
+        stockStatusId: status.stockStatusId,
+      },
+      include: {
+        stockStatus: true,
+        _count: {
+          select: {
+            shelves: true,
+          },
+        },
+      },
+    });
+  }
+
+  async updateStock(
+    dto: UpdateStockDTO,
+    id: string,
+  ) {
+    const stockId = id?.trim();
+
+    if (!stockId) {
+      throw new BadRequestException(
+        'Stock ID is required',
+      );
+    }
+
+    const validated =
+      updateStockSchema.parse(dto);
+
+    const existingStock =
+      await this.getStockOrThrow(
+        stockId,
+      );
+
+    if (
+      validated.stockName !== undefined &&
+      validated.stockName !==
+        existingStock.stockName
+    ) {
+      await this.assertStockNameAvailable(
+        validated.stockName,
+        stockId,
+      );
+    }
+
+    let statusId: string | undefined;
+
+    if (
+      validated.stockStatus !== undefined
+    ) {
+      const status =
+        await this.resolveStockStatus(
+          validated.stockStatus,
+        );
+
+      statusId = status.stockStatusId;
+    }
+
+    return this.prisma.stock.update({
+      where: {
+        stockId,
+      },
+      data: {
+        ...(validated.stockName !==
+          undefined && {
+          stockName: validated.stockName,
+        }),
+        ...(statusId !== undefined && {
+          stockStatusId: statusId,
+        }),
+      },
+      include: {
+        stockStatus: true,
+        _count: {
+          select: {
+            shelves: true,
+          },
+        },
+      },
+    });
+  }
+
+  async getStockById(
+    id: string,
+  ) {
+    const stockId = id?.trim();
+
+    if (!stockId) {
+      throw new BadRequestException(
+        'Stock ID is required',
+      );
+    }
+
+    const stock =
+      await this.prisma.stock.findUnique({
+        where: {
+          stockId,
+        },
+        include: {
+          stockStatus: true,
+          shelves: {
+            take: 100,
+            orderBy: [
+              {
+                shelfName: 'asc',
+              },
+              {
+                shelfId: 'asc',
+              },
+            ],
+            select: {
+              shelfId: true,
+              shelfName: true,
+              shelfQuantity: true,
+              stockId: true,
+            },
+          },
+          _count: {
+            select: {
+              shelves: true,
+            },
+          },
+        },
+      });
+
+    if (!stock) {
+      throw new NotFoundException(
+        `Stock with ID '${stockId}' not found`,
+      );
+    }
+
+    return stock;
+  }
+
+  async searchStocks(
+    searchStockDTO: SearchStockDTO,
+    pagination: PaginationDTO,
+  ) {
+    const validatedSearch =
+      searchStockSchema.parse(
+        searchStockDTO ?? {},
+      );
+
+    const {
+      page,
+      limit,
+    } = paginationSchema.parse(
+      pagination ?? {},
+    );
+
     const skip = (page - 1) * limit;
 
-    const where: any = {};
-    if (validatedSearch?.stockName) {
+    const where:
+      Prisma.StockWhereInput = {};
+
+    if (validatedSearch.stockName) {
       where.stockName = {
-        contains: validatedSearch.stockName,
-      };
-    }
-    if (validatedSearch?.stockStatus) {
-      where.stockStatus = {
-        stockStatusName: validatedSearch.stockStatus,
+        contains:
+          validatedSearch.stockName,
       };
     }
 
-    const [stocks, totalStocks] = await Promise.all([
+    if (validatedSearch.stockStatus) {
+      where.stockStatus = {
+        stockStatusName:
+          validatedSearch.stockStatus,
+      };
+    }
+
+    const [
+      stocks,
+      totalStocks,
+    ] = await Promise.all([
       this.prisma.stock.findMany({
+        where,
         skip,
         take: limit,
-        where,
-        orderBy: { stockName: 'asc' },
+        orderBy: [
+          {
+            stockName: 'asc',
+          },
+          {
+            stockId: 'asc',
+          },
+        ],
         include: {
           stockStatus: true,
           _count: {
-            select: { shelves: true },
+            select: {
+              shelves: true,
+            },
           },
         },
       }),
-      this.prisma.stock.count({ where }),
+
+      this.prisma.stock.count({
+        where,
+      }),
     ]);
 
     return {
       stocks,
       totalStocks,
-      totalPages: Math.ceil(totalStocks / limit) || 1,
+      totalPages:
+        Math.ceil(totalStocks / limit) || 1,
       currentPage: page,
       limit,
     };
   }
 
-  async getAllStocks(pagination: PaginationDTO) {
-    const parsedPagination = paginationSchema.parse(pagination ?? {});
-    const page = parsedPagination.page;
-    const limit = parsedPagination.limit;
+  async getAllStocks(
+    pagination: PaginationDTO,
+  ) {
+    const {
+      page,
+      limit,
+    } = paginationSchema.parse(
+      pagination ?? {},
+    );
+
     const skip = (page - 1) * limit;
 
-    const [stocks, totalStocks] = await Promise.all([
+    const [
+      stocks,
+      totalStocks,
+    ] = await Promise.all([
       this.prisma.stock.findMany({
         skip,
         take: limit,
-        orderBy: { stockName: 'asc' },
+        orderBy: [
+          {
+            stockName: 'asc',
+          },
+          {
+            stockId: 'asc',
+          },
+        ],
         include: {
           stockStatus: true,
           _count: {
-            select: { shelves: true },
+            select: {
+              shelves: true,
+            },
           },
         },
       }),
+
       this.prisma.stock.count(),
     ]);
 
     return {
       stocks,
       totalStocks,
-      totalPages: Math.ceil(totalStocks / limit) || 1,
+      totalPages:
+        Math.ceil(totalStocks / limit) || 1,
       currentPage: page,
       limit,
     };
   }
 
   async getAllStockStatuses() {
-    return await this.prisma.stockStatus.findMany({
-      orderBy: { stockStatusName: 'asc' },
+    return this.prisma.stockStatus.findMany({
+      where: {
+        stockStatusName: {
+          in: ['ACTIVE', 'INACTIVE'],
+        },
+      },
+      orderBy: {
+        stockStatusName: 'asc',
+      },
     });
   }
 }

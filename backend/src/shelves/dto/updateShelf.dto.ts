@@ -12,7 +12,6 @@ export const updateShelfSchema = z
     stockId: z
       .string()
       .uuid('Stock ID must be a valid UUID')
-      .nullable()
       .optional(),
   })
   .refine(
@@ -24,4 +23,5 @@ export const updateShelfSchema = z
     },
   );
 
-export type UpdateShelfDTO = z.infer<typeof updateShelfSchema>;
+export type UpdateShelfDTO =
+  z.infer<typeof updateShelfSchema>;

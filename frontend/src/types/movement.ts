@@ -1,9 +1,12 @@
-export type MovementType = 'IN' | 'OUT' | 'TRANSFER';
+export type MovementType =
+  | 'IN'
+  | 'OUT'
+  | 'TRANSFER';
 
-/**
- * Historical values can still exist in old records after migration.
- * They are READ compatibility only and must never be used when creating V3 movements.
- */
+export type MovementOrigin =
+  | 'USER'
+  | 'INVENTORY_ADJUSTMENT';
+
 export type MovementStatus =
   | MovementType
   | 'ENTRY'
@@ -15,14 +18,14 @@ export type MovementStatus =
 export interface MovementShelf {
   shelfId: string;
   shelfName: string | null;
-  shelfQuantity?: number;
+  stockId?: string;
 }
 
 export interface MovementEquipmentSummary {
   equipmentId: string;
   equipmentName: string | null;
   hasSerialNumber?: boolean;
-  equipmentQuantity?: number;
+  equipmentStatus?: string;
 }
 
 export interface MovementSerialSummary {
@@ -37,12 +40,19 @@ export interface MovementUserSummary {
   userEmail: string | null;
 }
 
+export interface MovementInventorySummary {
+  inventoryId: string;
+  title: string | null;
+  status: string;
+}
+
 export interface MovementItem {
   mouvementEquipmentId: string;
-  mouvementId: string;
+  mouvementId?: string;
   rowNum?: number;
 
   equipmentId: string;
+  equipmentTypeSnapshot?: 'STANDARD' | 'SERIALIZED';
   serialNumberId: string | null;
 
   sourceShelfId: string | null;
@@ -57,15 +67,6 @@ export interface MovementItem {
   destinationShelf?: MovementShelf | null;
 }
 
-/**
- * V3 movement header.
- *
- * A movement has exactly one type and one shared route.
- * All physical stock/location changes are represented by its items[].
- *
- * equipmentId and serialNumberId remain optional legacy/header mirror fields
- * because historical data may still contain them.
- */
 export interface Movement {
   mouvementId: string;
   createdAt?: string | null;
@@ -74,26 +75,30 @@ export interface Movement {
   mouvementStatus: MovementStatus | null;
   mouvementQuantity: number | null;
 
-  equipmentId: string | null;
-  serialNumberId: string | null;
-
-  sourceShelfId: string | null;
-  destinationShelfId: string | null;
-
-  sourceShelf?: MovementShelf | null;
-  destinationShelf?: MovementShelf | null;
-  createdByUser?: MovementUserSummary | null;
-
-  items?: MovementItem[];
+  equipmentId?: string | null;
+  serialNumberId?: string | null;
 
   /**
-   * Only present on flattened legacy-compatible movement lines.
-   * New V3 headers should use items[] instead.
+   * Present on legacy/flattened line reads. New movement headers use items[].
    */
   mouvementEquipmentId?: string;
 
   equipment?: MovementEquipmentSummary | null;
   serialNumber?: MovementSerialSummary | null;
+
+  sourceShelfId: string | null;
+  destinationShelfId: string | null;
+
+  origin?: MovementOrigin | string;
+  inventoryId?: string | null;
+  reason?: string | null;
+
+  sourceShelf?: MovementShelf | null;
+  destinationShelf?: MovementShelf | null;
+  createdByUser?: MovementUserSummary | null;
+  inventory?: MovementInventorySummary | null;
+
+  items?: MovementItem[];
 }
 
 export interface CreateMovementItemInput {
@@ -113,6 +118,8 @@ export interface MovementQuery {
   page?: number;
   limit?: number;
   movementType?: MovementType;
+  origin?: MovementOrigin;
+  inventoryId?: string;
   equipmentId?: string;
   serialNumberId?: string;
   sourceShelfId?: string;
@@ -125,6 +132,16 @@ export interface PaginatedMovementsResponse {
   totalPages: number;
   currentPage: number;
   limit: number;
+}
+
+export interface MovementDraftLine {
+  clientId: string;
+  equipmentId: string;
+  equipmentName: string;
+  hasSerialNumber: boolean;
+  serialNumberId: string | null;
+  serialNumberCode: string | null;
+  movementQuantity: number;
 }
 
 export interface MovementLedgerEntry {
@@ -140,28 +157,4 @@ export interface MovementAuditSummary {
   totalOut: number;
   currentQuantity: number;
   ledger: MovementLedgerEntry[];
-}
-
-/**
- * @deprecated
- * Temporary compatibility type for the old movement.service.ts.
- * Do not use this type in new V3 UI code.
- *
- * Remove it when the old movement.service.ts is rewritten/removed.
- */
-export interface CreateEquipmentMovementInput {
-  equipmentId: string;
-  serialNumberId?: string;
-  sourceShelfId?: string;
-  destinationShelfId?: string;
-  movementQuantity: number;
-  movementType: string;
-}
-
-/**
- * @deprecated
- * Temporary compatibility alias for older frontend code.
- */
-export interface MovementHeader extends Movement {
-  items: MovementItem[];
 }

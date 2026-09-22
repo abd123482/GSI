@@ -6,19 +6,16 @@ export const resolveIssueSchema = z.object({
     'MOVED_WITHOUT_RECORDED_MOVEMENT',
     'LOST',
   ]),
-  resolutionShelfId: z.string().optional(),
-  notes: z.string().optional(),
+  resolutionShelfId: z.string().trim().optional(),
+  notes: z.string().trim().max(1000).optional(),
 }).refine(
-  (data) => {
-    if (data.resolutionType === 'FOUND_IN_ANOTHER_LOCATION') {
-      return !!data.resolutionShelfId && data.resolutionShelfId.trim().length > 0;
-    }
-    return true;
-  },
+  (data) =>
+    data.resolutionType !== 'FOUND_IN_ANOTHER_LOCATION' ||
+    Boolean(data.resolutionShelfId?.trim()),
   {
-    message: "L'emplacement trouvé (resolutionShelfId) est obligatoire lorsque l'élément est trouvé ailleurs.",
     path: ['resolutionShelfId'],
-  }
+    message: "L'emplacement trouvé est obligatoire lorsque l'élément est trouvé ailleurs.",
+  },
 );
 
-export type ResolveIssueDTO = z.infer<typeof resolveIssueSchema>;
+export type ResolveIssueDTO = z.input<typeof resolveIssueSchema>;

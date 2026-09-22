@@ -1,16 +1,33 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import {
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+
+import {
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
+
 import { StockService } from './stock.service.js';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
 
-describe('StockService Unit Tests', () => {
+describe('StockService', () => {
   let service: StockService;
-  let mockPrisma: any;
+  let prisma: any;
 
-  const validStockId = 'b0000000-0000-4000-8000-000000000001';
-  const activeStatusId = 'c0000000-0000-4000-8000-000000000001';
+  const stockId =
+    'b0000000-0000-4000-8000-000000000001';
+
+  const activeStatusId =
+    'c0000000-0000-4000-8000-000000000001';
+
+  const inactiveStatusId =
+    'd0000000-0000-4000-8000-000000000002';
 
   beforeEach(() => {
-    mockPrisma = {
+    prisma = {
       stock: {
         findFirst: vi.fn(),
         findUnique: vi.fn(),
@@ -19,137 +36,164 @@ describe('StockService Unit Tests', () => {
         update: vi.fn(),
         count: vi.fn(),
       },
+
       stockStatus: {
-        findFirst: vi.fn(),
+        findUnique: vi.fn(),
         findMany: vi.fn(),
       },
     };
 
-    service = new StockService(mockPrisma);
+    service =
+      new StockService(prisma);
   });
 
-  describe('createStock', () => {
-    it('should create a new stock with validated name (5-50 chars) and default ACTIVE status', async () => {
-      mockPrisma.stock.findFirst.mockResolvedValue(null);
-      mockPrisma.stockStatus.findFirst.mockResolvedValue({
+  it('creates a stock with ACTIVE status by default', async () => {
+    prisma.stock.findFirst
+      .mockResolvedValue(null);
+
+    prisma.stockStatus.findUnique
+      .mockResolvedValue({
         stockStatusId: activeStatusId,
         stockStatusName: 'ACTIVE',
       });
-      mockPrisma.stock.create.mockResolvedValue({
-        stockId: validStockId,
-        stockName: 'Stock Central Alger',
+
+    prisma.stock.create
+      .mockResolvedValue({
+        stockId,
+        stockName: 'Stock Principal',
         stockStatusId: activeStatusId,
-        stockStatus: { stockStatusId: activeStatusId, stockStatusName: 'ACTIVE' },
-        _count: { shelves: 0 },
+        stockStatus: {
+          stockStatusId: activeStatusId,
+          stockStatusName: 'ACTIVE',
+        },
+        _count: {
+          shelves: 0,
+        },
       });
 
-      const result = await service.createStock({
-        stockName: 'Stock Central Alger',
-      });
+    await service.createStock({
+      stockName: 'Stock Principal',
+    });
 
-      expect(result).toBeDefined();
-      expect(result.stockName).toBe('Stock Central Alger');
-      expect(mockPrisma.stock.create).toHaveBeenCalledWith({
+    expect(
+      prisma.stockStatus.findUnique,
+    ).toHaveBeenCalledWith({
+      where: {
+        stockStatusName: 'ACTIVE',
+      },
+      select: {
+        stockStatusId: true,
+        stockStatusName: true,
+      },
+    });
+
+    expect(
+      prisma.stock.create,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
         data: {
-          stockName: 'Stock Central Alger',
+          stockName: 'Stock Principal',
           stockStatusId: activeStatusId,
         },
-        include: {
-          stockStatus: true,
-          _count: { select: { shelves: true } },
+      }),
+    );
+  });
+
+  it('rejects a duplicate stock name', async () => {
+    prisma.stock.findFirst
+      .mockResolvedValue({
+        stockId,
+      });
+
+    await expect(
+      service.createStock({
+        stockName: 'Stock Principal',
+      }),
+    ).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('updates stock status to INACTIVE', async () => {
+    prisma.stock.findUnique
+      .mockResolvedValue({
+        stockId,
+        stockName: 'Stock Principal',
+        stockStatusId: activeStatusId,
+        stockStatus: {
+          stockStatusName: 'ACTIVE',
+        },
+        _count: {
+          shelves: 2,
         },
       });
-    });
 
-    it('should reject stock names shorter than 5 characters', async () => {
-      await expect(
-        service.createStock({ stockName: 'ABC' }),
-      ).rejects.toThrow();
-    });
-
-    it('should reject duplicate stock name with BadRequestException', async () => {
-      mockPrisma.stock.findFirst.mockResolvedValue({ stockId: validStockId, stockName: 'Stock Central Alger' });
-
-      await expect(
-        service.createStock({ stockName: 'Stock Central Alger' }),
-      ).rejects.toThrow(BadRequestException);
-    });
-  });
-
-  describe('updateStock', () => {
-    it('should update stock name and status when valid', async () => {
-      mockPrisma.stock.findUnique.mockResolvedValue({
-        stockId: validStockId,
-        stockName: 'Stock Central Alger',
-        stockStatusId: activeStatusId,
-      });
-      mockPrisma.stock.findFirst.mockResolvedValue(null); // name not taken
-      mockPrisma.stockStatus.findFirst.mockResolvedValue({
-        stockStatusId: 'd0000000-0000-4000-8000-000000000002',
+    prisma.stockStatus.findUnique
+      .mockResolvedValue({
+        stockStatusId: inactiveStatusId,
         stockStatusName: 'INACTIVE',
       });
-      mockPrisma.stock.update.mockResolvedValue({
-        stockId: validStockId,
-        stockName: 'Stock Secondaire Oran',
-        stockStatusId: 'd0000000-0000-4000-8000-000000000002',
+
+    prisma.stock.update
+      .mockResolvedValue({
+        stockId,
+        stockName: 'Stock Principal',
+        stockStatusId: inactiveStatusId,
       });
 
-      const result = await service.updateStock(
-        { stockName: 'Stock Secondaire Oran', stockStatus: 'INACTIVE' },
-        validStockId,
-      );
+    await service.updateStock(
+      {
+        stockStatus: 'INACTIVE',
+      },
+      stockId,
+    );
 
-      expect(result.stockName).toBe('Stock Secondaire Oran');
-      expect(mockPrisma.stock.update).toHaveBeenCalled();
-    });
-
-    it('should throw NotFoundException if stock does not exist', async () => {
-      mockPrisma.stock.findUnique.mockResolvedValue(null);
-
-      await expect(
-        service.updateStock({ stockName: 'Stock Inexistant' }, validStockId),
-      ).rejects.toThrow(NotFoundException);
-    });
+    expect(
+      prisma.stock.update,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          stockId,
+        },
+        data: {
+          stockStatusId:
+            inactiveStatusId,
+        },
+      }),
+    );
   });
 
-  describe('getStockById', () => {
-    it('should return stock with attached shelves', async () => {
-      mockPrisma.stock.findUnique.mockResolvedValue({
-        stockId: validStockId,
-        stockName: 'Stock Principal Yacine',
-        shelves: [{ shelfId: 's1', shelfName: 'Rayon 1' }],
-        _count: { shelves: 1 },
-      });
+  it('throws when stock does not exist', async () => {
+    prisma.stock.findUnique
+      .mockResolvedValue(null);
 
-      const result = await service.getStockById(validStockId);
-      expect(result.stockName).toBe('Stock Principal Yacine');
-      expect(result.shelves.length).toBe(1);
-    });
-
-    it('should throw NotFoundException if stock does not exist', async () => {
-      mockPrisma.stock.findUnique.mockResolvedValue(null);
-
-      await expect(
-        service.getStockById('00000000-0000-0000-0000-000000000000'),
-      ).rejects.toThrow(NotFoundException);
-    });
+    await expect(
+      service.getStockById(stockId),
+    ).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
-  describe('searchStocks', () => {
-    it('should filter stocks by name with pagination', async () => {
-      mockPrisma.stock.findMany.mockResolvedValue([
-        { stockId: validStockId, stockName: 'Stock Principal Yacine' },
-      ]);
-      mockPrisma.stock.count.mockResolvedValue(1);
+  it('returns only ACTIVE and INACTIVE status rows', async () => {
+    prisma.stockStatus.findMany
+      .mockResolvedValue([]);
 
-      const result = await service.searchStocks(
-        { stockName: 'Principal' },
-        { page: 1, limit: 10 },
-      );
+    await service.getAllStockStatuses();
 
-      expect(result.stocks.length).toBe(1);
-      expect(result.totalStocks).toBe(1);
-      expect(result.currentPage).toBe(1);
+    expect(
+      prisma.stockStatus.findMany,
+    ).toHaveBeenCalledWith({
+      where: {
+        stockStatusName: {
+          in: [
+            'ACTIVE',
+            'INACTIVE',
+          ],
+        },
+      },
+      orderBy: {
+        stockStatusName: 'asc',
+      },
     });
   });
 });

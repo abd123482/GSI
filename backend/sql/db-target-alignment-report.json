@@ -1,0 +1,39 @@
+{
+  "generatedAt": "2026-09-22T20:24:12.908Z",
+  "sameConfiguredTarget": true,
+  "sameConnectedTarget": true,
+  "runtime": {
+    "label": "Nest runtime DB_*",
+    "configured": {
+      "server": "DESKTOP-H8RGDSS",
+      "port": 1433,
+      "database": "yacinedb",
+      "user": "admin_semepharm",
+      "encrypt": true,
+      "trustServerCertificate": true
+    },
+    "connected": true,
+    "identity": {
+      "currentDatabase": "yacinedb",
+      "currentServer": "DESKTOP-H8RGDSS"
+    },
+    "expectedTablesFound": []
+  },
+  "prismaCli": {
+    "label": "Prisma CLI DATABASE_URL",
+    "configured": {
+      "server": "DESKTOP-H8RGDSS",
+      "port": 1433,
+      "database": "yacinedb",
+      "user": "admin_semepharm",
+      "encrypt": true,
+      "trustServerCertificate": true
+    },
+    "connected": true,
+    "identity": {
+      "currentDatabase": "yacinedb",
+      "currentServer": "DESKTOP-H8RGDSS"
+    },
+    "expectedTablesFound": []
+  }
+}

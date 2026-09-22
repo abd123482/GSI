@@ -1,43 +1,58 @@
-import type { AxiosInstance } from 'axios';
-import { isAxiosError } from 'axios';
-
+import type {
+  AxiosInstance,
+} from 'axios';
 import {
-  calculateMovementAudit,
-} from '@/lib/movement-ledger';
+  isAxiosError,
+} from 'axios';
+
+import type {
+  Equipment,
+  EquipmentWithShelvesResponse,
+  SerialNumber,
+} from '@/types/equipment';
+
 import type {
   CreateMovementInput,
   Movement,
-  MovementAuditSummary,
   MovementQuery,
   PaginatedMovementsResponse,
 } from '@/types/movement';
+
+import type {
+  Shelf,
+} from '@/types/shelf';
+
+import {
+  EquipmentService,
+} from '@/services/equipment.service';
+
+import {
+  SerialNumberService,
+} from '@/services/serial-number.service';
+
+import {
+  ShelfService,
+} from '@/services/shelf.service';
+
 import {
   InsufficientPermissionException,
 } from './shelf.errors';
 
 export const REQUIRED_MOVEMENT_CREATE_PERMISSION =
   'movement.create';
+
 export const REQUIRED_MOVEMENT_READ_PERMISSION =
   'movement.read';
 
-export class MovementServiceException extends Error {
-  constructor(
-    message: string,
-    public readonly statusCode?: number,
-    public readonly details?: unknown,
-  ) {
-    super(message);
-    this.name = 'MovementServiceException';
-  }
-}
-
 function ensurePermission(
-  userPermissions: string[] | undefined,
+  permissions: string[] | undefined,
   permission: string,
 ) {
   if (
-    userPermissions &&
-    !userPermissions.includes(permission)
+    permissions &&
+    !permissions.includes(
+      permission,
+    )
   ) {
     throw new InsufficientPermissionException(
       permission,
@@ -46,128 +61,115 @@ function ensurePermission(
   }
 }
 
-function cleanQuery(query: MovementQuery) {
-  return Object.fromEntries(
-    Object.entries(query).filter(([, value]) => {
-      return (
-        value !== undefined &&
-        value !== null &&
-        value !== ''
-      );
-    }),
-  );
-}
-
 function throwMovementError(
   error: unknown,
   fallback: string,
-  permission?: string,
 ): never {
   if (isAxiosError(error)) {
-    const status = error.response?.status;
-    const rawMessage =
+    const message =
       error.response?.data?.message;
 
-    const message = Array.isArray(rawMessage)
-      ? rawMessage.join(', ')
-      : rawMessage ||
-      error.message ||
-      fallback;
-
     if (
-      status === 403 &&
-      permission
-    ) {
-      throw new InsufficientPermissionException(
-        permission,
+      Array.isArray(
         message,
+      )
+    ) {
+      throw new Error(
+        message.join(', '),
       );
     }
 
-    throw new MovementServiceException(
-      message,
-      status,
-      error.response?.data,
+    throw new Error(
+      typeof message ===
+        'string' &&
+        message
+        ? message
+        : error.message ||
+          fallback,
     );
   }
 
   if (
-    error instanceof
-    InsufficientPermissionException ||
-    error instanceof MovementServiceException
+    error instanceof Error
   ) {
     throw error;
   }
 
-  throw new MovementServiceException(
-    error instanceof Error
-      ? error.message
-      : fallback,
-  );
+  throw new Error(fallback);
 }
 
-function validateCreateMovement(
+function validateMovement(
   input: CreateMovementInput,
 ) {
-  if (!input.items.length) {
-    throw new MovementServiceException(
-      'Ajoutez au moins un article au mouvement.',
-      400,
+  if (
+    input.items.length < 1
+  ) {
+    throw new Error(
+      'Ajoutez au moins une ligne au mouvement.',
     );
   }
 
-  if (input.items.length > 100) {
-    throw new MovementServiceException(
-      'Un mouvement ne peut pas contenir plus de 100 lignes.',
-      400,
+  if (
+    input.items.length > 100
+  ) {
+    throw new Error(
+      'Un mouvement ne peut pas dépasser 100 lignes.',
     );
   }
 
-  const source =
-    input.sourceShelfId?.trim() || null;
-  const destination =
-    input.destinationShelfId?.trim() ||
-    null;
-
-  if (input.movementType === 'IN') {
-    if (source || !destination) {
-      throw new MovementServiceException(
-        'Une entrée nécessite uniquement un emplacement de destination.',
-        400,
-      );
-    }
-  }
-
-  if (input.movementType === 'OUT') {
-    if (!source || destination) {
-      throw new MovementServiceException(
-        'Une sortie nécessite uniquement un emplacement source.',
-        400,
+  if (
+    input.movementType ===
+    'IN'
+  ) {
+    if (
+      input.sourceShelfId ||
+      !input.destinationShelfId
+    ) {
+      throw new Error(
+        'Une entrée nécessite uniquement un emplacement destination.',
       );
     }
   }
 
   if (
-    input.movementType === 'TRANSFER'
+    input.movementType ===
+    'OUT'
   ) {
     if (
-      !source ||
-      !destination ||
-      source.toLowerCase() ===
-      destination.toLowerCase()
+      !input.sourceShelfId ||
+      input.destinationShelfId
     ) {
-      throw new MovementServiceException(
-        'Un transfert nécessite deux emplacements différents.',
-        400,
+      throw new Error(
+        'Une sortie nécessite uniquement un emplacement source.',
       );
     }
   }
 
-  for (const item of input.items) {
-    if (!item.equipmentId) {
-      throw new MovementServiceException(
-        'Chaque ligne doit contenir un article.',
-        400,
+  if (
+    input.movementType ===
+    'TRANSFER'
+  ) {
+    if (
+      !input.sourceShelfId ||
+      !input.destinationShelfId ||
+      input.sourceShelfId ===
+        input.destinationShelfId
+    ) {
+      throw new Error(
+        'Un transfert nécessite deux emplacements différents.',
+      );
+    }
+  }
+
+  for (
+    const item of
+    input.items
+  ) {
+    if (
+      !item.equipmentId
+    ) {
+      throw new Error(
+        'Article manquant dans une ligne.',
       );
     }
 
@@ -175,41 +177,27 @@ function validateCreateMovement(
       !Number.isInteger(
         item.movementQuantity,
       ) ||
-      item.movementQuantity <= 0
+      item.movementQuantity <=
+        0
     ) {
-      throw new MovementServiceException(
-        'La quantité de chaque ligne doit être un entier strictement positif.',
-        400,
+      throw new Error(
+        'La quantité doit être un entier strictement positif.',
       );
     }
 
     if (
       item.serialNumberId &&
-      item.movementQuantity !== 1
+      item.movementQuantity !==
+        1
     ) {
-      throw new MovementServiceException(
+      throw new Error(
         'Une ligne sérialisée doit avoir une quantité égale à 1.',
-        400,
       );
     }
   }
 }
 
 export class MovementService {
-  /**
-   * Canonical V3 create endpoint.
-   *
-   * One header:
-   * - one movementType
-   * - one source/destination route
-   *
-   * Many lines:
-   * - equipmentId
-   * - optional serialNumberId
-   * - movementQuantity
-   *
-   * POST /movements
-   */
   static async createMovement(
     client: AxiosInstance,
     input: CreateMovementInput,
@@ -220,7 +208,9 @@ export class MovementService {
       REQUIRED_MOVEMENT_CREATE_PERMISSION,
     );
 
-    validateCreateMovement(input);
+    validateMovement(
+      input,
+    );
 
     try {
       const response =
@@ -231,28 +221,25 @@ export class MovementService {
               input.movementType,
 
             sourceShelfId:
-              input.sourceShelfId?.trim() ||
+              input.sourceShelfId ??
               null,
 
             destinationShelfId:
-              input.destinationShelfId?.trim() ||
+              input.destinationShelfId ??
               null,
 
-            items: input.items.map(
-              (item) => ({
-                equipmentId:
-                  item.equipmentId,
-
-                serialNumberId:
-                  item.serialNumberId ??
-                  null,
-
-                movementQuantity:
-                  Number(
+            items:
+              input.items.map(
+                (item) => ({
+                  equipmentId:
+                    item.equipmentId,
+                  serialNumberId:
+                    item.serialNumberId ??
+                    null,
+                  movementQuantity:
                     item.movementQuantity,
-                  ),
-              }),
-            ),
+                }),
+              ),
           },
         );
 
@@ -260,17 +247,11 @@ export class MovementService {
     } catch (error: unknown) {
       throwMovementError(
         error,
-        'Erreur lors de la création du mouvement.',
-        REQUIRED_MOVEMENT_CREATE_PERMISSION,
+        'Impossible d’enregistrer le mouvement.',
       );
     }
   }
 
-  /**
-   * Canonical paginated movement history.
-   *
-   * GET /movements
-   */
   static async getMovements(
     client: AxiosInstance,
     query: MovementQuery = {},
@@ -282,30 +263,31 @@ export class MovementService {
     );
 
     try {
-      const normalizedQuery: MovementQuery =
-      {
-        page: query.page ?? 1,
-        limit: query.limit ?? 20,
-        movementType:
-          query.movementType,
-        equipmentId:
-          query.equipmentId,
-        serialNumberId:
-          query.serialNumberId,
-        sourceShelfId:
-          query.sourceShelfId,
-        destinationShelfId:
-          query.destinationShelfId,
-      };
-
       const response =
         await client.get<PaginatedMovementsResponse>(
           '/movements',
           {
-            params:
-              cleanQuery(
-                normalizedQuery,
-              ),
+            params: {
+              page:
+                query.page ?? 1,
+              limit:
+                query.limit ??
+                20,
+              movementType:
+                query.movementType,
+              origin:
+                query.origin,
+              inventoryId:
+                query.inventoryId,
+              equipmentId:
+                query.equipmentId,
+              serialNumberId:
+                query.serialNumberId,
+              sourceShelfId:
+                query.sourceShelfId,
+              destinationShelfId:
+                query.destinationShelfId,
+            },
           },
         );
 
@@ -313,15 +295,11 @@ export class MovementService {
     } catch (error: unknown) {
       throwMovementError(
         error,
-        'Erreur de chargement des mouvements.',
-        REQUIRED_MOVEMENT_READ_PERMISSION,
+        'Impossible de charger les mouvements.',
       );
     }
   }
 
-  /**
-   * GET /movements/:id
-   */
   static async getMovementById(
     client: AxiosInstance,
     movementId: string,
@@ -332,17 +310,10 @@ export class MovementService {
       REQUIRED_MOVEMENT_READ_PERMISSION,
     );
 
-    if (!movementId?.trim()) {
-      throw new MovementServiceException(
-        'Identifiant du mouvement requis.',
-        400,
-      );
-    }
-
     try {
       const response =
         await client.get<Movement>(
-          `/movements/${movementId.trim()}`,
+          `/movements/${movementId}`,
         );
 
       return response.data;
@@ -350,70 +321,121 @@ export class MovementService {
       throwMovementError(
         error,
         'Mouvement introuvable.',
-        REQUIRED_MOVEMENT_READ_PERMISSION,
       );
     }
   }
 
-  /**
-   * Compatibility helper used by EquipmentDetailModal.
-   *
-   * It now uses the canonical V3 route:
-   * GET /movements?equipmentId=<uuid>
-   */
-  static async getMovementsByEquipmentId(
+  static async getAllActiveEquipments(
     client: AxiosInstance,
-    equipmentId: string,
-    pagination: {
-      page?: number;
-      limit?: number;
-    } = {
-        page: 1,
-        limit: 100,
-      },
-    userPermissions?: string[],
-  ): Promise<Movement[]> {
-    if (!equipmentId?.trim()) {
-      throw new MovementServiceException(
-        'Identifiant article requis.',
-        400,
-      );
-    }
+  ): Promise<Equipment[]> {
+    const equipments:
+      Equipment[] = [];
 
-    const response =
-      await this.getMovements(
-        client,
-        {
-          page:
-            pagination.page ?? 1,
-          limit:
-            pagination.limit ?? 100,
-          equipmentId:
-            equipmentId.trim(),
-        },
-        userPermissions,
-      );
-
-    return response.movements;
-  }
-
-  /**
-   * Loads all movement headers containing an equipment.
-   *
-   * Kept for the existing EquipmentDetailModal.
-   * The backend limit is max 100.
-   */
-  static async getAllMovementsByEquipmentId(
-    client: AxiosInstance,
-    equipmentId: string,
-    userPermissions?: string[],
-  ): Promise<Movement[]> {
-    const movements: Movement[] = [];
     const limit = 100;
 
-    for (let page = 1; ; page += 1) {
-      const response =
-        await this.getMovements(
+    for (
+      let page = 1;
+      ;
+      page += 1
+    ) {
+      const result =
+        await EquipmentService.searchEquipments(
+          client,
+          {
+            page,
+            limit,
+            equipmentStatus:
+              'ACTIVE',
+          },
+        );
+
+      equipments.push(
+        ...result.equipments,
+      );
+
+      if (
+        page >=
+        result.totalPages
+      ) {
+        break;
+      }
+    }
+
+    return equipments;
+  }
+
+  static async getAllActiveShelves(
+    client: AxiosInstance,
+  ): Promise<Shelf[]> {
+    const shelves:
+      Shelf[] = [];
+
+    const limit = 100;
+
+    for (
+      let page = 1;
+      ;
+      page += 1
+    ) {
+      const result =
+        await ShelfService.getAllShelves(
+          client,
+          {
+            page,
+            limit,
+          },
+        );
+
+      shelves.push(
+        ...result.shelves.filter(
+          (shelf) =>
+            shelf.stock
+              ?.stockStatus
+              ?.stockStatusName ===
+            'ACTIVE',
+        ),
+      );
+
+      if (
+        page >=
+        result.totalPages
+      ) {
+        break;
+      }
+    }
+
+    return shelves;
+  }
+
+  static async getEquipmentAllocations(
+    client: AxiosInstance,
+    equipmentId: string,
+    userPermissions?: string[],
+  ): Promise<EquipmentWithShelvesResponse> {
+    return EquipmentService.getEquipmentShelves(
+      client,
+      equipmentId,
+      userPermissions,
+    );
+  }
+
+  static async getAllEquipmentSerials(
+    client: AxiosInstance,
+    equipmentId: string,
+    userPermissions?: string[],
+  ): Promise<SerialNumber[]> {
+    const serialNumbers:
+      SerialNumber[] = [];
+
+    const limit = 100;
+
+    for (
+      let page = 1;
+      ;
+      page += 1
+    ) {
+      const result =
+        await SerialNumberService.getSerialNumbers(
           client,
           {
             page,
@@ -423,33 +445,18 @@ export class MovementService {
           userPermissions,
         );
 
-      movements.push(
-        ...response.movements,
+      serialNumbers.push(
+        ...result.serialNumbers,
       );
 
       if (
         page >=
-        response.totalPages
+        result.totalPages
       ) {
         break;
       }
     }
 
-    return movements;
-  }
-
-  /**
-   * Pure frontend audit helper.
-   */
-  static calculateMovementAudit(
-    movements: Movement[],
-    currentStock: number,
-    equipmentId?: string,
-  ): MovementAuditSummary {
-    return calculateMovementAudit(
-      movements,
-      currentStock,
-      equipmentId,
-    );
+    return serialNumbers;
   }
 }

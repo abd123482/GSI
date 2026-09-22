@@ -1,11 +1,19 @@
-import type { AxiosInstance } from 'axios';
-import { isAxiosError } from 'axios';
+import type {
+  AxiosInstance,
+} from 'axios';
+import {
+  isAxiosError,
+} from 'axios';
 
 import {
   createDirectEquipmentSchema,
   updateEquipmentSchema,
 } from '@/schemas/equipment.schema';
-import { SerialNumberService } from '@/services/serial-number.service';
+
+import {
+  SerialNumberService,
+} from '@/services/serial-number.service';
+
 import {
   InsufficientPermissionException,
 } from './shelf.errors';
@@ -17,7 +25,7 @@ import type {
   EquipmentWithShelvesResponse,
   PaginatedEquipmentsResponse,
   PaginatedSerialNumbersResponse,
-  SerialNumber,
+  UpdateEquipmentInput,
 } from '@/types/equipment';
 
 export const REQUIRED_EQUIPMENT_READ_PERMISSION =
@@ -29,32 +37,18 @@ export const REQUIRED_EQUIPMENT_UPDATE_PERMISSION =
 export const REQUIRED_EQUIPMENT_DELETE_PERMISSION =
   'equipment.delete';
 
-export class EquipmentServiceException extends Error {
-  constructor(
-    message: string,
-    public readonly statusCode?: number,
-    public readonly details?: unknown,
-  ) {
-    super(message);
-    this.name = 'EquipmentServiceException';
-  }
-}
-
-export class EquipmentValidationException extends EquipmentServiceException {
-  constructor(
-    message: string,
-    public readonly fieldErrors?: Record<string, string[]>,
-  ) {
-    super(message, 400, fieldErrors);
-    this.name = 'EquipmentValidationException';
-  }
-}
-
 function ensurePermission(
-  permissions: string[] | undefined,
+  permissions:
+    | string[]
+    | undefined,
   permission: string,
 ) {
-  if (permissions && !permissions.includes(permission)) {
+  if (
+    permissions &&
+    !permissions.includes(
+      permission,
+    )
+  ) {
     throw new InsufficientPermissionException(
       permission,
       `Permission '${permission}' requise.`,
@@ -62,132 +56,120 @@ function ensurePermission(
   }
 }
 
-function apiMessage(error: unknown, fallback: string): string {
-  if (isAxiosError(error)) {
-    const raw = error.response?.data?.message;
-
-    if (Array.isArray(raw)) return raw.join(', ');
-    if (typeof raw === 'string' && raw) return raw;
-    if (error.message) return error.message;
-  }
-
-  return error instanceof Error && error.message
-    ? error.message
-    : fallback;
-}
-
-function throwEquipmentError(
+function equipmentError(
   error: unknown,
   fallback: string,
-  permission?: string,
 ): never {
   if (isAxiosError(error)) {
-    if (error.response?.status === 403 && permission) {
-      throw new InsufficientPermissionException(
-        permission,
-        apiMessage(error, `Permission '${permission}' requise.`),
+    const message =
+      error.response?.data
+        ?.message;
+
+    if (
+      Array.isArray(
+        message,
+      )
+    ) {
+      throw new Error(
+        message.join(', '),
       );
     }
 
-    throw new EquipmentServiceException(
-      apiMessage(error, fallback),
-      error.response?.status,
-      error.response?.data,
+    throw new Error(
+      typeof message ===
+        'string' &&
+        message
+        ? message
+        : error.message ||
+          fallback,
     );
   }
 
   if (
-    error instanceof InsufficientPermissionException ||
-    error instanceof EquipmentServiceException
+    error instanceof Error
   ) {
     throw error;
   }
 
-  throw new EquipmentServiceException(
-    error instanceof Error ? error.message : fallback,
-  );
+  throw new Error(fallback);
 }
 
 export class EquipmentService {
   static async getAllEquipments(
     client: AxiosInstance,
-    params?: EquipmentPaginationQuery,
+    params: EquipmentPaginationQuery = {},
   ): Promise<PaginatedEquipmentsResponse> {
     try {
-      const page = params?.page ?? 1;
-      const limit = params?.limit ?? 10;
-
       const response =
         await client.get<PaginatedEquipmentsResponse>(
           '/equipment',
           {
             params: {
-              page,
-              limit,
+              page:
+                params.page ?? 1,
+              limit:
+                params.limit ?? 20,
             },
           },
         );
 
       return response.data;
     } catch (error: unknown) {
-      throwEquipmentError(
+      equipmentError(
         error,
-        'Échec du chargement des articles.',
-        REQUIRED_EQUIPMENT_READ_PERMISSION,
+        'Impossible de charger les articles.',
       );
     }
   }
 
   static async searchEquipments(
     client: AxiosInstance,
-    name: string,
-    params?: EquipmentPaginationQuery,
+    query: EquipmentPaginationQuery,
   ): Promise<PaginatedEquipmentsResponse> {
     try {
-      const page = params?.page ?? 1;
-      const limit = params?.limit ?? 10;
-
       const response =
         await client.get<PaginatedEquipmentsResponse>(
           '/equipment/search',
           {
             params: {
-              equipmentName: name.trim(),
-              page,
-              limit,
+              page:
+                query.page ?? 1,
+              limit:
+                query.limit ?? 20,
+              equipmentName:
+                query.equipmentName,
+              hasSerialNumber:
+                query.hasSerialNumber,
+              equipmentStatus:
+                query.equipmentStatus,
             },
           },
         );
 
       return response.data;
     } catch (error: unknown) {
-      throwEquipmentError(
+      equipmentError(
         error,
-        'Échec de la recherche d’articles.',
-        REQUIRED_EQUIPMENT_READ_PERMISSION,
+        'Impossible de rechercher les articles.',
       );
     }
   }
 
-  /**
-   * Backend V3 returns the same lightweight equipment shape here:
-   * positive EquipmentShelfs + relation counts, but not every serial record.
-   */
   static async getEquipmentById(
     client: AxiosInstance,
     id: string,
   ): Promise<Equipment> {
     try {
-      const response = await client.get<Equipment>(
-        `/equipment/${id}`,
-      );
+      const response =
+        await client.get<Equipment>(
+          `/equipment/${id}`,
+        );
 
       return response.data;
     } catch (error: unknown) {
-      throwEquipmentError(
+      equipmentError(
         error,
-        `L’article '${id}' est introuvable ou inaccessible.`,
-        REQUIRED_EQUIPMENT_READ_PERMISSION,
+        'Article introuvable.',
       );
     }
   }
@@ -210,182 +192,40 @@ export class EquipmentService {
 
       return response.data;
     } catch (error: unknown) {
-      throwEquipmentError(
+      equipmentError(
         error,
-        'Échec de la récupération des emplacements.',
-        REQUIRED_EQUIPMENT_READ_PERMISSION,
+        'Impossible de charger les allocations de cet article.',
       );
     }
   }
 
-  /**
-   * Lazy paginated serial list for Equipment detail screens.
-   *
-   * GET /equipment/:id/serial-numbers
-   */
-  static async getEquipmentSerialNumbers(
+  static async getSerialNumbersByEquipmentId(
     client: AxiosInstance,
     id: string,
-    pagination: {
-      page?: number;
-      limit?: number;
-    } = {},
-    userPermissions?: string[],
+    page = 1,
+    limit = 20,
   ): Promise<PaginatedSerialNumbersResponse> {
-    ensurePermission(
-      userPermissions,
-      REQUIRED_EQUIPMENT_READ_PERMISSION,
-    );
-
     try {
       const response =
         await client.get<PaginatedSerialNumbersResponse>(
           `/equipment/${id}/serial-numbers`,
           {
             params: {
-              page: pagination.page ?? 1,
-              limit: pagination.limit ?? 20,
+              page,
+              limit,
             },
           },
         );
 
       return response.data;
     } catch (error: unknown) {
-      throwEquipmentError(
+      equipmentError(
         error,
-        'Échec du chargement des numéros de série.',
-        REQUIRED_EQUIPMENT_READ_PERMISSION,
+        'Impossible de charger les numéros de série.',
       );
     }
   }
 
-  /**
-   * V3 editable metadata only.
-   *
-   * PATCH /equipment/:id
-   *
-   * equipmentQuantity and hasSerialNumber are deliberately ignored even if
-   * an older caller still sends them.
-   */
-  static async updateEquipment(
-    client: AxiosInstance,
-    id: string,
-    input: {
-      equipmentName?: string;
-      minEquipmentQuantity?: number;
-
-      // Temporary caller compatibility. Never sent to backend.
-      equipmentQuantity?: number;
-      hasSerialNumber?: boolean;
-    },
-    userPermissions?: string[],
-  ): Promise<Equipment> {
-    ensurePermission(
-      userPermissions,
-      REQUIRED_EQUIPMENT_UPDATE_PERMISSION,
-    );
-
-    const validation = updateEquipmentSchema.safeParse({
-      equipmentName: input.equipmentName,
-      minEquipmentQuantity: input.minEquipmentQuantity,
-    });
-
-    if (!validation.success) {
-      const fieldErrors: Record<string, string[]> = {};
-
-      for (const issue of validation.error.issues) {
-        const field = issue.path.join('.') || 'form';
-        (fieldErrors[field] ??= []).push(issue.message);
-      }
-
-      throw new EquipmentValidationException(
-        'Données de modification invalides.',
-        fieldErrors,
-      );
-    }
-
-    try {
-      const response = await client.patch<Equipment>(
-        `/equipment/${id}`,
-        validation.data,
-      );
-
-      return response.data;
-    } catch (error: unknown) {
-      throwEquipmentError(
-        error,
-        'Erreur lors de la mise à jour de l’article.',
-        REQUIRED_EQUIPMENT_UPDATE_PERMISSION,
-      );
-    }
-  }
-
-  /**
-   * Backend refuses deletion when movement history, serial identities,
-   * or positive allocation prevents a safe delete.
-   */
-  static async deleteEquipment(
-    client: AxiosInstance,
-    id: string,
-    userPermissions?: string[],
-  ): Promise<void> {
-    ensurePermission(
-      userPermissions,
-      REQUIRED_EQUIPMENT_DELETE_PERMISSION,
-    );
-
-    try {
-      await client.delete(`/equipment/${id}`);
-    } catch (error: unknown) {
-      throwEquipmentError(
-        error,
-        'Erreur lors de la suppression de l’article.',
-        REQUIRED_EQUIPMENT_DELETE_PERMISSION,
-      );
-    }
-  }
-
-  /**
-   * Temporary compatibility wrappers for existing Equipment UI.
-   * Canonical serial API is owned by SerialNumberService.
-   */
-  static async updateSerialNumber(
-    client: AxiosInstance,
-    id: string,
-    input: {
-      serialNumberCode?: string;
-      serialNumberStatus?: string;
-    },
-    userPermissions?: string[],
-  ): Promise<SerialNumber> {
-    return SerialNumberService.updateSerialNumber(
-      client,
-      id,
-      input,
-      userPermissions,
-    );
-  }
-
-  static async deleteSerialNumber(
-    client: AxiosInstance,
-    id: string,
-    userPermissions?: string[],
-  ): Promise<void> {
-    await SerialNumberService.deleteSerialNumber(
-      client,
-      id,
-      userPermissions,
-    );
-  }
-
-  /**
-   * Create equipment metadata.
-   *
-   * Backend always starts equipmentQuantity at 0.
-   *
-   * Optional serial codes are created as identities in a second request.
-   * No shelfId is sent. Physical location comes later through Movement IN.
-   */
   static async createEquipmentDirect(
     client: AxiosInstance,
     input: CreateEquipmentDirectInput,
@@ -396,98 +236,166 @@ export class EquipmentService {
       REQUIRED_EQUIPMENT_CREATE_PERMISSION,
     );
 
-    const validation = createDirectEquipmentSchema.safeParse({
-      equipmentName: input.equipmentName,
-      hasSerialNumber: input.hasSerialNumber,
-      minEquipmentQuantity:
-        input.minEquipmentQuantity ?? 0,
-      serialNumbers: input.serialNumbers ?? [],
-    });
-
-    if (!validation.success) {
-      const fieldErrors: Record<string, string[]> = {};
-      const messages: string[] = [];
-
-      for (const issue of validation.error.issues) {
-        const field = issue.path.join('.') || 'form';
-        (fieldErrors[field] ??= []).push(issue.message);
-        messages.push(issue.message);
-      }
-
-      throw new EquipmentValidationException(
-        messages.length
-          ? messages.join(', ')
-          : 'Données d’article invalides.',
-        fieldErrors,
-      );
-    }
-
-    const data = validation.data;
+    const validated =
+      createDirectEquipmentSchema.parse({
+        equipmentName:
+          input.equipmentName,
+        hasSerialNumber:
+          input.hasSerialNumber,
+        minEquipmentQuantity:
+          input.minEquipmentQuantity ??
+          0,
+        equipmentStatus:
+          input.equipmentStatus ??
+          'ACTIVE',
+        serialNumbers:
+          input.serialNumbers ??
+          [],
+      });
 
     try {
-      const equipmentResponse =
-        await client.post<Equipment>('/equipment', {
-          equipmentName: data.equipmentName,
-          hasSerialNumber: data.hasSerialNumber,
-          minEquipmentQuantity:
-            data.minEquipmentQuantity,
-        });
+      const response =
+        await client.post<Equipment>(
+          '/equipment',
+          {
+            equipmentName:
+              validated.equipmentName,
+            hasSerialNumber:
+              validated.hasSerialNumber,
+            minEquipmentQuantity:
+              validated.minEquipmentQuantity,
+            equipmentStatus:
+              validated.equipmentStatus,
+          },
+        );
 
-      const created = equipmentResponse.data;
+      const created =
+        response.data;
 
       if (
-        data.hasSerialNumber &&
-        data.serialNumbers.length > 0
+        validated.hasSerialNumber &&
+        validated.serialNumbers.length
       ) {
-        try {
-          await SerialNumberService.createBatchSerialNumbers(
-            client,
-            {
-              equipmentId: created.equipmentId,
-              serialNumberCodes: data.serialNumbers.map((code) =>
-                code.trim().toUpperCase(),
-              ),
-              serialNumberStatus: 'AVAILABLE',
-            },
-            userPermissions,
-          );
-        } catch (serialError: unknown) {
-          /*
-           * The metadata record already exists at this point.
-           * Report this explicitly so the UI/user does not assume the
-           * entire operation rolled back and accidentally recreate it.
-           */
-          throw new EquipmentServiceException(
-            `L’article "${created.equipmentName ?? created.equipmentId}" a été créé, mais les numéros de série n’ont pas tous pu être enregistrés : ${apiMessage(
-              serialError,
-              'erreur de création des numéros de série',
-            )}`,
-            409,
-            {
-              equipmentId: created.equipmentId,
-              equipmentCreated: true,
-            },
-          );
-        }
+        await SerialNumberService.createBatchSerialNumbers(
+          client,
+          {
+            equipmentId:
+              created.equipmentId,
+            serialNumberCodes:
+              validated.serialNumbers,
+            serialNumberStatus:
+              'AVAILABLE',
+          },
+          userPermissions,
+        );
       }
 
-      return await this.getEquipmentById(
-        client,
-        created.equipmentId,
-      );
+      return created;
     } catch (error: unknown) {
-      if (
-        error instanceof EquipmentServiceException ||
-        error instanceof InsufficientPermissionException
-      ) {
-        throw error;
-      }
-
-      throwEquipmentError(
+      equipmentError(
         error,
-        'Erreur lors de la création de l’article.',
-        REQUIRED_EQUIPMENT_CREATE_PERMISSION,
+        'Impossible de créer l’article.',
       );
     }
+  }
+
+  static async updateEquipment(
+    client: AxiosInstance,
+    id: string,
+    input: UpdateEquipmentInput,
+    userPermissions?: string[],
+  ): Promise<Equipment> {
+    ensurePermission(
+      userPermissions,
+      REQUIRED_EQUIPMENT_UPDATE_PERMISSION,
+    );
+
+    const validated =
+      updateEquipmentSchema.parse(
+        input,
+      );
+
+    try {
+      const response =
+        await client.patch<Equipment>(
+          `/equipment/${id}`,
+          validated,
+        );
+
+      return response.data;
+    } catch (error: unknown) {
+      equipmentError(
+        error,
+        'Impossible de modifier l’article.',
+      );
+    }
+  }
+
+  static async deleteEquipment(
+    client: AxiosInstance,
+    id: string,
+    userPermissions?: string[],
+  ): Promise<Equipment> {
+    ensurePermission(
+      userPermissions,
+      REQUIRED_EQUIPMENT_DELETE_PERMISSION,
+    );
+
+    try {
+      const response =
+        await client.delete<Equipment>(
+          `/equipment/${id}`,
+        );
+
+      return response.data;
+    } catch (error: unknown) {
+      equipmentError(
+        error,
+        'Impossible de supprimer l’article.',
+      );
+    }
+  }
+
+  /**
+   * Compatibility wrappers retained for old imports.
+   * Serial editing sends status only.
+   */
+  static async updateSerialNumber(
+    client: AxiosInstance,
+    id: string,
+    input: {
+      serialNumberStatus?: string;
+    },
+    userPermissions?: string[],
+  ) {
+    if (
+      !input.serialNumberStatus
+    ) {
+      throw new Error(
+        'Le statut du numéro de série est requis.',
+      );
+    }
+
+    return SerialNumberService.updateSerialNumber(
+      client,
+      id,
+      {
+        serialNumberStatus:
+          input.serialNumberStatus,
+      },
+      userPermissions,
+    );
+  }
+
+  static async deleteSerialNumber(
+    client: AxiosInstance,
+    id: string,
+    userPermissions?: string[],
+  ) {
+    return SerialNumberService.deleteSerialNumber(
+      client,
+      id,
+      userPermissions,
+    );
   }
 }

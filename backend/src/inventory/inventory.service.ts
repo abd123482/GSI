@@ -1,44 +1,178 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
-import { Prisma } from '../generated/prisma/client.js';
 import {
-  PaginationDTO,
-  CreateInventoryDTO,
-  SubmitTaskDTO,
-  SaveDraftDTO,
-  ResolveIssueDTO,
-  AdjudicateDTO,
-  AssignThirdUserDTO
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+
+import type { Prisma } from '../generated/prisma/client.js';
+import { PrismaService } from '../prisma/prisma.service.js';
+
+import {
+  type AdjudicateDTO,
+  type CreateInventoryDTO,
+  createInventorySchema,
+  type PaginationDTO,
+  paginationSchema,
+  type ResolveIssueDTO,
+  resolveIssueSchema,
+  type SaveDraftDTO,
+  saveDraftSchema,
+  type SubmitTaskDTO,
+  submitTaskSchema,
 } from './dto/index.js';
+
+type AttemptPurpose =
+  | 'PRIMARY_1'
+  | 'PRIMARY_2'
+  | 'FINAL_RECOUNT';
+
+type UnitReconciliationStatus =
+  | 'PENDING'
+  | 'PRIMARY_MATCH'
+  | 'THIRD_REQUIRED'
+  | 'THIRD_RESOLVED';
+
+type CanonicalStandardValue = {
+  equipmentId: string;
+  shelfId: string;
+  quantity: number;
+};
+
+type CanonicalSerialValue = {
+  serialCode: string;
+  serialNumberId: string | null;
+  equipmentId: string;
+  shelfId: string | null;
+};
+
+type CanonicalAttempt = {
+  standard: Map<string, CanonicalStandardValue>;
+  serials: Map<string, CanonicalSerialValue>;
+  unknown: Set<string>;
+};
+
+type ReportCell = {
+  quantity: number;
+  serialNumberCode: string | null;
+  serialNumberId: string | null;
+  equipmentId: string | null;
+  equipmentName: string | null;
+  shelfId: string | null;
+  shelfName: string | null;
+  isUnexpected: boolean;
+  notes: string[];
+};
+
+const RECONCILED_STATUSES: UnitReconciliationStatus[] = [
+  'PRIMARY_MATCH',
+  'THIRD_RESOLVED',
+];
+
+const NON_LOCKING_INVENTORY_STATUSES = [
+  'DRAFT',
+  'FINALIZED',
+  'CANCELLED',
+] as const;
+
+const SQL_INT_MAX = 2_147_483_647;
 
 @Injectable()
 export class InventoryService {
   private readonly logger = new Logger(InventoryService.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+  ) {}
 
-  /**
-   * Retrieves all inventories with pagination and optional user filtering
-   */
-  async getInventories(pagination: PaginationDTO, filterUserId?: string) {
-    const page = pagination?.page ? Number(pagination.page) : 1;
-    const limit = pagination?.limit ? Number(pagination.limit) : 10;
+  // --------------------------------------------------------------------------
+  // Basic CRUD
+  // --------------------------------------------------------------------------
+
+  async getInventories(
+    pagination: PaginationDTO,
+    filterUserId?: string,
+  ) {
+    const { page, limit } = paginationSchema.parse(
+      pagination ?? {},
+    );
+
     const skip = (page - 1) * limit;
 
-    const whereClause: Prisma.InventoryWhereInput = filterUserId ? {
-      Inventory_User: {
-        some: {
-          userId: filterUserId
-        }
-      }
-    } : {};
+    const where: Prisma.InventoryWhereInput =
+      filterUserId
+        ? {
+            Inventory_User: {
+              some: {
+                userId: filterUserId,
+              },
+            },
+          }
+        : {};
 
-    const [inventories, totalInventories] = await Promise.all([
-      this.prisma.inventory.findMany({
-        where: whereClause,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
+    const [inventories, totalInventories] =
+      await Promise.all([
+        this.prisma.inventory.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: [
+            { createdAt: 'desc' },
+            { inventoryId: 'desc' },
+          ],
+          include: {
+            Inventory_User: {
+              include: {
+                User: {
+                  select: {
+                    userId: true,
+                    userName: true,
+                    userEmail: true,
+                  },
+                },
+              },
+              orderBy: { sequence: 'asc' },
+            },
+            workUnits: {
+              select: {
+                unitId: true,
+                unitOrder: true,
+                status: true,
+                equipmentId: true,
+                shelfId: true,
+                reconciliationStatus: true,
+                acceptedAttemptId: true,
+                reconciledAt: true,
+              },
+              orderBy: { unitOrder: 'asc' },
+            },
+            _count: {
+              select: {
+                investigationIssues: true,
+              },
+            },
+          },
+        }),
+        this.prisma.inventory.count({ where }),
+      ]);
+
+    return {
+      inventories,
+      totalInventories,
+      totalPages:
+        Math.ceil(totalInventories / limit) || 1,
+      currentPage: page,
+      limit,
+    };
+  }
+
+  async getInventoryById(
+    inventoryId: string,
+  ) {
+    const inventory =
+      await this.prisma.inventory.findUnique({
+        where: { inventoryId },
         include: {
           Inventory_User: {
             include: {
@@ -53,469 +187,900 @@ export class InventoryService {
             orderBy: { sequence: 'asc' },
           },
           workUnits: {
-            select: {
-              unitId: true,
-              unitOrder: true,
-              status: true,
-              equipmentId: true,
-              shelfId: true,
+            include: {
+              acceptedAttempt: {
+                select: {
+                  attemptId: true,
+                  sequence: true,
+                  purpose: true,
+                  status: true,
+                  submittedAt: true,
+                  assignedUserId: true,
+                },
+              },
+              attempts: {
+                include: {
+                  assignedUser: {
+                    select: {
+                      userId: true,
+                      userName: true,
+                      userEmail: true,
+                    },
+                  },
+                },
+                orderBy: { sequence: 'asc' },
+              },
             },
             orderBy: { unitOrder: 'asc' },
           },
-          _count: {
-            select: {
-              investigationIssues: true,
-            },
-          },
-        },
-      }),
-      this.prisma.inventory.count({ where: whereClause }),
-    ]);
-
-    return {
-      inventories,
-      totalInventories,
-      totalPages: Math.ceil(totalInventories / limit) || 1,
-      currentPage: page,
-      limit,
-    };
-  }
-
-  /**
-   * Retrieves a specific inventory by ID with participants and work units
-   */
-  async getInventoryById(inventoryId: string) {
-    const inventory = await this.prisma.inventory.findUnique({
-      where: { inventoryId },
-      include: {
-        Inventory_User: {
-          include: {
-            User: {
-              select: {
-                userId: true,
-                userName: true,
-                userEmail: true,
-              },
-            },
-          },
-          orderBy: { sequence: 'asc' },
-        },
-        workUnits: {
-          include: {
-            attempts: {
-              include: {
-                assignedUser: {
-                  select: {
-                    userId: true,
-                    userName: true,
-                    userEmail: true,
-                  },
+          investigationIssues: {
+            include: {
+              equipment: {
+                select: {
+                  equipmentId: true,
+                  equipmentName: true,
                 },
               },
-              orderBy: { sequence: 'asc' },
+              serialNumber: {
+                select: {
+                  serialNumberId: true,
+                  serialNumberCode: true,
+                },
+              },
+              expectedShelf: {
+                select: {
+                  shelfId: true,
+                  shelfName: true,
+                },
+              },
+              finalObservedShelf: {
+                select: {
+                  shelfId: true,
+                  shelfName: true,
+                },
+              },
+              resolutionShelf: {
+                select: {
+                  shelfId: true,
+                  shelfName: true,
+                },
+              },
+              resolvedByUser: {
+                select: {
+                  userId: true,
+                  userName: true,
+                },
+              },
             },
           },
-          orderBy: { unitOrder: 'asc' },
         },
-        investigationIssues: {
-          include: {
-            equipment: { select: { equipmentId: true, equipmentName: true } },
-            serialNumber: { select: { serialNumberId: true, serialNumberCode: true } },
-            expectedShelf: { select: { shelfId: true, shelfName: true } },
-            finalObservedShelf: { select: { shelfId: true, shelfName: true } },
-            resolutionShelf: { select: { shelfId: true, shelfName: true } },
-            resolvedByUser: { select: { userId: true, userName: true } },
-          },
-        },
-      },
-    });
-    if (!inventory) throw new NotFoundException('Inventaire introuvable');
+      });
+
+    if (!inventory) {
+      throw new NotFoundException(
+        'Inventaire introuvable',
+      );
+    }
+
     return inventory;
   }
 
-  /**
-   * Creates a new inventory.
-   * For V2 (default policyVersion = 2):
-   * Requires EXACTLY 3 distinct users in an explicit order:
-   *   Sequence 0 -> PRIMARY_COUNTER_1 (Controller 1)
-   *   Sequence 1 -> PRIMARY_COUNTER_2 (Controller 2)
-   *   Sequence 2 -> FINAL_CONTROLLER   (Final Controller, preassigned, initially inactive)
-   */
-  async createInventory(data: CreateInventoryDTO, creatorId: string) {
-    const policyVersion = data.policyVersion ?? 2;
+  async createInventory(
+    dto: CreateInventoryDTO,
+    creatorId: string,
+  ) {
+    const data = createInventorySchema.parse(dto);
+    const policyVersion = data.policyVersion ?? 3;
     const users = data.users;
 
-    if (policyVersion >= 2) {
-      if (!users || users.length !== 3) {
-        throw new BadRequestException('L\'architecture V2 requiert exactement 3 participants distincts ordonnés.');
-      }
-      const distinctUsers = new Set(users.map((u) => u.userId));
-      if (distinctUsers.size !== 3) {
-        throw new BadRequestException('Les 3 participants doivent être des utilisateurs différents.');
-      }
-    } else {
-      if (!users || users.length < 2) {
-        throw new BadRequestException('Un inventaire hérité doit comporter au moins 2 participants distincts.');
-      }
-      const distinctUsers = new Set(users.map((u) => u.userId));
-      if (distinctUsers.size < 2) {
-        throw new BadRequestException('Les participants doivent être des utilisateurs différents.');
-      }
+    if (
+      policyVersion >= 2 &&
+      users.length !== 3
+    ) {
+      throw new BadRequestException(
+        "L'inventaire courant requiert exactement trois contrôleurs distincts.",
+      );
     }
 
-    if (data.typeInventory === 'ByEquipment' && (!data.equipmentIds || data.equipmentIds.length === 0)) {
-      throw new BadRequestException('Veuillez sélectionner au moins un article.');
-    }
-    if (data.typeInventory === 'ByShelf' && (!data.shelfIds || data.shelfIds.length === 0)) {
-      throw new BadRequestException('Veuillez sélectionner au moins un emplacement.');
-    }
+    const equipmentIds = [
+      ...new Set(
+        (data.equipmentIds ?? []).map((id) =>
+          id.trim(),
+        ),
+      ),
+    ];
+
+    const shelfIds = [
+      ...new Set(
+        (data.shelfIds ?? []).map((id) =>
+          id.trim(),
+        ),
+      ),
+    ];
 
     return this.prisma.$transaction(async (tx) => {
-      // 1. Create inventory master record
-      const inventory = await tx.inventory.create({
-        data: {
-          title: data.title,
-          typeInventory: data.typeInventory,
-          status: 'DRAFT',
-          policyVersion,
-          creatorId: creatorId || null,
-          equipmentScopeIds: data.equipmentIds ? JSON.stringify(data.equipmentIds) : null,
-          shelfScopeIds: data.shelfIds ? JSON.stringify(data.shelfIds) : null,
+      const userRecords = await tx.user.findMany({
+        where: {
+          userId: {
+            in: users.map((item) => item.userId),
+          },
+        },
+        include: {
+          role: true,
         },
       });
 
-      // 2. Fetch user details to capture role snapshot
-      const userRecords = await tx.user.findMany({
-        where: { userId: { in: users.map((u) => u.userId) } },
-        include: { role: true },
-      });
-      const userMap = new Map(userRecords.map((u) => [u.userId, u]));
+      if (
+        userRecords.length !== users.length
+      ) {
+        const found = new Set(
+          userRecords.map((user) => user.userId),
+        );
 
-      // 3. Create assigned Inventory_User entries
-      const assignedParticipants = users.map((u, index) => {
-        let resp = u.responsibility;
-        if (policyVersion >= 2) {
-          if (index === 0) resp = 'PRIMARY_COUNTER_1';
-          else if (index === 1) resp = 'PRIMARY_COUNTER_2';
-          else resp = 'FINAL_CONTROLLER';
-        } else {
-          resp = resp || (index === 0 ? 'COUNT' : 'ADJUDICATE');
+        const missing = users
+          .map((item) => item.userId)
+          .filter((id) => !found.has(id));
+
+        throw new NotFoundException(
+          `Utilisateur(s) introuvable(s): ${missing.join(', ')}`,
+        );
+      }
+
+      if (
+        data.typeInventory === 'ByEquipment'
+      ) {
+        const equipmentCount =
+          await tx.equipment.count({
+            where: {
+              equipmentId: {
+                in: equipmentIds,
+              },
+            },
+          });
+
+        if (
+          equipmentCount !== equipmentIds.length
+        ) {
+          throw new NotFoundException(
+            'Un ou plusieurs articles du périmètre sont introuvables.',
+          );
         }
+      }
 
-        const userRec = userMap.get(u.userId);
-        return {
-          inventoryId: inventory.inventoryId,
-          userId: u.userId,
-          sequence: index,
-          responsibility: resp,
-          roleSnapshot: userRec?.role?.roleName ?? 'USER',
-        };
-      });
+      if (
+        data.typeInventory === 'ByShelf'
+      ) {
+        const shelfCount =
+          await tx.shelf.count({
+            where: {
+              shelfId: {
+                in: shelfIds,
+              },
+            },
+          });
+
+        if (
+          shelfCount !== shelfIds.length
+        ) {
+          throw new NotFoundException(
+            'Un ou plusieurs emplacements du périmètre sont introuvables.',
+          );
+        }
+      }
+
+      const inventory =
+        await tx.inventory.create({
+          data: {
+            title: data.title,
+            typeInventory: data.typeInventory,
+            status: 'DRAFT',
+            policyVersion,
+            creatorId: creatorId || null,
+            equipmentScopeIds:
+              equipmentIds.length
+                ? JSON.stringify(equipmentIds)
+                : null,
+            shelfScopeIds:
+              shelfIds.length
+                ? JSON.stringify(shelfIds)
+                : null,
+            thirdCountRequired: false,
+            finalResultSource: null,
+          },
+        });
+
+      const userMap = new Map(
+        userRecords.map((user) => [
+          user.userId,
+          user,
+        ]),
+      );
+
+      const participants = users.map(
+        (item, index) => {
+          const responsibility =
+            index === 0
+              ? 'PRIMARY_COUNTER_1'
+              : index === 1
+                ? 'PRIMARY_COUNTER_2'
+                : 'FINAL_CONTROLLER';
+
+          const user = userMap.get(item.userId);
+
+          return {
+            inventoryId: inventory.inventoryId,
+            userId: item.userId,
+            sequence: index,
+            responsibility:
+              policyVersion >= 2
+                ? responsibility
+                : item.responsibility ??
+                  responsibility,
+            roleSnapshot:
+              user?.role?.roleName ??
+              'USER',
+          };
+        },
+      );
 
       await tx.inventory_User.createMany({
-        data: assignedParticipants,
+        data: participants,
       });
 
-      this.logger.log(`Created inventory ${inventory.inventoryId} (V${policyVersion}) with 3 participants.`);
       return inventory;
     });
   }
 
-  /**
-   * Launches the inventory workflow:
-   * 1. Freezes reference stock quantities and serial number locations as LIVE_AT_LAUNCH snapshots.
-   * 2. Creates ordered work units (unitOrder: 0, 1, ..., n-1).
-   * 3. Creates count attempts:
-   *    - Controller 1 (seq 0): U0 is AVAILABLE, U1..Un-1 are BLOCKED.
-   *    - Controller 2 (seq 1): all units are BLOCKED.
-   *    - Final Controller (seq 2): all units are BLOCKED.
-   * 4. Transitions status to IN_PROGRESS.
-   * 5. Sends initial notification to Controller 1.
-   */
-  async launchInventory(inventoryId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const inventory = await tx.inventory.findUnique({
-        where: { inventoryId },
-        include: {
-          Inventory_User: {
-            orderBy: { sequence: 'asc' },
-          },
-        },
-      });
+  // --------------------------------------------------------------------------
+  // Shared movement / inventory race locks
+  // --------------------------------------------------------------------------
 
-      if (!inventory) throw new NotFoundException('Inventaire introuvable');
-      if (inventory.status !== 'DRAFT') throw new BadRequestException('L\'inventaire n\'est pas au statut BROUILLON (DRAFT)');
+  private async acquireResourceLocks(
+    tx: Prisma.TransactionClient,
+    equipmentIds: string[],
+    shelfIds: string[],
+    serialIds: string[] = [],
+  ) {
+    const resources = [
+      ...equipmentIds.map(
+        (id) =>
+          `SOMIPHARM:EQUIPMENT:${id.toLowerCase()}`,
+      ),
+      ...shelfIds.map(
+        (id) =>
+          `SOMIPHARM:SHELF:${id.toLowerCase()}`,
+      ),
+      ...serialIds.map(
+        (id) =>
+          `SOMIPHARM:SERIAL:${id.toLowerCase()}`,
+      ),
+    ]
+      .filter(
+        (value, index, array) =>
+          array.indexOf(value) === index,
+      )
+      .sort();
 
-      const participants = inventory.Inventory_User;
-      if ((inventory.policyVersion ?? 1) >= 2) {
-        if (participants.length !== 3) {
-          throw new BadRequestException('L\'inventaire V2 doit avoir exactement 3 participants pour être lancé.');
-        }
-      } else {
-        if (participants.length < 2) {
-          throw new BadRequestException('L\'inventaire requiert au moins 2 participants.');
-        }
-      }
+    for (const resource of resources) {
+      const result = await tx.$queryRaw<
+        Array<{ lockResult: number }>
+      >`
+        DECLARE @lockResult int;
 
-      const controller1 = participants[0];
-      const controller2 = participants[1];
-      const controller3 = participants.length > 2 ? participants[2] : null;
+        EXEC @lockResult =
+          sys.sp_getapplock
+            @Resource = ${resource},
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
 
-      const equipmentIds: string[] = inventory.equipmentScopeIds ? JSON.parse(inventory.equipmentScopeIds) : [];
-      const shelfIds: string[] = inventory.shelfScopeIds ? JSON.parse(inventory.shelfScopeIds) : [];
+        SELECT @lockResult AS lockResult;
+      `;
 
-      const workUnitIds: string[] = [];
+      const lockResult = Number(
+        result[0]?.lockResult,
+      );
 
-      // 1. Create Work Units with stable, deterministic unitOrder
-      if (inventory.typeInventory === 'ByEquipment' && equipmentIds.length > 0) {
-        for (let idx = 0; idx < equipmentIds.length; idx++) {
-          const eqId = equipmentIds[idx];
-          const unit = await tx.inventoryWorkUnit.create({
-            data: {
-              inventoryId,
-              equipmentId: eqId,
-              unitOrder: idx,
-              status: 'DRAFT',
-            },
-          });
-          workUnitIds.push(unit.unitId);
-
-          // Freeze live quantity snapshot for this equipment
-          const stockRows = await tx.equipmentShelfs.findMany({
-            where: { equipmentId: eqId },
-          });
-          if (stockRows.length > 0) {
-            await tx.inventory_Equipment_Shelf_Snapshot.createMany({
-              data: stockRows.map((s) => ({
-                inventoryId,
-                equipmentId: s.equipmentId!,
-                shelfId: s.shelfId!,
-                phase: 'LIVE_AT_LAUNCH',
-                quantity: s.equipmentQuantity || 0,
-                provenance: 'LIVE_EQUIPMENT_SHELFS',
-              })),
-            });
-          }
-
-          // Freeze live serial numbers snapshot for serialized equipment
-          const serialRows = tx.serialNumber?.findMany ? await tx.serialNumber.findMany({
-            where: { equipmentId: eqId },
-          }) : [];
-          if (serialRows.length > 0 && tx.inventory_SerialNumber_Snapshot?.createMany) {
-            await tx.inventory_SerialNumber_Snapshot.createMany({
-              data: serialRows.map((sn: any) => ({
-                inventoryId,
-                equipmentId: eqId,
-                shelfId: sn.shelfId,
-                serialNumberId: sn.serialNumberId,
-                serialNumberCode: sn.serialNumberCode || '',
-                serialNumberStatus: sn.serialNumberStatus,
-                phase: 'LIVE_AT_LAUNCH',
-                provenance: 'LIVE_SERIAL_NUMBERS',
-              })),
-            });
-          }
-        }
-      } else if (inventory.typeInventory === 'ByShelf' && shelfIds.length > 0) {
-        for (let idx = 0; idx < shelfIds.length; idx++) {
-          const shId = shelfIds[idx];
-          const unit = await tx.inventoryWorkUnit.create({
-            data: {
-              inventoryId,
-              shelfId: shId,
-              unitOrder: idx,
-              status: 'DRAFT',
-            },
-          });
-          workUnitIds.push(unit.unitId);
-
-          // Freeze live quantity snapshot for this shelf
-          const stockRows = await tx.equipmentShelfs.findMany({
-            where: { shelfId: shId },
-          });
-          if (stockRows.length > 0) {
-            await tx.inventory_Equipment_Shelf_Snapshot.createMany({
-              data: stockRows.map((s) => ({
-                inventoryId,
-                equipmentId: s.equipmentId!,
-                shelfId: s.shelfId!,
-                phase: 'LIVE_AT_LAUNCH',
-                quantity: s.equipmentQuantity || 0,
-                provenance: 'LIVE_EQUIPMENT_SHELFS',
-              })),
-            });
-          }
-
-          // Freeze live serial numbers snapshot for serialized items currently on this shelf
-          const serialRows = tx.serialNumber?.findMany ? await tx.serialNumber.findMany({
-            where: { shelfId: shId },
-          }) : [];
-          if (serialRows.length > 0 && tx.inventory_SerialNumber_Snapshot?.createMany) {
-            await tx.inventory_SerialNumber_Snapshot.createMany({
-              data: serialRows.map((sn: any) => ({
-                inventoryId,
-                equipmentId: sn.equipmentId!,
-                shelfId: shId,
-                serialNumberId: sn.serialNumberId,
-                serialNumberCode: sn.serialNumberCode || '',
-                serialNumberStatus: sn.serialNumberStatus,
-                phase: 'LIVE_AT_LAUNCH',
-                provenance: 'LIVE_SERIAL_NUMBERS',
-              })),
-            });
-          }
-        }
-      }
-
-      // 2. Create attempts for all controllers respecting strict unit pipeline
-      let firstC1AttemptId: string | undefined;
-
-      for (let unitIdx = 0; unitIdx < workUnitIds.length; unitIdx++) {
-        const uId = workUnitIds[unitIdx];
-
-        // Controller 1: Unit 0 is AVAILABLE, Units 1..n-1 are BLOCKED
-        const c1Attempt = await tx.inventoryCountAttempt.create({
-          data: {
-            unitId: uId,
-            assignedUserId: controller1.userId,
-            sequence: 0,
-            purpose: 'PRIMARY_1',
-            status: unitIdx === 0 ? 'AVAILABLE' : 'BLOCKED',
-          },
-        });
-        if (unitIdx === 0) {
-          firstC1AttemptId = c1Attempt.attemptId;
-        }
-
-        // Controller 2: All units initially BLOCKED
-        await tx.inventoryCountAttempt.create({
-          data: {
-            unitId: uId,
-            assignedUserId: controller2.userId,
-            sequence: 1,
-            purpose: 'PRIMARY_2',
-            status: 'BLOCKED',
-          },
-        });
-
-        // Controller 3 (FINAL_RECOUNT) attempts are intentionally NOT created at launch.
-        // In accordance with blind counting and policy requirements, Controller 3 tasks
-        // are only created dynamically if a discrepancy between C1 and C2 is detected during primary reconciliation.
-      }
-
-      // 3. Transition inventory to IN_PROGRESS
-      await tx.inventory.update({
-        where: { inventoryId },
-        data: {
-          status: 'IN_PROGRESS',
-          launchedAt: new Date(),
-        },
-      });
-
-      // 4. Send notification to Controller 1
-      await tx.notification.create({
-        data: {
-          recipientId: controller1.userId,
-          eventType: 'INVENTORY_TASK_AVAILABLE',
-          payload: JSON.stringify({
-            inventoryId,
-            taskId: firstC1AttemptId,
-            title: inventory.title,
-            message: `L'inventaire "${inventory.title}" a été lancé. La première tâche de comptage vous est attribuée.`,
-            unitOrder: 0,
-          }),
-        },
-      });
-
-      this.logger.log(`Inventory ${inventoryId} launched successfully. Generated ${workUnitIds.length} units.`);
-      return { success: true, inventoryId, totalUnits: workUnitIds.length };
-    });
-  }
-
-  /**
-   * Retrieves active counting tasks currently assigned to the user
-   */
-  async getMyTasks(userId: string) {
-    const attempts = await this.prisma.inventoryCountAttempt.findMany({
-      where: {
-        assignedUserId: userId,
-        status: { in: ['AVAILABLE', 'IN_PROGRESS'] },
-        unit: {
-          inventory: {
-            status: { in: ['IN_PROGRESS', 'THIRD_COUNT_REQUIRED'] },
-          },
-        },
-      },
-      include: {
-        unit: {
-          include: {
-            inventory: {
-              select: {
-                inventoryId: true,
-                title: true,
-                typeInventory: true,
-                status: true,
-                policyVersion: true,
-                thirdCountRequired: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        unit: { unitOrder: 'asc' },
-      },
-    });
-
-    // Strictly filter out any FINAL_RECOUNT tasks unless the inventory explicitly requires third count (discrepancy detected)
-    const validAttempts = attempts.filter((attempt) => {
-      if (attempt.purpose === 'FINAL_RECOUNT') {
-        return (
-          attempt.unit.inventory.status === 'THIRD_COUNT_REQUIRED' &&
-          attempt.unit.inventory.thirdCountRequired === true
+      if (
+        !Number.isFinite(lockResult) ||
+        lockResult < 0
+      ) {
+        throw new BadRequestException(
+          'Une ressource de stock est occupée par une autre opération. Actualisez puis réessayez.',
         );
       }
-      return true;
-    });
+    }
+  }
 
-    // Populate scope labels
-    const enriched = await Promise.all(
-      validAttempts.map(async (attempt) => {
-        let label = 'Unité de travail';
-        let isSerialized = false;
+  private async assertNoOtherActiveInventory(
+    tx: Prisma.TransactionClient,
+    inventoryId: string,
+    equipmentIds: string[],
+    shelfIds: string[],
+  ) {
+    const scope:
+      Prisma.InventoryWorkUnitWhereInput[] = [];
 
-        if (attempt.unit.equipmentId) {
-          const eq = await this.prisma.equipment.findUnique({
-            where: { equipmentId: attempt.unit.equipmentId },
-            select: { equipmentName: true, hasSerialNumber: true },
+    if (equipmentIds.length) {
+      scope.push({
+        equipmentId: {
+          in: equipmentIds,
+        },
+      });
+    }
+
+    if (shelfIds.length) {
+      scope.push({
+        shelfId: {
+          in: shelfIds,
+        },
+      });
+    }
+
+    if (!scope.length) {
+      return;
+    }
+
+    const conflict =
+      await tx.inventoryWorkUnit.findFirst({
+        where: {
+          OR: scope,
+          inventory: {
+            inventoryId: {
+              not: inventoryId,
+            },
+            status: {
+              notIn: [
+                ...NON_LOCKING_INVENTORY_STATUSES,
+              ],
+            },
+          },
+        },
+        select: {
+          unitId: true,
+          inventory: {
+            select: {
+              inventoryId: true,
+              title: true,
+              status: true,
+            },
+          },
+        },
+      });
+
+    if (conflict) {
+      throw new BadRequestException(
+        `Le périmètre est déjà contrôlé par l'inventaire actif '${conflict.inventory.title ?? conflict.inventory.inventoryId}'.`,
+      );
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Launch
+  // --------------------------------------------------------------------------
+
+  async launchInventory(
+    inventoryId: string,
+  ) {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const inventory =
+          await tx.inventory.findUnique({
+            where: { inventoryId },
+            include: {
+              Inventory_User: {
+                orderBy: {
+                  sequence: 'asc',
+                },
+              },
+            },
           });
-          label = eq?.equipmentName || 'Article inconnu';
-          isSerialized = !!eq?.hasSerialNumber;
-        } else if (attempt.unit.shelfId) {
-          const sh = await this.prisma.shelf.findUnique({
-            where: { shelfId: attempt.unit.shelfId },
-            select: { shelfName: true },
+
+        if (!inventory) {
+          throw new NotFoundException(
+            'Inventaire introuvable',
+          );
+        }
+
+        if (
+          inventory.status !== 'DRAFT'
+        ) {
+          throw new BadRequestException(
+            'Seul un inventaire au statut DRAFT peut être lancé.',
+          );
+        }
+
+        const participants =
+          inventory.Inventory_User;
+
+        if (
+          participants.length !== 3
+        ) {
+          throw new BadRequestException(
+            'Trois contrôleurs distincts doivent être préassignés avant le lancement.',
+          );
+        }
+
+        const controller1 = participants[0];
+        const controller2 = participants[1];
+
+        const equipmentIds =
+          this.parseScopeIds(
+            inventory.equipmentScopeIds,
+          );
+
+        const shelfIds =
+          this.parseScopeIds(
+            inventory.shelfScopeIds,
+          );
+
+        if (
+          inventory.typeInventory ===
+            'ByEquipment' &&
+          !equipmentIds.length
+        ) {
+          throw new BadRequestException(
+            "Le périmètre article de l'inventaire est vide.",
+          );
+        }
+
+        if (
+          inventory.typeInventory ===
+            'ByShelf' &&
+          !shelfIds.length
+        ) {
+          throw new BadRequestException(
+            "Le périmètre emplacement de l'inventaire est vide.",
+          );
+        }
+
+        await this.acquireResourceLocks(
+          tx,
+          equipmentIds,
+          shelfIds,
+        );
+
+        await this.assertNoOtherActiveInventory(
+          tx,
+          inventoryId,
+          equipmentIds,
+          shelfIds,
+        );
+
+        const workUnits: Array<{
+          unitId: string;
+          unitOrder: number;
+          equipmentId: string | null;
+          shelfId: string | null;
+        }> = [];
+
+        if (
+          inventory.typeInventory ===
+          'ByEquipment'
+        ) {
+          const equipmentRows =
+            await tx.equipment.findMany({
+              where: {
+                equipmentId: {
+                  in: equipmentIds,
+                },
+              },
+              select: {
+                equipmentId: true,
+              },
+            });
+
+          if (
+            equipmentRows.length !==
+            equipmentIds.length
+          ) {
+            throw new NotFoundException(
+              'Un article du périmètre a été supprimé ou est introuvable.',
+            );
+          }
+
+          for (
+            let index = 0;
+            index < equipmentIds.length;
+            index += 1
+          ) {
+            const equipmentId =
+              equipmentIds[index];
+
+            const unit =
+              await tx.inventoryWorkUnit.create({
+                data: {
+                  inventoryId,
+                  equipmentId,
+                  shelfId: null,
+                  unitOrder: index,
+                  status: 'COUNTING',
+                  reconciliationStatus:
+                    'PENDING',
+                  acceptedAttemptId: null,
+                  reconciledAt: null,
+                },
+                select: {
+                  unitId: true,
+                  unitOrder: true,
+                  equipmentId: true,
+                  shelfId: true,
+                },
+              });
+
+            workUnits.push(unit);
+
+            await this.snapshotEquipmentAtLaunch(
+              tx,
+              inventoryId,
+              equipmentId,
+            );
+          }
+        } else {
+          const shelfRows =
+            await tx.shelf.findMany({
+              where: {
+                shelfId: {
+                  in: shelfIds,
+                },
+              },
+              select: {
+                shelfId: true,
+              },
+            });
+
+          if (
+            shelfRows.length !==
+            shelfIds.length
+          ) {
+            throw new NotFoundException(
+              'Un emplacement du périmètre a été supprimé ou est introuvable.',
+            );
+          }
+
+          for (
+            let index = 0;
+            index < shelfIds.length;
+            index += 1
+          ) {
+            const shelfId = shelfIds[index];
+
+            const unit =
+              await tx.inventoryWorkUnit.create({
+                data: {
+                  inventoryId,
+                  equipmentId: null,
+                  shelfId,
+                  unitOrder: index,
+                  status: 'COUNTING',
+                  reconciliationStatus:
+                    'PENDING',
+                  acceptedAttemptId: null,
+                  reconciledAt: null,
+                },
+                select: {
+                  unitId: true,
+                  unitOrder: true,
+                  equipmentId: true,
+                  shelfId: true,
+                },
+              });
+
+            workUnits.push(unit);
+
+            await this.snapshotShelfAtLaunch(
+              tx,
+              inventoryId,
+              shelfId,
+            );
+          }
+        }
+
+        let firstC1AttemptId:
+          string | null = null;
+
+        for (
+          let index = 0;
+          index < workUnits.length;
+          index += 1
+        ) {
+          const unit = workUnits[index];
+
+          const c1 =
+            await tx.inventoryCountAttempt.create({
+              data: {
+                unitId: unit.unitId,
+                assignedUserId:
+                  controller1.userId,
+                sequence: 0,
+                purpose: 'PRIMARY_1',
+                status:
+                  index === 0
+                    ? 'AVAILABLE'
+                    : 'BLOCKED',
+              },
+            });
+
+          if (index === 0) {
+            firstC1AttemptId =
+              c1.attemptId;
+          }
+
+          await tx.inventoryCountAttempt.create({
+            data: {
+              unitId: unit.unitId,
+              assignedUserId:
+                controller2.userId,
+              sequence: 1,
+              purpose: 'PRIMARY_2',
+              status: 'BLOCKED',
+            },
           });
-          label = sh?.shelfName || 'Emplacement inconnu';
+
+          // C3 is intentionally NOT created at launch.
+        }
+
+        await tx.inventory.update({
+          where: { inventoryId },
+          data: {
+            status: 'IN_PROGRESS',
+            launchedAt: new Date(),
+            thirdCountRequired: false,
+            finalResultSource:
+              'PER_UNIT_RECONCILIATION',
+          },
+        });
+
+        if (firstC1AttemptId) {
+          await tx.notification.create({
+            data: {
+              recipientId:
+                controller1.userId,
+              eventType:
+                'INVENTORY_TASK_AVAILABLE',
+              payload: JSON.stringify({
+                inventoryId,
+                taskId:
+                  firstC1AttemptId,
+                title:
+                  inventory.title,
+                unitOrder: 0,
+                message:
+                  'La première unité de comptage est disponible.',
+              }),
+            },
+          });
         }
 
         return {
-          ...attempt,
-          scopeLabel: label,
-          isSerialized,
+          success: true,
+          inventoryId,
+          totalUnits:
+            workUnits.length,
         };
-      })
+      },
+      {
+        isolationLevel: 'Serializable',
+        timeout: 30_000,
+      },
     );
-
-    return enriched;
   }
 
-  /**
-   * Retrieves a specific counting task (attempt) with BLIND physical counting semantics.
-   * Never leaks theoretical or expected stock quantities.
-   */
-  async getTask(attemptId: string, currentUserId?: string) {
-    const attempt = await this.prisma.inventoryCountAttempt.findUnique({
+  private parseScopeIds(
+    raw: string | null,
+  ): string[] {
+    if (!raw) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+
+      return [
+        ...new Set(
+          parsed
+            .filter(
+              (value) =>
+                typeof value === 'string',
+            )
+            .map((value) => value.trim())
+            .filter(Boolean),
+        ),
+      ];
+    } catch {
+      throw new BadRequestException(
+        "Le périmètre enregistré de l'inventaire est illisible.",
+      );
+    }
+  }
+
+  private async snapshotEquipmentAtLaunch(
+    tx: Prisma.TransactionClient,
+    inventoryId: string,
+    equipmentId: string,
+  ) {
+    const allocations =
+      await tx.equipmentShelfs.findMany({
+        where: { equipmentId },
+        select: {
+          equipmentId: true,
+          shelfId: true,
+          equipmentQuantity: true,
+        },
+      });
+
+    if (allocations.length) {
+      await tx.inventory_Equipment_Shelf_Snapshot.createMany({
+        data: allocations.map((row) => ({
+          inventoryId,
+          equipmentId: row.equipmentId,
+          shelfId: row.shelfId,
+          phase: 'LIVE_AT_LAUNCH',
+          quantity: row.equipmentQuantity,
+          provenance:
+            'LIVE_EQUIPMENT_SHELFS',
+        })),
+      });
+    }
+
+    const serials =
+      await tx.serialNumber.findMany({
+        where: { equipmentId },
+        select: {
+          serialNumberId: true,
+          serialNumberCode: true,
+          serialNumberStatus: true,
+          equipmentId: true,
+          shelfId: true,
+        },
+      });
+
+    if (serials.length) {
+      await tx.inventory_SerialNumber_Snapshot.createMany({
+        data: serials.map((serial) => ({
+          inventoryId,
+          equipmentId: serial.equipmentId,
+          shelfId: serial.shelfId,
+          serialNumberId:
+            serial.serialNumberId,
+          serialNumberCode:
+            serial.serialNumberCode,
+          serialNumberStatus:
+            serial.serialNumberStatus,
+          phase: 'LIVE_AT_LAUNCH',
+          provenance:
+            'LIVE_SERIAL_NUMBERS',
+        })),
+      });
+    }
+  }
+
+  private async snapshotShelfAtLaunch(
+    tx: Prisma.TransactionClient,
+    inventoryId: string,
+    shelfId: string,
+  ) {
+    const allocations =
+      await tx.equipmentShelfs.findMany({
+        where: { shelfId },
+        select: {
+          equipmentId: true,
+          shelfId: true,
+          equipmentQuantity: true,
+        },
+      });
+
+    if (allocations.length) {
+      await tx.inventory_Equipment_Shelf_Snapshot.createMany({
+        data: allocations.map((row) => ({
+          inventoryId,
+          equipmentId: row.equipmentId,
+          shelfId: row.shelfId,
+          phase: 'LIVE_AT_LAUNCH',
+          quantity: row.equipmentQuantity,
+          provenance:
+            'LIVE_EQUIPMENT_SHELFS',
+        })),
+      });
+    }
+
+    const serials =
+      await tx.serialNumber.findMany({
+        where: { shelfId },
+        select: {
+          serialNumberId: true,
+          serialNumberCode: true,
+          serialNumberStatus: true,
+          equipmentId: true,
+          shelfId: true,
+        },
+      });
+
+    if (serials.length) {
+      await tx.inventory_SerialNumber_Snapshot.createMany({
+        data: serials.map((serial) => ({
+          inventoryId,
+          equipmentId: serial.equipmentId,
+          shelfId: serial.shelfId,
+          serialNumberId:
+            serial.serialNumberId,
+          serialNumberCode:
+            serial.serialNumberCode,
+          serialNumberStatus:
+            serial.serialNumberStatus,
+          phase: 'LIVE_AT_LAUNCH',
+          provenance:
+            'LIVE_SERIAL_NUMBERS',
+        })),
+      });
+    }
+  }
+
+
+// --------------------------------------------------------------------------
+// Tasks
+// --------------------------------------------------------------------------
+
+async getMyTasks(
+  userId: string,
+) {
+  return this.prisma.inventoryCountAttempt.findMany({
+    where: {
+      assignedUserId: userId,
+      status: {
+        in: [
+          'AVAILABLE',
+          'IN_PROGRESS',
+        ],
+      },
+      unit: {
+        inventory: {
+          status: {
+            in: [
+              'IN_PROGRESS',
+            ],
+          },
+        },
+      },
+    },
+    include: {
+      unit: {
+        include: {
+          inventory: {
+            select: {
+              inventoryId: true,
+              title: true,
+              typeInventory: true,
+              status: true,
+              policyVersion: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: [
+      {
+        unit: {
+          unitOrder: 'asc',
+        },
+      },
+      {
+        sequence: 'asc',
+      },
+    ],
+  });
+}
+
+async getTask(
+  attemptId: string,
+  currentUserId?: string,
+) {
+  const attempt =
+    await this.prisma.inventoryCountAttempt.findUnique({
       where: { attemptId },
       include: {
         unit: {
@@ -532,7 +1097,9 @@ export class InventoryService {
                       },
                     },
                   },
-                  orderBy: { sequence: 'asc' },
+                  orderBy: {
+                    sequence: 'asc',
+                  },
                 },
               },
             },
@@ -564,450 +1131,237 @@ export class InventoryService {
       },
     });
 
-    if (!attempt) throw new NotFoundException('Tâche introuvable');
-    if (currentUserId && attempt.assignedUserId !== currentUserId) {
-      throw new ForbiddenException('Vous n\'êtes pas le contrôleur assigné à cette tâche.');
-    }
+  if (!attempt) {
+    throw new NotFoundException(
+      'Tâche introuvable',
+    );
+  }
 
-    // Guard against accessing FINAL_RECOUNT when not required
-    if (attempt.purpose === 'FINAL_RECOUNT') {
-      if (
-        attempt.unit.inventory.status !== 'THIRD_COUNT_REQUIRED' ||
-        !attempt.unit.inventory.thirdCountRequired
-      ) {
-        throw new ForbiddenException(
-          "Le recomptage du 3ème contrôleur n'est pas requis pour cet inventaire (les comptages des deux premiers contrôleurs sont conformes)."
+  if (
+    currentUserId &&
+    attempt.assignedUserId !== currentUserId
+  ) {
+    throw new ForbiddenException(
+      "Vous n'êtes pas le contrôleur assigné à cette tâche.",
+    );
+  }
+
+  let scopeLabel = 'Unité de travail';
+  let isSerialized = false;
+
+  if (attempt.unit.equipmentId) {
+    const equipment =
+      await this.prisma.equipment.findUnique({
+        where: {
+          equipmentId:
+            attempt.unit.equipmentId,
+        },
+        select: {
+          equipmentName: true,
+          hasSerialNumber: true,
+        },
+      });
+
+    scopeLabel =
+      equipment?.equipmentName ??
+      'Article inconnu';
+
+    isSerialized =
+      Boolean(
+        equipment?.hasSerialNumber,
+      );
+  } else if (attempt.unit.shelfId) {
+    const shelf =
+      await this.prisma.shelf.findUnique({
+        where: {
+          shelfId:
+            attempt.unit.shelfId,
+        },
+        select: {
+          shelfName: true,
+        },
+      });
+
+    scopeLabel =
+      shelf?.shelfName ??
+      'Emplacement inconnu';
+  }
+
+  return {
+    ...attempt,
+    scopeLabel,
+    isSerialized,
+  };
+}
+
+async saveDraft(
+  attemptId: string,
+  userId: string,
+  dto: SaveDraftDTO,
+) {
+  const data =
+    saveDraftSchema.parse(dto);
+
+  const attempt =
+    await this.prisma.inventoryCountAttempt.findUnique({
+      where: { attemptId },
+    });
+
+  if (!attempt) {
+    throw new NotFoundException(
+      'Tâche introuvable',
+    );
+  }
+
+  if (
+    attempt.assignedUserId !== userId
+  ) {
+    throw new ForbiddenException(
+      "Vous n'êtes pas le contrôleur assigné à cette tâche.",
+    );
+  }
+
+  if (
+    ![
+      'AVAILABLE',
+      'IN_PROGRESS',
+    ].includes(attempt.status)
+  ) {
+    throw new BadRequestException(
+      `Cette tâche ne peut plus être modifiée (statut: ${attempt.status}).`,
+    );
+  }
+
+  await this.prisma.inventoryCountAttempt.update({
+    where: { attemptId },
+    data: {
+      status: 'IN_PROGRESS',
+      draftData:
+        JSON.stringify(data),
+    },
+  });
+
+  return {
+    success: true,
+    message:
+      'Brouillon enregistré avec succès.',
+  };
+}
+
+async submitCountAttempt(
+  attemptId: string,
+  userId: string,
+  dto: SubmitTaskDTO,
+) {
+  const data =
+    submitTaskSchema.parse(dto);
+
+  if (data.isDraft) {
+    return this.saveDraft(
+      attemptId,
+      userId,
+      data,
+    );
+  }
+
+  return this.prisma.$transaction(
+    async (tx) => {
+      const attempt =
+        await tx.inventoryCountAttempt.findUnique({
+          where: { attemptId },
+          include: {
+            unit: {
+              include: {
+                inventory: true,
+              },
+            },
+          },
+        });
+
+      if (!attempt) {
+        throw new NotFoundException(
+          'Tâche introuvable',
         );
       }
-    }
 
-    const inventory = attempt.unit.inventory;
-    const isByEquipment = inventory.typeInventory === 'ByEquipment';
-
-    let equipmentDetails: any = null;
-    let shelfDetails: any = null;
-    let candidateShelves: any[] = [];
-    let candidateEquipments: any[] = [];
-
-    if (isByEquipment && attempt.unit.equipmentId) {
-      const eq = await this.prisma.equipment.findUnique({
-        where: { equipmentId: attempt.unit.equipmentId },
-        select: {
-          equipmentId: true,
-          equipmentName: true,
-          hasSerialNumber: true,
-        },
-      });
-
-      // Provide candidate search shelves (blind: shelfName only, NO expected quantity)
-      const eqShelfs = await this.prisma.equipmentShelfs.findMany({
-        where: { equipmentId: attempt.unit.equipmentId },
-        include: {
-          shelf: { select: { shelfId: true, shelfName: true } },
-        },
-      });
-      candidateShelves = eqShelfs
-        .filter((es) => es.shelf)
-        .map((es) => ({
-          shelfId: es.shelf!.shelfId,
-          shelfName: es.shelf!.shelfName,
-        }));
-
-      let serialNumbers: any[] = [];
-      if (eq?.hasSerialNumber) {
-        const sns = await this.prisma.serialNumber.findMany({
-          where: { equipmentId: attempt.unit.equipmentId },
-          select: {
-            serialNumberId: true,
-            serialNumberCode: true,
-            serialNumberStatus: true,
-            shelfId: true,
-            shelf: { select: { shelfName: true } },
-          },
-        });
-        serialNumbers = sns.map((s) => ({
-          serialNumberId: s.serialNumberId,
-          serialNumberCode: s.serialNumberCode,
-          serialNumberStatus: s.serialNumberStatus,
-          shelfId: s.shelfId,
-          shelfName: s.shelf?.shelfName || null,
-        }));
+      if (
+        attempt.assignedUserId !== userId
+      ) {
+        throw new ForbiddenException(
+          "Vous n'êtes pas le contrôleur assigné à cette tâche.",
+        );
       }
 
-      equipmentDetails = eq
-        ? {
-          ...eq,
-          shelves: candidateShelves,
-          serialNumbers,
-        }
-        : null;
-    } else if (!isByEquipment && attempt.unit.shelfId) {
-      const sh = await this.prisma.shelf.findUnique({
-        where: { shelfId: attempt.unit.shelfId },
-        select: {
-          shelfId: true,
-          shelfName: true,
-        },
-      });
+      if (
+        ![
+          'AVAILABLE',
+          'IN_PROGRESS',
+        ].includes(attempt.status)
+      ) {
+        throw new BadRequestException(
+          `Cette tâche ne peut pas être soumise car elle est au statut '${attempt.status}'.`,
+        );
+      }
 
-      // Provide candidate search equipments on this shelf (blind: NO expected quantity)
-      const eqShelfs = await this.prisma.equipmentShelfs.findMany({
-        where: { shelfId: attempt.unit.shelfId },
-        include: {
-          equipment: {
-            select: {
-              equipmentId: true,
-              equipmentName: true,
-              hasSerialNumber: true,
-            },
-          },
-        },
-      });
+      if (
+        attempt.unit.inventory.status !==
+        'IN_PROGRESS'
+      ) {
+        throw new BadRequestException(
+          "L'inventaire n'est pas en cours.",
+        );
+      }
 
-      const serializedEqIds = eqShelfs
-        .filter((es) => !!es.equipment?.hasSerialNumber && !!es.equipmentId)
-        .map((es) => es.equipmentId as string);
+      if (
+        attempt.purpose ===
+          'FINAL_RECOUNT' &&
+        attempt.unit.reconciliationStatus !==
+          'THIRD_REQUIRED'
+      ) {
+        throw new BadRequestException(
+          "Cette unité ne nécessite pas de troisième comptage.",
+        );
+      }
 
-      const snsOnShelf =
-        serializedEqIds.length > 0
-          ? await this.prisma.serialNumber.findMany({
-            where: {
-              shelfId: attempt.unit.shelfId,
-              equipmentId: { in: serializedEqIds },
-            },
-            select: {
-              serialNumberId: true,
-              serialNumberCode: true,
-              serialNumberStatus: true,
-              equipmentId: true,
-              shelfId: true,
-            },
-          })
-          : [];
+      const inventoryId =
+        attempt.unit.inventoryId;
 
-      candidateEquipments = eqShelfs
-        .filter((es) => es.equipment)
-        .map((es) => {
-          const eqSns = snsOnShelf.filter((s) => s.equipmentId === es.equipment!.equipmentId);
-          return {
-            equipmentId: es.equipment!.equipmentId,
-            equipmentName: es.equipment!.equipmentName,
-            hasSerialNumber: es.equipment!.hasSerialNumber,
-            serialNumbers: eqSns.map((s) => ({
-              serialNumberId: s.serialNumberId,
-              serialNumberCode: s.serialNumberCode,
-              serialNumberStatus: s.serialNumberStatus,
-              shelfId: s.shelfId,
-              shelfName: sh?.shelfName,
-            })),
-          };
-        });
+      const unitOrder =
+        attempt.unit.unitOrder;
 
-      shelfDetails = sh
-        ? {
-          shelfId: sh.shelfId,
-          shelfName: sh.shelfName,
-          equipments: candidateEquipments,
-        }
-        : null;
-    }
+      if (
+        attempt.purpose ===
+          'PRIMARY_1' ||
+        attempt.purpose ===
+          'PRIMARY_2'
+      ) {
+        await this.assertPreviousPrimaryUnitSubmitted(
+          tx,
+          inventoryId,
+          attempt.purpose as AttemptPurpose,
+          userId,
+          unitOrder,
+        );
+      }
 
-    const [allEquipments, allShelves] = await Promise.all([
-      this.prisma.equipment.findMany({
-        select: {
-          equipmentId: true,
-          equipmentName: true,
-          hasSerialNumber: true,
-        },
-        orderBy: { equipmentName: 'asc' },
-      }),
-      this.prisma.shelf.findMany({
-        select: {
-          shelfId: true,
-          shelfName: true,
-        },
-        orderBy: { shelfName: 'asc' },
-      }),
-    ]);
+      const orders =
+        await this.buildOrdersFromObservations(
+          tx,
+          attempt,
+          userId,
+          data.observations,
+        );
 
-    // Get total work units count for progress indicator
-    const totalUnits = await this.prisma.inventoryWorkUnit.count({
-      where: { inventoryId: inventory.inventoryId },
-    });
-
-    const inventoryObj = {
-      inventoryId: inventory.inventoryId,
-      title: inventory.title,
-      typeInventory: inventory.typeInventory,
-      status: inventory.status,
-      policyVersion: inventory.policyVersion,
-      Inventory_User: (inventory.Inventory_User || []).map((iu: any) => ({
-        inventoryId: iu.inventoryId,
-        userId: iu.userId,
-        sequence: iu.sequence,
-        responsibility: iu.responsibility,
-        roleSnapshot: iu.roleSnapshot,
-        user: iu.User
-          ? {
-            userId: iu.User.userId,
-            userName: iu.User.userName,
-            userEmail: iu.User.userEmail,
-          }
-          : undefined,
-        User: iu.User,
-      })),
-    };
-
-    const formattedOrders = (attempt.orders || []).map((o) => ({
-      orderId: o.orderId,
-      inventoryId: o.inventoryId,
-      attemptId: o.attemptId,
-      equipmentId: o.equipmentId,
-      shelfId: o.shelfId,
-      serialNumberId: o.serialNumberId,
-      scannedSerialCode: o.scannedSerialCode,
-      quantityCalculated: o.quantityCalculated,
-      isExplicitZero: o.isExplicitZero,
-      isUnexpected: o.isUnexpected,
-      notes: o.notes,
-      equipment: o.equipment
-        ? {
-          equipmentId: o.equipment.equipmentId,
-          equipmentName: o.equipment.equipmentName,
-          hasSerialNumber: o.equipment.hasSerialNumber,
-        }
-        : undefined,
-      shelf: o.shelf
-        ? {
-          shelfId: o.shelf.shelfId,
-          shelfName: o.shelf.shelfName,
-        }
-        : undefined,
-      serialNumber: o.serialNumber
-        ? {
-          serialNumberId: o.serialNumber.serialNumberId,
-          serialNumberCode: o.serialNumber.serialNumberCode,
-        }
-        : undefined,
-      equipmentName: o.equipment?.equipmentName,
-      shelfName: o.shelf?.shelfName,
-      serialNumberCode: o.serialNumber?.serialNumberCode || o.scannedSerialCode,
-    }));
-
-    const unitObj = {
-      unitId: attempt.unit.unitId,
-      inventoryId: inventory.inventoryId,
-      equipmentId: attempt.unit.equipmentId,
-      shelfId: attempt.unit.shelfId,
-      unitOrder: attempt.unit.unitOrder,
-      status: attempt.unit.status,
-      equipment: equipmentDetails,
-      shelf: shelfDetails,
-      inventory: inventoryObj,
-    };
-
-    return {
-      attemptId: attempt.attemptId,
-      unitId: attempt.unitId,
-      assignedUserId: attempt.assignedUserId,
-      sequence: attempt.sequence,
-      purpose: attempt.purpose,
-      status: attempt.status,
-      draftData: attempt.draftData ? JSON.parse(attempt.draftData) : null,
-      unitOrder: attempt.unit.unitOrder,
-      totalUnits,
-      unit: unitObj,
-      inventory: inventoryObj,
-      participants: inventoryObj.Inventory_User,
-      equipment: equipmentDetails,
-      shelf: shelfDetails,
-      candidateShelves,
-      candidateEquipments,
-      orders: formattedOrders,
-      savedOrders: formattedOrders,
-      allShelves,
-      scopeDetails: {
-        allEquipments,
-        allShelves,
-        equipments: equipmentDetails ? [equipmentDetails] : [],
-        shelves: shelfDetails ? [shelfDetails] : [],
-      },
-    };
-  }
-
-  /**
-   * Saves work-in-progress draft observations without submitting or advancing the pipeline.
-   */
-  async saveDraft(attemptId: string, userId: string, data: SaveDraftDTO) {
-    const attempt = await this.prisma.inventoryCountAttempt.findUnique({
-      where: { attemptId },
-    });
-    if (!attempt) throw new NotFoundException('Tâche introuvable');
-    if (attempt.assignedUserId !== userId) {
-      throw new ForbiddenException('Vous n\'êtes pas le contrôleur assigné à cette tâche.');
-    }
-    if (attempt.status !== 'AVAILABLE' && attempt.status !== 'IN_PROGRESS') {
-      throw new BadRequestException('Cette tâche ne peut plus être modifiée (statut: ' + attempt.status + ')');
-    }
-
-    await this.prisma.inventoryCountAttempt.update({
-      where: { attemptId },
-      data: {
-        status: 'IN_PROGRESS',
-        draftData: JSON.stringify(data),
-      },
-    });
-
-    return { success: true, message: 'Brouillon enregistré avec succès.' };
-  }
-
-  /**
-   * Submits a physical count attempt.
-   * Transactional and atomic:
-   * 1. Validates caller ownership and attempt status (must be AVAILABLE or IN_PROGRESS).
-   * 2. Validates strict unit order (cannot submit Ui if U(i-1) is not submitted).
-   * 3. Resolves serial numbers, validates uniqueness within attempt, prevents double-counting.
-   * 4. Persists observations in Order table and marks attempt SUBMITTED.
-   * 5. Advances the pipeline strictly:
-   *    - Controller 1 submitting Ui -> unlocks C1 U(i+1) AND unlocks C2 Ui (if C2 has submitted U(i-1)).
-   *    - Controller 2 submitting Uj -> unlocks C2 U(j+1) IF AND ONLY IF C1 has submitted U(j+1).
-   *    - Controller 3 submitting Uk -> unlocks C3 U(k+1).
-   * 6. Checks for stage completion:
-   *    - When both C1 and C2 submitted ALL units -> triggers reconcilePrimaryInventory().
-   *    - When C3 submitted ALL units -> triggers finalizeFromThirdController().
-   */
-  async submitCountAttempt(attemptId: string, userId: string, data: SubmitTaskDTO) {
-    if (data.isDraft) {
-      return this.saveDraft(attemptId, userId, data);
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      const attempt = await tx.inventoryCountAttempt.findUnique({
+      await tx.order.deleteMany({
         where: { attemptId },
-        include: {
-          unit: {
-            include: {
-              inventory: true,
-            },
-          },
-        },
       });
 
-      if (!attempt) throw new NotFoundException('Tâche introuvable');
-      if (attempt.assignedUserId !== userId) {
-        throw new ForbiddenException('Vous n\'êtes pas le contrôleur assigné à cette tâche.');
-      }
-      if (attempt.status !== 'AVAILABLE' && attempt.status !== 'IN_PROGRESS') {
-        throw new BadRequestException(`Cette tâche ne peut pas être soumise car elle est au statut '${attempt.status}'.`);
-      }
-
-      const inventoryId = attempt.unit.inventoryId;
-      const currentUnitOrder = attempt.unit.unitOrder;
-
-      // 1. Strict Unit Order Validation: Counter must have submitted all prior units
-      if (currentUnitOrder > 0) {
-        const priorAttempt = await tx.inventoryCountAttempt.findFirst({
-          where: {
-            assignedUserId: userId,
-            purpose: attempt.purpose,
-            unit: {
-              inventoryId,
-              unitOrder: currentUnitOrder - 1,
-            },
-          },
+      for (const order of orders) {
+        await tx.order.create({
+          data: order,
         });
-        if (!priorAttempt || priorAttempt.status !== 'SUBMITTED') {
-          throw new BadRequestException(`Vous devez d'abord soumettre l'unité précédente (#${currentUnitOrder}) avant de soumettre celle-ci (#${currentUnitOrder + 1}).`);
-        }
       }
 
-      // 2. Validate observations and resolve serial numbers
-      const observations = data.observations || [];
-      const ordersToCreate: any[] = [];
-      const scannedSerialCodesSet = new Set<string>();
-
-      for (const obs of observations) {
-        const targetEqId = obs.equipmentId || attempt.unit.equipmentId;
-        const targetShelfId = obs.shelfId || attempt.unit.shelfId;
-
-        // Serialized observation handling
-        if (obs.scannedSerialCode && obs.scannedSerialCode.trim().length > 0) {
-          const code = obs.scannedSerialCode.trim();
-
-          // Reject duplicate scans within the same count attempt
-          if (scannedSerialCodesSet.has(code.toLowerCase())) {
-            throw new BadRequestException(`Le numéro de série '${code}' a été scanné plusieurs fois dans cette même unité.`);
-          }
-          scannedSerialCodesSet.add(code.toLowerCase());
-
-          // Resolve code against real database
-          const matches = await tx.serialNumber.findMany({
-            where: { serialNumberCode: code },
-          });
-
-          let resolvedSnId: string | null = null;
-          let isUnexpected = !!obs.isUnexpected;
-
-          if (matches.length === 1) {
-            resolvedSnId = matches[0].serialNumberId;
-            if (targetEqId && matches[0].equipmentId !== targetEqId) {
-              isUnexpected = true;
-            }
-          } else if (matches.length === 0) {
-            isUnexpected = true;
-          } else {
-            // Ambiguity: multiple database records share the code
-            this.logger.warn(`Ambiguous serial code scanned: ${code} (${matches.length} matches)`);
-            isUnexpected = true;
-          }
-
-          ordersToCreate.push({
-            inventoryId,
-            attemptId,
-            userId,
-            equipmentId: targetEqId || (matches.length === 1 ? matches[0].equipmentId : null),
-            shelfId: targetShelfId || (matches.length === 1 ? matches[0].shelfId : null),
-            serialNumberId: resolvedSnId,
-            scannedSerialCode: code,
-            quantityCalculated: 1, // Strictly 1 unit per serialized scan
-            isExplicitZero: false,
-            isUnexpected,
-            notes: obs.notes || null,
-            unknownItemEvidence: obs.unknownItemEvidence || (matches.length > 1 ? `Ambiguous: ${matches.length} matching records` : null),
-          });
-        } else {
-          // Non-serialized item observation
-          const qty = obs.quantityCalculated ?? 0;
-          const isZero = !!obs.isExplicitZero || qty === 0;
-
-          ordersToCreate.push({
-            inventoryId,
-            attemptId,
-            userId,
-            equipmentId: targetEqId,
-            shelfId: targetShelfId,
-            serialNumberId: null,
-            scannedSerialCode: null,
-            quantityCalculated: qty,
-            isExplicitZero: isZero,
-            isUnexpected: !!obs.isUnexpected,
-            notes: obs.notes || null,
-            unknownItemEvidence: obs.unknownItemEvidence || null,
-          });
-        }
-      }
-
-      // Clear any prior draft observations on this attempt
-      await tx.order.deleteMany({ where: { attemptId } });
-
-      // Insert validated count observations
-      if (ordersToCreate.length > 0) {
-        for (const orderData of ordersToCreate) {
-          await tx.order.create({ data: orderData });
-        }
-      }
-
-      // Mark attempt as SUBMITTED and clear draft
       await tx.inventoryCountAttempt.update({
         where: { attemptId },
         data: {
@@ -1017,1282 +1371,3690 @@ export class InventoryService {
         },
       });
 
-      // 3. Pipeline Streaming Progression
-      const allWorkUnits = await tx.inventoryWorkUnit.findMany({
-        where: { inventoryId },
-        orderBy: { unitOrder: 'asc' },
-      });
-      const totalUnitsCount = allWorkUnits.length;
-
-      // Handle advancement based on controller role
-      if (attempt.purpose === 'PRIMARY_1') {
-        // C1 submitted unit i
-        // A. Unlock C1 unit i + 1
-        if (currentUnitOrder + 1 < totalUnitsCount) {
-          const nextUnit = allWorkUnits[currentUnitOrder + 1];
-          const nextAttempt = await tx.inventoryCountAttempt.findFirst({
-            where: {
-              unitId: nextUnit.unitId,
-              assignedUserId: userId,
-              purpose: 'PRIMARY_1',
-            },
-          });
-
-          if (nextAttempt) {
-            await tx.inventoryCountAttempt.update({
-              where: { attemptId: nextAttempt.attemptId },
-              data: { status: 'AVAILABLE' },
-            });
-
-            await tx.notification.create({
-              data: {
-                recipientId: userId,
-                eventType: 'INVENTORY_TASK_AVAILABLE',
-                payload: JSON.stringify({
-                  inventoryId,
-                  taskId: nextAttempt.attemptId,
-                  title: attempt.unit.inventory.title,
-                  message: `Unité #${currentUnitOrder + 2} disponible pour comptage.`,
-                  unitOrder: currentUnitOrder + 1,
-                }),
-              },
-            });
-          }
-        }
-
-        // B. Check if Controller 2 can unlock unit i
-        // Condition: C1 has submitted unit i (just did) AND (i == 0 OR C2 submitted unit i-1)
-        const c2AttemptForCurrentUnit = await tx.inventoryCountAttempt.findFirst({
-          where: {
-            unitId: attempt.unitId,
-            purpose: 'PRIMARY_2',
-          },
-        });
-
-        if (c2AttemptForCurrentUnit && c2AttemptForCurrentUnit.status === 'BLOCKED') {
-          let canUnlockC2 = false;
-          if (currentUnitOrder === 0) {
-            canUnlockC2 = true;
-          } else {
-            const priorC2Attempt = await tx.inventoryCountAttempt.findFirst({
-              where: {
-                unitId: allWorkUnits[currentUnitOrder - 1].unitId,
-                assignedUserId: c2AttemptForCurrentUnit.assignedUserId,
-                purpose: 'PRIMARY_2',
-              },
-            });
-            if (priorC2Attempt && priorC2Attempt.status === 'SUBMITTED') {
-              canUnlockC2 = true;
-            }
-          }
-
-          if (canUnlockC2) {
-            await tx.inventoryCountAttempt.update({
-              where: { attemptId: c2AttemptForCurrentUnit.attemptId },
-              data: { status: 'AVAILABLE' },
-            });
-
-            await tx.notification.create({
-              data: {
-                recipientId: c2AttemptForCurrentUnit.assignedUserId,
-                eventType: 'INVENTORY_TASK_AVAILABLE',
-                payload: JSON.stringify({
-                  inventoryId,
-                  taskId: c2AttemptForCurrentUnit.attemptId,
-                  title: attempt.unit.inventory.title,
-                  message: `Unité #${currentUnitOrder + 1} est maintenant disponible pour votre 2ème comptage.`,
-                  unitOrder: currentUnitOrder,
-                }),
-              },
-            });
-          }
-        }
-      } else if (attempt.purpose === 'PRIMARY_2') {
-        // C2 submitted unit j
-        // Unlock C2 unit j + 1 IF AND ONLY IF C1 has already submitted unit j + 1
-        if (currentUnitOrder + 1 < totalUnitsCount) {
-          const nextUnit = allWorkUnits[currentUnitOrder + 1];
-          const c1NextAttempt = await tx.inventoryCountAttempt.findFirst({
-            where: {
-              unitId: nextUnit.unitId,
-              purpose: 'PRIMARY_1',
-            },
-          });
-
-          if (c1NextAttempt && c1NextAttempt.status === 'SUBMITTED') {
-            const nextC2Attempt = await tx.inventoryCountAttempt.findFirst({
-              where: {
-                unitId: nextUnit.unitId,
-                assignedUserId: userId,
-                purpose: 'PRIMARY_2',
-              },
-            });
-
-            if (nextC2Attempt) {
-              await tx.inventoryCountAttempt.update({
-                where: { attemptId: nextC2Attempt.attemptId },
-                data: { status: 'AVAILABLE' },
-              });
-
-              await tx.notification.create({
-                data: {
-                  recipientId: userId,
-                  eventType: 'INVENTORY_TASK_AVAILABLE',
-                  payload: JSON.stringify({
-                    inventoryId,
-                    taskId: nextC2Attempt.attemptId,
-                    title: attempt.unit.inventory.title,
-                    message: `Unité #${currentUnitOrder + 2} disponible pour votre comptage.`,
-                    unitOrder: currentUnitOrder + 1,
-                  }),
-                },
-              });
-            }
-          }
-        }
-      } else if (attempt.purpose === 'FINAL_RECOUNT') {
-        // C3 submitted unit k
-        // Unlock C3 unit k + 1
-        if (currentUnitOrder + 1 < totalUnitsCount) {
-          const nextUnit = allWorkUnits[currentUnitOrder + 1];
-          const nextC3Attempt = await tx.inventoryCountAttempt.findFirst({
-            where: {
-              unitId: nextUnit.unitId,
-              assignedUserId: userId,
-              purpose: 'FINAL_RECOUNT',
-            },
-          });
-
-          if (nextC3Attempt) {
-            await tx.inventoryCountAttempt.update({
-              where: { attemptId: nextC3Attempt.attemptId },
-              data: { status: 'AVAILABLE' },
-            });
-
-            await tx.notification.create({
-              data: {
-                recipientId: userId,
-                eventType: 'INVENTORY_TASK_AVAILABLE',
-                payload: JSON.stringify({
-                  inventoryId,
-                  taskId: nextC3Attempt.attemptId,
-                  title: attempt.unit.inventory.title,
-                  message: `Recomptage final : Unité #${currentUnitOrder + 2} disponible.`,
-                  unitOrder: currentUnitOrder + 1,
-                }),
-              },
-            });
-          }
-        }
+      if (
+        attempt.purpose ===
+        'PRIMARY_1'
+      ) {
+        await this.advancePrimaryOne(
+          tx,
+          inventoryId,
+          unitOrder,
+          userId,
+        );
       }
-
-      // 4. Stage Completion Verification
-      // Check if both C1 and C2 have submitted all units
-      const primary1Submitted = await tx.inventoryCountAttempt.count({
-        where: {
-          unit: { inventoryId },
-          purpose: 'PRIMARY_1',
-          status: 'SUBMITTED',
-        },
-      });
-      const primary2Submitted = await tx.inventoryCountAttempt.count({
-        where: {
-          unit: { inventoryId },
-          purpose: 'PRIMARY_2',
-          status: 'SUBMITTED',
-        },
-      });
 
       if (
-        primary1Submitted === totalUnitsCount &&
-        primary2Submitted === totalUnitsCount &&
-        attempt.unit.inventory.status === 'IN_PROGRESS'
+        attempt.purpose ===
+        'PRIMARY_2'
       ) {
-        this.logger.log(`Both C1 and C2 finished 100% of units for inventory ${inventoryId}. Running primary reconciliation...`);
-        await this.reconcilePrimaryInventory(inventoryId, tx);
+        // Compare this exact unit immediately.
+        await this.reconcileUnit(
+          tx,
+          attempt.unitId,
+        );
+
+        await this.advancePrimaryTwo(
+          tx,
+          inventoryId,
+          unitOrder,
+          userId,
+        );
       }
 
-      // Check if C3 has submitted all units
-      if (attempt.purpose === 'FINAL_RECOUNT') {
-        const finalRecountSubmitted = await tx.inventoryCountAttempt.count({
+      if (
+        attempt.purpose ===
+        'FINAL_RECOUNT'
+      ) {
+        await tx.inventoryWorkUnit.update({
           where: {
-            unit: { inventoryId },
-            purpose: 'FINAL_RECOUNT',
-            status: 'SUBMITTED',
+            unitId:
+              attempt.unitId,
+          },
+          data: {
+            status: 'VALIDATED',
+            reconciliationStatus:
+              'THIRD_RESOLVED',
+            acceptedAttemptId:
+              attemptId,
+            reconciledAt:
+              new Date(),
           },
         });
-        if (finalRecountSubmitted === totalUnitsCount) {
-          this.logger.log(`Final Controller finished 100% of recount units for inventory ${inventoryId}. Accepting final authoritative result...`);
-          await this.finalizeFromThirdController(inventoryId, tx);
-        }
       }
+
+      await this.refreshInventoryCompletion(
+        tx,
+        inventoryId,
+      );
 
       return {
         success: true,
         attemptId,
-        unitOrder: currentUnitOrder,
-        totalUnits: totalUnitsCount,
+        unitOrder,
       };
+    },
+    {
+      isolationLevel: 'Serializable',
+      timeout: 30_000,
+    },
+  );
+}
+
+private async assertPreviousPrimaryUnitSubmitted(
+  tx: Prisma.TransactionClient,
+  inventoryId: string,
+  purpose: AttemptPurpose,
+  userId: string,
+  unitOrder: number,
+) {
+  if (unitOrder <= 0) {
+    return;
+  }
+
+  const previous =
+    await tx.inventoryCountAttempt.findFirst({
+      where: {
+        assignedUserId: userId,
+        purpose,
+        unit: {
+          inventoryId,
+          unitOrder:
+            unitOrder - 1,
+        },
+      },
+      select: {
+        status: true,
+      },
+    });
+
+  if (
+    previous?.status !== 'SUBMITTED'
+  ) {
+    throw new BadRequestException(
+      "L'unité précédente doit être soumise avant celle-ci.",
+    );
+  }
+}
+
+private async buildOrdersFromObservations(
+  tx: Prisma.TransactionClient,
+  attempt: any,
+  userId: string,
+  observations: any[],
+) {
+  const orders:
+    Prisma.OrderUncheckedCreateInput[] = [];
+
+  const scanned =
+    new Set<string>();
+
+  for (const observation of observations) {
+    const targetEquipmentId =
+      observation.equipmentId ??
+      observation.observedEquipmentId ??
+      attempt.unit.equipmentId ??
+      null;
+
+    const targetShelfId =
+      observation.shelfId ??
+      observation.observedShelfId ??
+      attempt.unit.shelfId ??
+      null;
+
+    if (
+      observation.scannedSerialCode
+    ) {
+      const code =
+        observation.scannedSerialCode.trim();
+
+      const codeKey =
+        code.toLowerCase();
+
+      if (scanned.has(codeKey)) {
+        throw new BadRequestException(
+          `Le numéro de série '${code}' a été compté plusieurs fois dans cette même tentative.`,
+        );
+      }
+
+      scanned.add(codeKey);
+
+      const matches =
+        await tx.serialNumber.findMany({
+          where: {
+            serialNumberCode: code,
+          },
+          select: {
+            serialNumberId: true,
+            equipmentId: true,
+            shelfId: true,
+          },
+        });
+
+      const match =
+        matches.length === 1
+          ? matches[0]
+          : null;
+
+      const observedEquipmentId =
+        observation.observedEquipmentId ??
+        match?.equipmentId ??
+        targetEquipmentId;
+
+      const observedShelfId =
+        observation.observedShelfId ??
+        targetShelfId ??
+        match?.shelfId ??
+        null;
+
+      const isUnexpected =
+        Boolean(
+          observation.isUnexpected,
+        ) ||
+        !match ||
+        Boolean(
+          targetEquipmentId &&
+          match.equipmentId !==
+            targetEquipmentId,
+        ) ||
+        Boolean(
+          targetShelfId &&
+          match.shelfId !==
+            targetShelfId,
+        );
+
+      orders.push({
+        inventoryId:
+          attempt.unit.inventoryId,
+        attemptId:
+          attempt.attemptId,
+        userId,
+        equipmentId:
+          observedEquipmentId,
+        shelfId:
+          observedShelfId,
+        observedEquipmentId,
+        observedShelfId,
+        serialNumberId:
+          match?.serialNumberId ??
+          null,
+        scannedSerialCode: code,
+        quantityCalculated: 1,
+        isExplicitZero: false,
+        isUnexpected,
+        notes:
+          observation.notes ??
+          null,
+        unknownItemEvidence:
+          !match
+            ? observation.unknownItemEvidence ??
+              `Unknown serial: ${code}`
+            : observation.unknownItemEvidence ??
+              null,
+      });
+
+      continue;
+    }
+
+    const quantity =
+      Number(
+        observation.quantityCalculated ??
+          0,
+      );
+
+    orders.push({
+      inventoryId:
+        attempt.unit.inventoryId,
+      attemptId:
+        attempt.attemptId,
+      userId,
+      equipmentId:
+        targetEquipmentId,
+      shelfId:
+        targetShelfId,
+      observedEquipmentId:
+        observation.observedEquipmentId ??
+        targetEquipmentId,
+      observedShelfId:
+        observation.observedShelfId ??
+        targetShelfId,
+      serialNumberId: null,
+      scannedSerialCode: null,
+      quantityCalculated: quantity,
+      isExplicitZero:
+        Boolean(
+          observation.isExplicitZero,
+        ) ||
+        quantity === 0,
+      isUnexpected:
+        Boolean(
+          observation.isUnexpected,
+        ),
+      notes:
+        observation.notes ??
+        null,
+      unknownItemEvidence:
+        observation.unknownItemEvidence ??
+        null,
     });
   }
 
-  /**
-   * Reconciles Controller 1 and Controller 2 submissions across the ENTIRE inventory.
-   * Compares canonical sets of equipment, shelf, serials, quantities, and unexpected items.
-   * If MATCH: C3 is never activated. Accepted provenance = PRIMARY_DOUBLE_COUNT_MATCH.
-   * If ANY MISMATCH: C3 is activated to recount the ENTIRE inventory. Status = THIRD_COUNT_REQUIRED.
-   */
-  async reconcilePrimaryInventory(inventoryId: string, txClient?: Prisma.TransactionClient) {
-    const run = async (tx: Prisma.TransactionClient) => {
-      const workUnits = await tx.inventoryWorkUnit.findMany({
-        where: { inventoryId },
-        include: {
-          attempts: {
-            where: { status: 'SUBMITTED' },
-            include: {
-              orders: {
-                include: {
-                  serialNumber: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: { unitOrder: 'asc' },
-      });
+  return orders;
+}
 
-      let hasAnyDifference = false;
-      const unitComparisons: any[] = [];
+private async advancePrimaryOne(
+  tx: Prisma.TransactionClient,
+  inventoryId: string,
+  unitOrder: number,
+  userId: string,
+) {
+  const units =
+    await tx.inventoryWorkUnit.findMany({
+      where: { inventoryId },
+      orderBy: {
+        unitOrder: 'asc',
+      },
+      select: {
+        unitId: true,
+        unitOrder: true,
+      },
+    });
 
-      for (const unit of workUnits) {
-        const c1Attempt = unit.attempts.find((a) => a.purpose === 'PRIMARY_1');
-        const c2Attempt = unit.attempts.find((a) => a.purpose === 'PRIMARY_2');
+  const nextUnit =
+    units.find(
+      (unit) =>
+        unit.unitOrder ===
+        unitOrder + 1,
+    );
 
-        if (!c1Attempt || !c2Attempt) {
-          hasAnyDifference = true;
-          break;
-        }
-
-        const c1Orders = c1Attempt.orders || [];
-        const c2Orders = c2Attempt.orders || [];
-
-        // Build canonical maps for comparison
-        // 1. Non-serialized map: `${equipmentId}:${shelfId}` -> quantity
-        const c1NonSerialMap = new Map<string, number>();
-        const c2NonSerialMap = new Map<string, number>();
-
-        // 2. Serialized set:
-        //    `${serialCode}:${equipmentId}:${shelfId}`
-        //
-        // Serial identity alone is not enough for inventory reconciliation:
-        // finding the same serial on a different shelf is a real position
-        // discrepancy and must trigger the final recount.
-        const c1SerialSet = new Set<string>();
-        const c2SerialSet = new Set<string>();
-
-        const extractSerial = (o: any) => {
-          return (o.scannedSerialCode || o.serialNumber?.serialNumberCode || '')
-            .trim()
-            .toLowerCase();
-        };
-
-        const serializedKey = (o: any, serialCode: string) => {
-          const eqId = (o.equipmentId || unit.equipmentId || 'UNKNOWN')
-            .toLowerCase()
-            .trim();
-
-          const shId = (o.shelfId || unit.shelfId || 'UNASSIGNED')
-            .toLowerCase()
-            .trim();
-
-          return `${serialCode}:${eqId}:${shId}`;
-        };
-
-        for (const o of c1Orders) {
-          const sn = extractSerial(o);
-          if (sn) {
-            c1SerialSet.add(serializedKey(o, sn));
-          } else {
-            const eqId = (o.equipmentId || unit.equipmentId || 'UNKNOWN').toLowerCase().trim();
-            const shId = (o.shelfId || unit.shelfId || 'UNKNOWN').toLowerCase().trim();
-            const key = `${eqId}:${shId}`;
-            const qty = Number(o.quantityCalculated ?? 0);
-            c1NonSerialMap.set(key, (c1NonSerialMap.get(key) || 0) + qty);
-          }
-        }
-
-        for (const o of c2Orders) {
-          const sn = extractSerial(o);
-          if (sn) {
-            c2SerialSet.add(serializedKey(o, sn));
-          } else {
-            const eqId = (o.equipmentId || unit.equipmentId || 'UNKNOWN').toLowerCase().trim();
-            const shId = (o.shelfId || unit.shelfId || 'UNKNOWN').toLowerCase().trim();
-            const key = `${eqId}:${shId}`;
-            const qty = Number(o.quantityCalculated ?? 0);
-            c2NonSerialMap.set(key, (c2NonSerialMap.get(key) || 0) + qty);
-          }
-        }
-
-        // Compare non-serialized maps
-        let unitMatches = true;
-        const allKeys = new Set([...c1NonSerialMap.keys(), ...c2NonSerialMap.keys()]);
-        for (const k of allKeys) {
-          const q1 = c1NonSerialMap.get(k) || 0;
-          const q2 = c2NonSerialMap.get(k) || 0;
-          if (q1 !== q2) {
-            unitMatches = false;
-            break;
-          }
-        }
-
-        // Compare serialized sets
-        if (unitMatches) {
-          if (c1SerialSet.size !== c2SerialSet.size) {
-            unitMatches = false;
-          } else {
-            for (const s of c1SerialSet) {
-              if (!c2SerialSet.has(s)) {
-                unitMatches = false;
-                break;
-              }
-            }
-          }
-        }
-
-        unitComparisons.push({
-          unitId: unit.unitId,
-          unitOrder: unit.unitOrder,
-          matches: unitMatches,
-        });
-
-        if (!unitMatches) {
-          hasAnyDifference = true;
-        }
-      }
-
-      const inventory = await tx.inventory.findUnique({
-        where: { inventoryId },
-        include: {
-          Inventory_User: { orderBy: { sequence: 'asc' } },
+  if (nextUnit) {
+    const nextC1 =
+      await tx.inventoryCountAttempt.findFirst({
+        where: {
+          unitId: nextUnit.unitId,
+          assignedUserId: userId,
+          purpose: 'PRIMARY_1',
         },
       });
 
-      if (!inventory) return;
+    if (
+      nextC1?.status === 'BLOCKED'
+    ) {
+      await tx.inventoryCountAttempt.update({
+        where: {
+          attemptId:
+            nextC1.attemptId,
+        },
+        data: {
+          status: 'AVAILABLE',
+        },
+      });
 
-      if (!hasAnyDifference) {
-        // 100% Agreement! C3 bypassed completely.
-        this.logger.log(`Inventory ${inventoryId}: Primary double count MATCHED 100%. Bypassing 3rd controller.`);
-        await tx.inventory.update({
-          where: { inventoryId },
-          data: {
-            status: 'COMPLETED',
-            finalResultSource: 'PRIMARY_DOUBLE_COUNT_MATCH',
-            thirdCountRequired: false,
-          },
-        });
-
-        // Mark all work units as VALIDATED
-        await tx.inventoryWorkUnit.updateMany({
-          where: { inventoryId },
-          data: { status: 'VALIDATED' },
-        });
-
-        // Ensure NO tasks or attempts exist for Controller 3 when C1 and C2 match
-        if (tx.inventoryCountAttempt?.deleteMany) {
-          await tx.inventoryCountAttempt.deleteMany({
-            where: {
-              unitId: { in: workUnits.map((u) => u.unitId) },
-              purpose: 'FINAL_RECOUNT',
-            },
-          });
-        }
-
-        // Ensure NO notifications exist for Controller 3 regarding this inventory
-        const c3User = inventory.Inventory_User.find((u) => u.sequence === 2);
-        if (c3User && tx.notification?.deleteMany) {
-          await tx.notification.deleteMany({
-            where: {
-              recipientId: c3User.userId,
-              payload: { contains: inventoryId },
-            },
-          });
-        }
-
-        // Notify Creator / Admin ONLY IF creator is NOT Controller 3
-        // Controller 3 must NEVER receive any notification when C1 and C2 validate
-        if (
-          inventory.creatorId &&
-          (!c3User || inventory.creatorId !== c3User.userId)
-        ) {
-          await tx.notification.create({
-            data: {
-              recipientId: inventory.creatorId,
-              eventType: 'INVENTORY_PRIMARY_MATCH',
-              payload: JSON.stringify({
-                inventoryId,
-                title: inventory.title,
-                message: `Les deux contrôles physiques concordent parfaitement. L'inventaire est prêt pour la validation finale.`,
-              }),
-            },
-          });
-        }
-      } else {
-        // Mismatch found anywhere! Activate Controller 3 for FULL RECOUNT
-        this.logger.warn(`Inventory ${inventoryId}: Discrepancies detected between C1 and C2. Activating full recount for Controller 3.`);
-        await tx.inventory.update({
-          where: { inventoryId },
-          data: {
-            status: 'THIRD_COUNT_REQUIRED',
-            thirdCountRequired: true,
-          },
-        });
-
-        // Dynamically create/activate Controller 3's tasks for ALL units
-        const c3User = inventory.Inventory_User.find((u) => u.sequence === 2);
-        if (c3User && workUnits.length > 0) {
-          let firstC3AttemptId = '';
-
-          for (let i = 0; i < workUnits.length; i++) {
-            const u = workUnits[i];
-            let existingAttempt: any = null;
-            if (tx.inventoryCountAttempt?.findFirst) {
-              existingAttempt = await tx.inventoryCountAttempt.findFirst({
-                where: {
-                  unitId: u.unitId,
-                  assignedUserId: c3User.userId,
-                  purpose: 'FINAL_RECOUNT',
-                },
-              });
-            }
-
-            if (!existingAttempt) {
-              const created = await tx.inventoryCountAttempt.create({
-                data: {
-                  unitId: u.unitId,
-                  assignedUserId: c3User.userId,
-                  sequence: 2,
-                  purpose: 'FINAL_RECOUNT',
-                  status: i === 0 ? 'AVAILABLE' : 'BLOCKED',
-                },
-              });
-              if (i === 0) firstC3AttemptId = created.attemptId;
-            } else {
-              await tx.inventoryCountAttempt.update({
-                where: { attemptId: existingAttempt.attemptId },
-                data: {
-                  status: i === 0 ? 'AVAILABLE' : 'BLOCKED',
-                },
-              });
-              if (i === 0) firstC3AttemptId = existingAttempt.attemptId;
-            }
-          }
-
-          // Notify Controller 3 ONLY when there is an actual discrepancy
-          if (firstC3AttemptId && tx.notification?.create) {
-            await tx.notification.create({
-              data: {
-                recipientId: c3User.userId,
-                eventType: 'INVENTORY_THIRD_COUNT_REQUIRED',
-                payload: JSON.stringify({
-                  inventoryId,
-                  taskId: firstC3AttemptId,
-                  title: inventory.title,
-                  message: `Un écart a été détecté entre les deux premiers contrôleurs. Un recomptage complet et indépendant de l'inventaire vous est assigné. Première tâche disponible.`,
-                }),
-              },
-            });
-          }
-        }
-
-        // Notify Creator / Admin
-        if (inventory.creatorId) {
-          await tx.notification.create({
-            data: {
-              recipientId: inventory.creatorId,
-              eventType: 'INVENTORY_THIRD_COUNT_REQUIRED',
-              payload: JSON.stringify({
-                inventoryId,
-                title: inventory.title,
-                message: `Écart détecté entre les deux contrôleurs. Le contrôleur final effectue actuellement le recomptage complet de l'inventaire.`,
-              }),
-            },
-          });
-        }
-      }
-    };
-
-    if (txClient) {
-      return run(txClient);
-    } else {
-      return this.prisma.$transaction(run);
+      await this.notifyAttemptAvailable(
+        tx,
+        nextC1.assignedUserId,
+        inventoryId,
+        nextC1.attemptId,
+        nextUnit.unitOrder,
+        'PRIMARY_1',
+      );
     }
   }
 
-  /**
-   * Accepts Controller 3's complete physical count as the final authoritative truth.
-   */
-  async finalizeFromThirdController(inventoryId: string, txClient?: Prisma.TransactionClient) {
-    const run = async (tx: Prisma.TransactionClient) => {
+  const currentUnit =
+    units.find(
+      (unit) =>
+        unit.unitOrder ===
+        unitOrder,
+    );
+
+  if (!currentUnit) {
+    return;
+  }
+
+  const c2 =
+    await tx.inventoryCountAttempt.findFirst({
+      where: {
+        unitId:
+          currentUnit.unitId,
+        purpose: 'PRIMARY_2',
+      },
+    });
+
+  if (
+    !c2 ||
+    c2.status !== 'BLOCKED'
+  ) {
+    return;
+  }
+
+  let mayUnlock =
+    unitOrder === 0;
+
+  if (unitOrder > 0) {
+    const previousUnit =
+      units.find(
+        (unit) =>
+          unit.unitOrder ===
+          unitOrder - 1,
+      );
+
+    if (previousUnit) {
+      const previousC2 =
+        await tx.inventoryCountAttempt.findFirst({
+          where: {
+            unitId:
+              previousUnit.unitId,
+            assignedUserId:
+              c2.assignedUserId,
+            purpose: 'PRIMARY_2',
+            status: 'SUBMITTED',
+          },
+          select: {
+            attemptId: true,
+          },
+        });
+
+      mayUnlock =
+        Boolean(previousC2);
+    }
+  }
+
+  if (mayUnlock) {
+    await tx.inventoryCountAttempt.update({
+      where: {
+        attemptId:
+          c2.attemptId,
+      },
+      data: {
+        status: 'AVAILABLE',
+      },
+    });
+
+    await this.notifyAttemptAvailable(
+      tx,
+      c2.assignedUserId,
+      inventoryId,
+      c2.attemptId,
+      unitOrder,
+      'PRIMARY_2',
+    );
+  }
+}
+
+private async advancePrimaryTwo(
+  tx: Prisma.TransactionClient,
+  inventoryId: string,
+  unitOrder: number,
+  userId: string,
+) {
+  const nextUnit =
+    await tx.inventoryWorkUnit.findFirst({
+      where: {
+        inventoryId,
+        unitOrder:
+          unitOrder + 1,
+      },
+      select: {
+        unitId: true,
+        unitOrder: true,
+      },
+    });
+
+  if (!nextUnit) {
+    return;
+  }
+
+  const nextC1 =
+    await tx.inventoryCountAttempt.findFirst({
+      where: {
+        unitId:
+          nextUnit.unitId,
+        purpose: 'PRIMARY_1',
+        status: 'SUBMITTED',
+      },
+      select: {
+        attemptId: true,
+      },
+    });
+
+  if (!nextC1) {
+    return;
+  }
+
+  const nextC2 =
+    await tx.inventoryCountAttempt.findFirst({
+      where: {
+        unitId:
+          nextUnit.unitId,
+        assignedUserId: userId,
+        purpose: 'PRIMARY_2',
+      },
+    });
+
+  if (
+    nextC2?.status === 'BLOCKED'
+  ) {
+    await tx.inventoryCountAttempt.update({
+      where: {
+        attemptId:
+          nextC2.attemptId,
+      },
+      data: {
+        status: 'AVAILABLE',
+      },
+    });
+
+    await this.notifyAttemptAvailable(
+      tx,
+      nextC2.assignedUserId,
+      inventoryId,
+      nextC2.attemptId,
+      nextUnit.unitOrder,
+      'PRIMARY_2',
+    );
+  }
+}
+
+private async notifyAttemptAvailable(
+  tx: Prisma.TransactionClient,
+  recipientId: string,
+  inventoryId: string,
+  attemptId: string,
+  unitOrder: number,
+  purpose: AttemptPurpose,
+) {
+  await tx.notification.create({
+    data: {
+      recipientId,
+      eventType:
+        'INVENTORY_TASK_AVAILABLE',
+      payload: JSON.stringify({
+        inventoryId,
+        taskId: attemptId,
+        unitOrder,
+        purpose,
+      }),
+    },
+  });
+}
+
+// --------------------------------------------------------------------------
+// Per-unit reconciliation
+// --------------------------------------------------------------------------
+
+async reconcilePrimaryInventory(
+  inventoryId: string,
+  txClient?: Prisma.TransactionClient,
+) {
+  const run =
+    async (
+      tx: Prisma.TransactionClient,
+    ) => {
+      const units =
+        await tx.inventoryWorkUnit.findMany({
+          where: {
+            inventoryId,
+            reconciliationStatus:
+              'PENDING',
+          },
+          include: {
+            attempts: {
+              where: {
+                status: 'SUBMITTED',
+                purpose: {
+                  in: [
+                    'PRIMARY_1',
+                    'PRIMARY_2',
+                  ],
+                },
+              },
+              include: {
+                orders: {
+                  include: {
+                    serialNumber: true,
+                    equipment: true,
+                    shelf: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            unitOrder: 'asc',
+          },
+        });
+
+      const reconciled: Array<{
+        unitId: string;
+        result: string;
+      }> = [];
+
+      for (const unit of units) {
+        const c1 =
+          unit.attempts.find(
+            (attempt) =>
+              attempt.purpose ===
+              'PRIMARY_1',
+          );
+
+        const c2 =
+          unit.attempts.find(
+            (attempt) =>
+              attempt.purpose ===
+              'PRIMARY_2',
+          );
+
+        if (!c1 || !c2) {
+          continue;
+        }
+
+        const result =
+          await this.reconcileUnitLoaded(
+            tx,
+            unit,
+            c1,
+            c2,
+          );
+
+        reconciled.push({
+          unitId:
+            unit.unitId,
+          result,
+        });
+      }
+
+      await this.refreshInventoryCompletion(
+        tx,
+        inventoryId,
+      );
+
+      return {
+        inventoryId,
+        reconciled,
+      };
+    };
+
+  if (txClient) {
+    return run(txClient);
+  }
+
+  return this.prisma.$transaction(
+    run,
+    {
+      isolationLevel: 'Serializable',
+      timeout: 30_000,
+    },
+  );
+}
+
+private async reconcileUnit(
+  tx: Prisma.TransactionClient,
+  unitId: string,
+) {
+  const unit =
+    await tx.inventoryWorkUnit.findUnique({
+      where: { unitId },
+      include: {
+        attempts: {
+          where: {
+            status: 'SUBMITTED',
+          },
+          include: {
+            orders: {
+              include: {
+                serialNumber: true,
+                equipment: true,
+                shelf: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+  if (!unit) {
+    throw new NotFoundException(
+      'Unité de travail introuvable',
+    );
+  }
+
+  if (
+    unit.reconciliationStatus !==
+    'PENDING'
+  ) {
+    return unit.reconciliationStatus;
+  }
+
+  const c1 =
+    unit.attempts.find(
+      (attempt) =>
+        attempt.purpose ===
+        'PRIMARY_1',
+    );
+
+  const c2 =
+    unit.attempts.find(
+      (attempt) =>
+        attempt.purpose ===
+        'PRIMARY_2',
+    );
+
+  if (!c1 || !c2) {
+    return 'PENDING';
+  }
+
+  return this.reconcileUnitLoaded(
+    tx,
+    unit,
+    c1,
+    c2,
+  );
+}
+
+private async reconcileUnitLoaded(
+  tx: Prisma.TransactionClient,
+  unit: any,
+  c1: any,
+  c2: any,
+) {
+  const first =
+    this.canonicalizeAttempt(
+      unit,
+      c1,
+    );
+
+  const second =
+    this.canonicalizeAttempt(
+      unit,
+      c2,
+    );
+
+  if (
+    this.canonicalAttemptsEqual(
+      first,
+      second,
+    )
+  ) {
+    await tx.inventoryWorkUnit.update({
+      where: {
+        unitId: unit.unitId,
+      },
+      data: {
+        status: 'VALIDATED',
+        reconciliationStatus:
+          'PRIMARY_MATCH',
+        acceptedAttemptId:
+          c1.attemptId,
+        reconciledAt:
+          new Date(),
+      },
+    });
+
+    return 'PRIMARY_MATCH';
+  }
+
+  const inventory =
+    await tx.inventory.findUnique({
+      where: {
+        inventoryId:
+          unit.inventoryId,
+      },
+      include: {
+        Inventory_User: {
+          orderBy: {
+            sequence: 'asc',
+          },
+        },
+      },
+    });
+
+  if (!inventory) {
+    throw new NotFoundException(
+      'Inventaire introuvable',
+    );
+  }
+
+  const controller3 =
+    inventory.Inventory_User.find(
+      (participant) =>
+        participant.sequence === 2,
+    );
+
+  if (!controller3) {
+    throw new BadRequestException(
+      "Un écart C1/C2 nécessite un troisième contrôleur, mais aucun contrôleur final n'est assigné.",
+    );
+  }
+
+  let c3 =
+    await tx.inventoryCountAttempt.findFirst({
+      where: {
+        unitId: unit.unitId,
+        purpose:
+          'FINAL_RECOUNT',
+      },
+    });
+
+  if (!c3) {
+    c3 =
+      await tx.inventoryCountAttempt.create({
+        data: {
+          unitId: unit.unitId,
+          assignedUserId:
+            controller3.userId,
+          sequence: 2,
+          purpose:
+            'FINAL_RECOUNT',
+          status: 'AVAILABLE',
+          linkedPriorAttemptId:
+            c2.attemptId,
+        },
+      });
+  } else if (
+    c3.status === 'BLOCKED'
+  ) {
+    c3 =
+      await tx.inventoryCountAttempt.update({
+        where: {
+          attemptId:
+            c3.attemptId,
+        },
+        data: {
+          status: 'AVAILABLE',
+        },
+      });
+  }
+
+  await tx.inventoryWorkUnit.update({
+    where: {
+      unitId: unit.unitId,
+    },
+    data: {
+      status:
+        'RECOUNT_REQUIRED',
+      reconciliationStatus:
+        'THIRD_REQUIRED',
+      acceptedAttemptId: null,
+      reconciledAt: null,
+    },
+  });
+
+  await tx.inventory.update({
+    where: {
+      inventoryId:
+        unit.inventoryId,
+    },
+    data: {
+      // Compatibility only. Per-unit status is authoritative.
+      thirdCountRequired: true,
+      finalResultSource:
+        'PER_UNIT_ACCEPTED_ATTEMPT',
+    },
+  });
+
+  await tx.notification.create({
+    data: {
+      recipientId:
+        controller3.userId,
+      eventType:
+        'INVENTORY_THIRD_COUNT_REQUIRED',
+      payload: JSON.stringify({
+        inventoryId:
+          unit.inventoryId,
+        unitId:
+          unit.unitId,
+        unitOrder:
+          unit.unitOrder,
+        taskId:
+          c3.attemptId,
+        message:
+          `Un écart C1/C2 a été détecté uniquement sur l'unité #${unit.unitOrder + 1}.`,
+      }),
+    },
+  });
+
+  return 'THIRD_REQUIRED';
+}
+
+private canonicalizeAttempt(
+  unit: any,
+  attempt: any,
+): CanonicalAttempt {
+  const standard =
+    new Map<
+      string,
+      CanonicalStandardValue
+    >();
+
+  const serials =
+    new Map<
+      string,
+      CanonicalSerialValue
+    >();
+
+  const unknown =
+    new Set<string>();
+
+  for (
+    const order of
+    attempt.orders ?? []
+  ) {
+    const equipmentId =
+      (
+        order.observedEquipmentId ??
+        order.equipmentId ??
+        unit.equipmentId ??
+        ''
+      )
+        .toString()
+        .trim();
+
+    const shelfId =
+      (
+        order.observedShelfId ??
+        order.shelfId ??
+        unit.shelfId ??
+        ''
+      )
+        .toString()
+        .trim();
+
+    const serialCode =
+      (
+        order.scannedSerialCode ??
+        order.serialNumber
+          ?.serialNumberCode ??
+        ''
+      )
+        .toString()
+        .trim();
+
+    if (serialCode) {
+      serials.set(
+        serialCode.toLowerCase(),
+        {
+          serialCode,
+          serialNumberId:
+            order.serialNumberId ??
+            null,
+          equipmentId,
+          shelfId:
+            shelfId || null,
+        },
+      );
+
+      continue;
+    }
+
+    if (
+      equipmentId &&
+      shelfId
+    ) {
+      const key =
+        `${equipmentId.toLowerCase()}:${shelfId.toLowerCase()}`;
+
+      const quantity =
+        Number(
+          order.quantityCalculated ??
+            0,
+        );
+
+      const existing =
+        standard.get(key);
+
+      standard.set(
+        key,
+        {
+          equipmentId,
+          shelfId,
+          quantity:
+            (
+              existing
+                ?.quantity ??
+              0
+            ) +
+            quantity,
+        },
+      );
+
+      continue;
+    }
+
+    if (
+      order.unknownItemEvidence
+    ) {
+      unknown.add(
+        String(
+          order.unknownItemEvidence,
+        )
+          .trim()
+          .toLowerCase(),
+      );
+    }
+  }
+
+  return {
+    standard,
+    serials,
+    unknown,
+  };
+}
+
+private canonicalAttemptsEqual(
+  left: CanonicalAttempt,
+  right: CanonicalAttempt,
+) {
+  const standardKeys =
+    new Set([
+      ...left.standard.keys(),
+      ...right.standard.keys(),
+    ]);
+
+  for (
+    const key of standardKeys
+  ) {
+    if (
+      (
+        left.standard.get(key)
+          ?.quantity ?? 0
+      ) !==
+      (
+        right.standard.get(key)
+          ?.quantity ?? 0
+      )
+    ) {
+      return false;
+    }
+  }
+
+  if (
+    left.serials.size !==
+    right.serials.size
+  ) {
+    return false;
+  }
+
+  for (
+    const [code, value] of
+    left.serials
+  ) {
+    const other =
+      right.serials.get(code);
+
+    if (!other) {
+      return false;
+    }
+
+    if (
+      value.equipmentId.toLowerCase() !==
+        other.equipmentId.toLowerCase() ||
+      (
+        value.shelfId ?? ''
+      ).toLowerCase() !==
+        (
+          other.shelfId ?? ''
+        ).toLowerCase()
+    ) {
+      return false;
+    }
+  }
+
+  if (
+    left.unknown.size !==
+    right.unknown.size
+  ) {
+    return false;
+  }
+
+  for (
+    const value of left.unknown
+  ) {
+    if (
+      !right.unknown.has(value)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+private async refreshInventoryCompletion(
+  tx: Prisma.TransactionClient,
+  inventoryId: string,
+) {
+  const total =
+    await tx.inventoryWorkUnit.count({
+      where: { inventoryId },
+    });
+
+  if (!total) {
+    return;
+  }
+
+  const pending =
+    await tx.inventoryWorkUnit.count({
+      where: {
+        inventoryId,
+        reconciliationStatus: {
+          notIn:
+            RECONCILED_STATUSES,
+        },
+      },
+    });
+
+  const thirdRequired =
+    await tx.inventoryWorkUnit.count({
+      where: {
+        inventoryId,
+        reconciliationStatus:
+          'THIRD_REQUIRED',
+      },
+    });
+
+  if (pending === 0) {
+    const inventory =
       await tx.inventory.update({
         where: { inventoryId },
         data: {
           status: 'COMPLETED',
-          finalResultSource: 'THIRD_FULL_RECOUNT_FINAL',
+          thirdCountRequired: false,
+          finalResultSource:
+            'PER_UNIT_ACCEPTED_ATTEMPT',
         },
       });
 
-      const inv = await tx.inventory.findUnique({ where: { inventoryId } });
-      if (inv?.creatorId) {
-        await tx.notification.create({
-          data: {
-            recipientId: inv.creatorId,
-            eventType: 'INVENTORY_THIRD_COUNT_COMPLETED',
-            payload: JSON.stringify({
-              inventoryId,
-              title: inv.title,
-              message: `Le recomptage complet par le contrôleur final est terminé. L'inventaire est prêt pour la validation finale.`,
-            }),
-          },
-        });
-      }
-    };
-
-    if (txClient) {
-      return run(txClient);
-    } else {
-      return this.prisma.$transaction(run);
+    if (inventory.creatorId) {
+      await tx.notification.create({
+        data: {
+          recipientId:
+            inventory.creatorId,
+          eventType:
+            'INVENTORY_COUNTS_COMPLETED',
+          payload: JSON.stringify({
+            inventoryId,
+            title:
+              inventory.title,
+            message:
+              "Toutes les unités ont un résultat accepté. L'inventaire est prêt à être finalisé.",
+          }),
+        },
+      });
     }
+
+    return;
   }
 
-  /**
-   * Returns pipeline progress (C1, C2, C3 completed units, stage, and work unit statuses)
-   */
-  async getInventoryProgress(inventoryId: string) {
-    const inventory = await this.prisma.inventory.findUnique({
+  await tx.inventory.update({
+    where: { inventoryId },
+    data: {
+      status: 'IN_PROGRESS',
+      thirdCountRequired:
+        thirdRequired > 0,
+      finalResultSource:
+        'PER_UNIT_ACCEPTED_ATTEMPT',
+    },
+  });
+}
+
+
+// --------------------------------------------------------------------------
+// Progress + report rows
+// --------------------------------------------------------------------------
+
+async getInventoryProgress(
+  inventoryId: string,
+) {
+  const inventory =
+    await this.prisma.inventory.findUnique({
       where: { inventoryId },
       include: {
         Inventory_User: {
           include: {
-            User: { select: { userId: true, userName: true, userEmail: true } },
-          },
-          orderBy: { sequence: 'asc' },
-        },
-        workUnits: {
-          include: {
-            attempts: {
-              include: {
-                assignedUser: { select: { userId: true, userName: true } },
+            User: {
+              select: {
+                userId: true,
+                userName: true,
+                userEmail: true,
               },
-              orderBy: { sequence: 'asc' },
             },
           },
-          orderBy: { unitOrder: 'asc' },
+          orderBy: {
+            sequence: 'asc',
+          },
         },
-      },
-    });
-
-    if (!inventory) throw new NotFoundException('Inventaire introuvable');
-
-    const totalUnits = inventory.workUnits.length;
-    const participants = inventory.Inventory_User;
-
-    const c1 = participants[0];
-    const c2 = participants[1];
-    const c3 = participants.length > 2 ? participants[2] : null;
-
-    let c1Completed = 0;
-    let c2Completed = 0;
-    let c3Completed = 0;
-
-    for (const unit of inventory.workUnits) {
-      const a1 = unit.attempts.find((a) => a.purpose === 'PRIMARY_1');
-      if (a1 && a1.status === 'SUBMITTED') c1Completed++;
-
-      const a2 = unit.attempts.find((a) => a.purpose === 'PRIMARY_2');
-      if (a2 && a2.status === 'SUBMITTED') c2Completed++;
-
-      const a3 = unit.attempts.find((a) => a.purpose === 'FINAL_RECOUNT');
-      if (a3 && a3.status === 'SUBMITTED') c3Completed++;
-    }
-
-    return {
-      inventoryId: inventory.inventoryId,
-      title: inventory.title,
-      typeInventory: inventory.typeInventory,
-      status: inventory.status,
-      policyVersion: inventory.policyVersion,
-      finalResultSource: inventory.finalResultSource,
-      thirdCountRequired: inventory.thirdCountRequired,
-      totalUnits,
-      controllers: {
-        controller1: {
-          user: c1?.User,
-          responsibility: 'PRIMARY_COUNTER_1',
-          completedUnits: c1Completed,
-          isFinished: c1Completed === totalUnits && totalUnits > 0,
-        },
-        controller2: {
-          user: c2?.User,
-          responsibility: 'PRIMARY_COUNTER_2',
-          completedUnits: c2Completed,
-          isFinished: c2Completed === totalUnits && totalUnits > 0,
-        },
-        finalController: {
-          user: c3?.User,
-          responsibility: 'FINAL_CONTROLLER',
-          completedUnits: c3Completed,
-          isActive: inventory.status === 'THIRD_COUNT_REQUIRED' || inventory.finalResultSource === 'THIRD_FULL_RECOUNT_FINAL',
-          isFinished: c3Completed === totalUnits && totalUnits > 0,
-        },
-      },
-      workUnits: inventory.workUnits.map((u) => ({
-        unitId: u.unitId,
-        unitOrder: u.unitOrder,
-        equipmentId: u.equipmentId,
-        shelfId: u.shelfId,
-        c1Status: u.attempts.find((a) => a.purpose === 'PRIMARY_1')?.status || 'BLOCKED',
-        c2Status: u.attempts.find((a) => a.purpose === 'PRIMARY_2')?.status || 'BLOCKED',
-        c3Status: u.attempts.find((a) => a.purpose === 'FINAL_RECOUNT')?.status || 'BLOCKED',
-      })),
-    };
-  }
-
-  /**
-   * Returns comparison between Controller 1 and Controller 2, or Controller 3 observations
-   */
-  async getInventoryComparison(inventoryId: string) {
-    const inventory = await this.prisma.inventory.findUnique({
-      where: { inventoryId },
-      include: {
         workUnits: {
           include: {
             attempts: {
-              where: { status: 'SUBMITTED' },
               include: {
-                orders: {
-                  include: {
-                    serialNumber: true,
-                    equipment: true,
-                    shelf: true,
+                assignedUser: {
+                  select: {
+                    userId: true,
+                    userName: true,
                   },
                 },
               },
-              orderBy: { sequence: 'asc' },
+              orderBy: {
+                sequence: 'asc',
+              },
             },
           },
-          orderBy: { unitOrder: 'asc' },
+          orderBy: {
+            unitOrder: 'asc',
+          },
         },
       },
     });
 
-    if (!inventory) throw new NotFoundException('Inventaire introuvable');
+  if (!inventory) {
+    throw new NotFoundException(
+      'Inventaire introuvable',
+    );
+  }
 
-    const equipmentIds = inventory.workUnits
-      .map((u) => u.equipmentId)
-      .filter((id): id is string => Boolean(id));
-    const shelfIds = inventory.workUnits
-      .map((u) => u.shelfId)
-      .filter((id): id is string => Boolean(id));
+  const totalUnits =
+    inventory.workUnits.length;
 
-    const [equipments, shelves] = await Promise.all([
-      equipmentIds.length > 0
-        ? this.prisma.equipment.findMany({
-          where: { equipmentId: { in: equipmentIds } },
-        })
-        : [],
-      shelfIds.length > 0
-        ? this.prisma.shelf.findMany({
-          where: { shelfId: { in: shelfIds } },
-        })
-        : [],
+  const participants =
+    inventory.Inventory_User;
+
+  const countSubmitted =
+    (purpose: AttemptPurpose) =>
+      inventory.workUnits.filter(
+        (unit) =>
+          unit.attempts.some(
+            (attempt) =>
+              attempt.purpose === purpose &&
+              attempt.status === 'SUBMITTED',
+          ),
+      ).length;
+
+  const c1Completed =
+    countSubmitted('PRIMARY_1');
+
+  const c2Completed =
+    countSubmitted('PRIMARY_2');
+
+  const c3Required =
+    inventory.workUnits.filter(
+      (unit) =>
+        [
+          'THIRD_REQUIRED',
+          'THIRD_RESOLVED',
+        ].includes(
+          unit.reconciliationStatus,
+        ),
+    ).length;
+
+  const c3Completed =
+    countSubmitted(
+      'FINAL_RECOUNT',
+    );
+
+  const reconciledUnits =
+    inventory.workUnits.filter(
+      (unit) =>
+        RECONCILED_STATUSES.includes(
+          unit.reconciliationStatus as UnitReconciliationStatus,
+        ),
+    ).length;
+
+  return {
+    inventoryId:
+      inventory.inventoryId,
+    title:
+      inventory.title,
+    typeInventory:
+      inventory.typeInventory,
+    status:
+      inventory.status,
+    policyVersion:
+      inventory.policyVersion,
+    totalUnits,
+    reconciledUnits,
+
+    controllers: {
+      controller1: {
+        user:
+          participants[0]?.User ??
+          null,
+        responsibility:
+          'PRIMARY_COUNTER_1',
+        completedUnits:
+          c1Completed,
+        totalUnits,
+        isFinished:
+          c1Completed === totalUnits &&
+          totalUnits > 0,
+      },
+
+      controller2: {
+        user:
+          participants[1]?.User ??
+          null,
+        responsibility:
+          'PRIMARY_COUNTER_2',
+        completedUnits:
+          c2Completed,
+        totalUnits,
+        isFinished:
+          c2Completed === totalUnits &&
+          totalUnits > 0,
+      },
+
+      controller3: {
+        user:
+          participants[2]?.User ??
+          null,
+        responsibility:
+          'FINAL_CONTROLLER',
+        requiredUnits:
+          c3Required,
+        completedUnits:
+          c3Completed,
+        isActive:
+          c3Required > c3Completed,
+        isFinished:
+          c3Required > 0 &&
+          c3Completed === c3Required,
+      },
+    },
+
+    workUnits:
+      inventory.workUnits.map(
+        (unit) => ({
+          unitId:
+            unit.unitId,
+          unitOrder:
+            unit.unitOrder,
+          equipmentId:
+            unit.equipmentId,
+          shelfId:
+            unit.shelfId,
+          status:
+            unit.status,
+          reconciliationStatus:
+            unit.reconciliationStatus,
+          acceptedAttemptId:
+            unit.acceptedAttemptId,
+          reconciledAt:
+            unit.reconciledAt,
+
+          c1Status:
+            unit.attempts.find(
+              (attempt) =>
+                attempt.purpose ===
+                'PRIMARY_1',
+            )?.status ??
+            'BLOCKED',
+
+          c2Status:
+            unit.attempts.find(
+              (attempt) =>
+                attempt.purpose ===
+                'PRIMARY_2',
+            )?.status ??
+            'BLOCKED',
+
+          c3Status:
+            unit.attempts.find(
+              (attempt) =>
+                attempt.purpose ===
+                'FINAL_RECOUNT',
+            )?.status ??
+            'NOT_REQUIRED',
+        }),
+      ),
+  };
+}
+
+async getInventoryComparison(
+  inventoryId: string,
+) {
+  const inventory =
+    await this.loadInventoryForReporting(
+      inventoryId,
+    );
+
+  const units =
+    inventory.workUnits.map(
+      (unit: any) =>
+        this.buildUnitReport(unit),
+    );
+
+  return {
+    inventoryId:
+      inventory.inventoryId,
+    title:
+      inventory.title,
+    status:
+      inventory.status,
+    typeInventory:
+      inventory.typeInventory,
+    units,
+    summary:
+      this.summarizeUnitReports(
+        units,
+      ),
+  };
+}
+
+private async loadInventoryForReporting(
+  inventoryId: string,
+) {
+  const inventory =
+    await this.prisma.inventory.findUnique({
+      where: { inventoryId },
+      include: {
+        Inventory_User: {
+          include: {
+            User: {
+              select: {
+                userId: true,
+                userName: true,
+                userEmail: true,
+              },
+            },
+          },
+          orderBy: {
+            sequence: 'asc',
+          },
+        },
+        workUnits: {
+          include: {
+            attempts: {
+              where: {
+                status: 'SUBMITTED',
+              },
+              include: {
+                orders: {
+                  include: {
+                    equipment: true,
+                    shelf: true,
+                    serialNumber: true,
+                  },
+                },
+                assignedUser: {
+                  select: {
+                    userId: true,
+                    userName: true,
+                  },
+                },
+              },
+              orderBy: {
+                sequence: 'asc',
+              },
+            },
+            acceptedAttempt: {
+              include: {
+                orders: {
+                  include: {
+                    equipment: true,
+                    shelf: true,
+                    serialNumber: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            unitOrder: 'asc',
+          },
+        },
+      },
+    });
+
+  if (!inventory) {
+    throw new NotFoundException(
+      'Inventaire introuvable',
+    );
+  }
+
+  return inventory;
+}
+
+private buildUnitReport(
+  unit: any,
+) {
+  const c1 =
+    unit.attempts.find(
+      (attempt: any) =>
+        attempt.purpose ===
+        'PRIMARY_1',
+    ) ?? null;
+
+  const c2 =
+    unit.attempts.find(
+      (attempt: any) =>
+        attempt.purpose ===
+        'PRIMARY_2',
+    ) ?? null;
+
+  const c3 =
+    unit.attempts.find(
+      (attempt: any) =>
+        attempt.purpose ===
+        'FINAL_RECOUNT',
+    ) ?? null;
+
+  const accepted =
+    unit.acceptedAttempt ??
+    (
+      unit.acceptedAttemptId
+        ? unit.attempts.find(
+            (attempt: any) =>
+              attempt.attemptId ===
+              unit.acceptedAttemptId,
+          )
+        : null
+    );
+
+  const c1Cells =
+    this.attemptCells(
+      unit,
+      c1,
+    );
+
+  const c2Cells =
+    this.attemptCells(
+      unit,
+      c2,
+    );
+
+  const c3Cells =
+    this.attemptCells(
+      unit,
+      c3,
+    );
+
+  const finalCells =
+    this.attemptCells(
+      unit,
+      accepted,
+    );
+
+  const keys =
+    new Set([
+      ...c1Cells.keys(),
+      ...c2Cells.keys(),
+      ...c3Cells.keys(),
+      ...finalCells.keys(),
     ]);
 
-    const eqMap = new Map(equipments.map((e) => [e.equipmentId, e]));
-    const shelfMap = new Map(shelves.map((s) => [s.shelfId, s]));
+  const rows =
+    [...keys]
+      .sort()
+      .map((key) => {
+        const first =
+          c1Cells.get(key) ??
+          null;
 
-    return {
-      inventoryId,
-      status: inventory.status,
-      thirdCountRequired: inventory.thirdCountRequired,
-      finalResultSource: inventory.finalResultSource,
-      units: inventory.workUnits.map((u) => {
-        const c1Attempt = u.attempts.find((a) => a.purpose === 'PRIMARY_1');
-        const c2Attempt = u.attempts.find((a) => a.purpose === 'PRIMARY_2');
-        const c3Attempt = u.attempts.find((a) => a.purpose === 'FINAL_RECOUNT');
+        const second =
+          c2Cells.get(key) ??
+          null;
+
+        const third =
+          c3Cells.get(key) ??
+          null;
+
+        const final =
+          finalCells.get(key) ??
+          null;
+
+        const sample =
+          final ??
+          third ??
+          second ??
+          first;
+
+        const kind =
+          key.startsWith('SER|')
+            ? 'SERIALIZED'
+            : key.startsWith('STD|')
+              ? 'STANDARD'
+              : 'UNKNOWN';
 
         return {
-          unitId: u.unitId,
-          unitOrder: u.unitOrder,
-          equipmentId: u.equipmentId,
-          equipment: u.equipmentId ? eqMap.get(u.equipmentId) || null : null,
-          shelfId: u.shelfId,
-          shelf: u.shelfId ? shelfMap.get(u.shelfId) || null : null,
-          c1Orders: c1Attempt?.orders || [],
-          c2Orders: c2Attempt?.orders || [],
-          c3Orders: c3Attempt?.orders || [],
+          key,
+          kind,
+          equipmentId:
+            sample?.equipmentId ??
+            null,
+          equipmentName:
+            sample?.equipmentName ??
+            null,
+          shelfId:
+            sample?.shelfId ??
+            null,
+          shelfName:
+            sample?.shelfName ??
+            null,
+          serialNumberCode:
+            sample?.serialNumberCode ??
+            null,
+
+          controller1:
+            first,
+          controller2:
+            second,
+          controller3:
+            third,
+          accepted:
+            final,
+
+          controller1VsAccepted:
+            this.compareReportCells(
+              kind,
+              first,
+              final,
+            ),
+
+          controller2VsAccepted:
+            this.compareReportCells(
+              kind,
+              second,
+              final,
+            ),
         };
-      }),
+      });
+
+  return {
+    unitId:
+      unit.unitId,
+    unitOrder:
+      unit.unitOrder,
+    equipmentId:
+      unit.equipmentId,
+    shelfId:
+      unit.shelfId,
+    status:
+      unit.status,
+    reconciliationStatus:
+      unit.reconciliationStatus,
+    acceptedAttemptId:
+      unit.acceptedAttemptId,
+    acceptedPurpose:
+      accepted?.purpose ??
+      null,
+
+    attempts: {
+      controller1: c1
+        ? {
+            attemptId:
+              c1.attemptId,
+            user:
+              c1.assignedUser ??
+              null,
+            submittedAt:
+              c1.submittedAt,
+          }
+        : null,
+
+      controller2: c2
+        ? {
+            attemptId:
+              c2.attemptId,
+            user:
+              c2.assignedUser ??
+              null,
+            submittedAt:
+              c2.submittedAt,
+          }
+        : null,
+
+      controller3: c3
+        ? {
+            attemptId:
+              c3.attemptId,
+            user:
+              c3.assignedUser ??
+              null,
+            submittedAt:
+              c3.submittedAt,
+          }
+        : null,
+    },
+
+    rows,
+  };
+}
+
+private attemptCells(
+  unit: any,
+  attempt: any,
+) {
+  const cells =
+    new Map<
+      string,
+      ReportCell
+    >();
+
+  if (!attempt) {
+    return cells;
+  }
+
+  for (
+    const order of
+    attempt.orders ?? []
+  ) {
+    const equipmentId =
+      order.observedEquipmentId ??
+      order.equipmentId ??
+      unit.equipmentId ??
+      null;
+
+    const shelfId =
+      order.observedShelfId ??
+      order.shelfId ??
+      unit.shelfId ??
+      null;
+
+    const serialCode =
+      (
+        order.scannedSerialCode ??
+        order.serialNumber
+          ?.serialNumberCode ??
+        ''
+      )
+        .toString()
+        .trim();
+
+    if (serialCode) {
+      const key =
+        `SER|${serialCode.toLowerCase()}`;
+
+      cells.set(
+        key,
+        {
+          quantity: 1,
+          serialNumberCode:
+            serialCode,
+          serialNumberId:
+            order.serialNumberId ??
+            null,
+          equipmentId,
+          equipmentName:
+            order.equipment
+              ?.equipmentName ??
+            null,
+          shelfId,
+          shelfName:
+            order.shelf
+              ?.shelfName ??
+            null,
+          isUnexpected:
+            Boolean(
+              order.isUnexpected,
+            ),
+          notes:
+            order.notes
+              ? [order.notes]
+              : [],
+        },
+      );
+
+      continue;
+    }
+
+    if (
+      equipmentId &&
+      shelfId
+    ) {
+      const key =
+        `STD|${equipmentId.toLowerCase()}|${shelfId.toLowerCase()}`;
+
+      const existing =
+        cells.get(key);
+
+      cells.set(
+        key,
+        {
+          quantity:
+            (
+              existing?.quantity ??
+              0
+            ) +
+            Number(
+              order.quantityCalculated ??
+                0,
+            ),
+          serialNumberCode:
+            null,
+          serialNumberId:
+            null,
+          equipmentId,
+          equipmentName:
+            order.equipment
+              ?.equipmentName ??
+            existing
+              ?.equipmentName ??
+            null,
+          shelfId,
+          shelfName:
+            order.shelf
+              ?.shelfName ??
+            existing
+              ?.shelfName ??
+            null,
+          isUnexpected:
+            Boolean(
+              existing?.isUnexpected,
+            ) ||
+            Boolean(
+              order.isUnexpected,
+            ),
+          notes: [
+            ...(
+              existing?.notes ??
+              []
+            ),
+            ...(
+              order.notes
+                ? [order.notes]
+                : []
+            ),
+          ],
+        },
+      );
+
+      continue;
+    }
+
+    if (
+      order.unknownItemEvidence
+    ) {
+      const value =
+        String(
+          order.unknownItemEvidence,
+        );
+
+      const key =
+        `UNK|${value.toLowerCase()}`;
+
+      cells.set(
+        key,
+        {
+          quantity:
+            Number(
+              order.quantityCalculated ??
+                1,
+            ),
+          serialNumberCode:
+            serialCode || null,
+          serialNumberId:
+            order.serialNumberId ??
+            null,
+          equipmentId,
+          equipmentName: null,
+          shelfId,
+          shelfName: null,
+          isUnexpected: true,
+          notes: [value],
+        },
+      );
+    }
+  }
+
+  return cells;
+}
+
+private compareReportCells(
+  kind: string,
+  controller:
+    ReportCell | null,
+  accepted:
+    ReportCell | null,
+) {
+  if (!accepted) {
+    return {
+      status: 'PENDING',
+      delta: null,
+      missing: 0,
+      surplus: 0,
     };
   }
 
-  /**
-   * Finalizes the inventory:
-   * 1. Validates that the inventory is COMPLETED.
-   * 2. Freezes the accepted physical count into FINALIZED snapshots.
-   * 3. Compares accepted physical truth against the most recent compatible verified inventory.
-   * 4. Reconciles variance against recorded stock movements.
-   * 5. Automatically generates normalized InventoryInvestigationIssue records for unexplained shortages.
-   * 6. Transitions inventory status to FINALIZED.
-   */
-  async finalizeInventory(inventoryId: string, finalizerId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const inventory = await tx.inventory.findUnique({
-        where: { inventoryId },
-        include: {
-          workUnits: {
+  if (kind === 'STANDARD') {
+    const controllerQuantity =
+      controller?.quantity ?? 0;
+
+    const delta =
+      controllerQuantity -
+      accepted.quantity;
+
+    if (delta === 0) {
+      return {
+        status: 'CONFORME',
+        delta: 0,
+        missing: 0,
+        surplus: 0,
+      };
+    }
+
+    if (delta < 0) {
+      return {
+        status: 'MANQUE',
+        delta,
+        missing:
+          Math.abs(delta),
+        surplus: 0,
+      };
+    }
+
+    return {
+      status: 'SURPLUS',
+      delta,
+      missing: 0,
+      surplus: delta,
+    };
+  }
+
+  if (
+    kind === 'SERIALIZED'
+  ) {
+    if (!controller) {
+      return {
+        status: 'MANQUE',
+        delta: -1,
+        missing: 1,
+        surplus: 0,
+      };
+    }
+
+    if (
+      (
+        controller.equipmentId ??
+        ''
+      ).toLowerCase() !==
+      (
+        accepted.equipmentId ??
+        ''
+      ).toLowerCase()
+    ) {
+      return {
+        status:
+          'MAUVAIS_ARTICLE',
+        delta: 0,
+        missing: 0,
+        surplus: 0,
+      };
+    }
+
+    if (
+      (
+        controller.shelfId ??
+        ''
+      ).toLowerCase() !==
+      (
+        accepted.shelfId ??
+        ''
+      ).toLowerCase()
+    ) {
+      return {
+        status:
+          'MAUVAISE_POSITION',
+        delta: 0,
+        missing: 0,
+        surplus: 0,
+      };
+    }
+
+    return {
+      status: 'CONFORME',
+      delta: 0,
+      missing: 0,
+      surplus: 0,
+    };
+  }
+
+  return {
+    status:
+      controller
+        ? 'ECART'
+        : 'MANQUE',
+    delta: null,
+    missing:
+      controller
+        ? 0
+        : 1,
+    surplus: 0,
+  };
+}
+
+private summarizeUnitReports(
+  units: any[],
+) {
+  let primaryMatchUnits =
+    0;
+  let thirdResolvedUnits =
+    0;
+  let thirdRequiredUnits =
+    0;
+  let compliantRows = 0;
+  let controller1Missing =
+    0;
+  let controller1Surplus =
+    0;
+  let controller2Missing =
+    0;
+  let controller2Surplus =
+    0;
+  let locationMismatches =
+    0;
+
+  for (const unit of units) {
+    if (
+      unit.reconciliationStatus ===
+      'PRIMARY_MATCH'
+    ) {
+      primaryMatchUnits += 1;
+    }
+
+    if (
+      unit.reconciliationStatus ===
+      'THIRD_RESOLVED'
+    ) {
+      thirdResolvedUnits += 1;
+    }
+
+    if (
+      unit.reconciliationStatus ===
+      'THIRD_REQUIRED'
+    ) {
+      thirdRequiredUnits += 1;
+    }
+
+    for (const row of unit.rows) {
+      if (
+        row.controller1VsAccepted
+          .status ===
+          'CONFORME' &&
+        row.controller2VsAccepted
+          .status ===
+          'CONFORME'
+      ) {
+        compliantRows += 1;
+      }
+
+      controller1Missing +=
+        row.controller1VsAccepted
+          .missing ?? 0;
+
+      controller1Surplus +=
+        row.controller1VsAccepted
+          .surplus ?? 0;
+
+      controller2Missing +=
+        row.controller2VsAccepted
+          .missing ?? 0;
+
+      controller2Surplus +=
+        row.controller2VsAccepted
+          .surplus ?? 0;
+
+      if (
+        [
+          row.controller1VsAccepted
+            .status,
+          row.controller2VsAccepted
+            .status,
+        ].includes(
+          'MAUVAISE_POSITION',
+        )
+      ) {
+        locationMismatches += 1;
+      }
+    }
+  }
+
+  return {
+    totalUnits:
+      units.length,
+    primaryMatchUnits,
+    thirdRequiredUnits,
+    thirdResolvedUnits,
+    compliantRows,
+    controller1: {
+      missing:
+        controller1Missing,
+      surplus:
+        controller1Surplus,
+    },
+    controller2: {
+      missing:
+        controller2Missing,
+      surplus:
+        controller2Surplus,
+    },
+    locationMismatches,
+  };
+}
+
+
+  // --------------------------------------------------------------------------
+  // Finalization + append-only adjustment movements
+  // --------------------------------------------------------------------------
+
+  async finalizeInventory(
+    inventoryId: string,
+    finalizerId: string,
+  ) {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const inventory =
+          await tx.inventory.findUnique({
+            where: { inventoryId },
             include: {
-              attempts: {
-                where: { status: 'SUBMITTED' },
+              workUnits: {
                 include: {
-                  orders: {
+                  acceptedAttempt: {
                     include: {
-                      serialNumber: true,
-                      equipment: true,
-                      shelf: true,
+                      orders: {
+                        include: {
+                          serialNumber: true,
+                          equipment: true,
+                          shelf: true,
+                        },
+                      },
                     },
                   },
                 },
+                orderBy: {
+                  unitOrder: 'asc',
+                },
               },
             },
-            orderBy: { unitOrder: 'asc' },
-          },
-          Inventory_User: true,
-        },
-      });
+          });
 
-      if (!inventory) throw new NotFoundException('Inventaire introuvable');
-      if (inventory.status === 'FINALIZED') {
-        throw new BadRequestException('Cet inventaire est déjà finalisé.');
-      }
-      if (inventory.status !== 'COMPLETED' && inventory.status !== 'THIRD_COUNT_REQUIRED') {
-        throw new BadRequestException('L\'inventaire ne peut être finalisé tant que tous les comptages requis ne sont pas terminés.');
-      }
-
-      // Determine which controller's observations constitute the authoritative accepted result
-      const useThirdController =
-        inventory.finalResultSource === 'THIRD_FULL_RECOUNT_FINAL' ||
-        inventory.status === 'THIRD_COUNT_REQUIRED';
-      const targetPurpose = useThirdController ? 'FINAL_RECOUNT' : 'PRIMARY_1';
-
-      // Aggregate accepted physical results
-      const acceptedPhysicalCounts = new Map<string, { equipmentId: string; shelfId: string; quantity: number }>();
-      const acceptedSerialObservations = new Map<string, { equipmentId: string; shelfId: string; serialCode: string; serialNumberId?: string }>();
-
-      for (const unit of inventory.workUnits) {
-        const authoritativeAttempt = unit.attempts.find((a) => a.purpose === targetPurpose);
-        if (!authoritativeAttempt) continue;
-
-        for (const order of authoritativeAttempt.orders) {
-          if (order.scannedSerialCode) {
-            const key = `${order.equipmentId || ''}:${order.shelfId || ''}:${order.scannedSerialCode.toLowerCase()}`;
-            acceptedSerialObservations.set(key, {
-              equipmentId: order.equipmentId!,
-              shelfId: order.shelfId!,
-              serialCode: order.scannedSerialCode,
-              serialNumberId: order.serialNumberId || undefined,
-            });
-
-            // Serialized item contributes +1 unit to physical stock on this shelf
-            if (order.equipmentId && order.shelfId) {
-              const eqShelfKey = `${order.equipmentId}:${order.shelfId}`;
-              const existing = acceptedPhysicalCounts.get(eqShelfKey);
-              if (existing) {
-                existing.quantity += 1;
-              } else {
-                acceptedPhysicalCounts.set(eqShelfKey, {
-                  equipmentId: order.equipmentId,
-                  shelfId: order.shelfId,
-                  quantity: 1,
-                });
-              }
-            }
-          } else if (order.equipmentId && order.shelfId) {
-            const key = `${order.equipmentId}:${order.shelfId}`;
-            const existing = acceptedPhysicalCounts.get(key);
-            const qty = (order.quantityCalculated || 0);
-            if (existing) {
-              existing.quantity += qty;
-            } else {
-              acceptedPhysicalCounts.set(key, {
-                equipmentId: order.equipmentId,
-                shelfId: order.shelfId,
-                quantity: qty,
-              });
-            }
-          }
+        if (!inventory) {
+          throw new NotFoundException(
+            'Inventaire introuvable',
+          );
         }
-      }
 
-      // 1. Delete any previous or stale FINALIZED snapshots for this inventory
-      await tx.inventory_Equipment_Shelf_Snapshot.deleteMany({
-        where: { inventoryId, phase: 'FINALIZED' },
-      });
-      await tx.inventory_SerialNumber_Snapshot.deleteMany({
-        where: { inventoryId, phase: 'FINALIZED' },
-      });
+        if (
+          inventory.status ===
+          'FINALIZED'
+        ) {
+          throw new BadRequestException(
+            'Cet inventaire est déjà finalisé.',
+          );
+        }
 
-      // 2. Freeze fresh FINALIZED Snapshots
-      // Quantities
-      for (const item of acceptedPhysicalCounts.values()) {
-        await tx.inventory_Equipment_Shelf_Snapshot.create({
-          data: {
+        if (
+          inventory.status !==
+          'COMPLETED'
+        ) {
+          throw new BadRequestException(
+            'Toutes les unités doivent être réconciliées avant la finalisation.',
+          );
+        }
+
+        const unresolved =
+          inventory.workUnits.filter(
+            (unit) =>
+              !RECONCILED_STATUSES.includes(
+                unit.reconciliationStatus as UnitReconciliationStatus,
+              ) ||
+              !unit.acceptedAttempt,
+          );
+
+        if (unresolved.length) {
+          throw new BadRequestException(
+            "Une ou plusieurs unités n'ont pas encore de tentative acceptée.",
+          );
+        }
+
+        const scopeEquipmentIds =
+          this.parseScopeIds(
+            inventory.equipmentScopeIds,
+          );
+
+        const scopeShelfIds =
+          this.parseScopeIds(
+            inventory.shelfScopeIds,
+          );
+
+        await this.acquireResourceLocks(
+          tx,
+          scopeEquipmentIds,
+          scopeShelfIds,
+        );
+
+        await this.assertNoOtherActiveInventory(
+          tx,
+          inventoryId,
+          scopeEquipmentIds,
+          scopeShelfIds,
+        );
+
+        const accepted =
+          this.buildAcceptedPhysicalTruth(
+            inventory.workUnits,
+          );
+
+        await tx.inventory_Equipment_Shelf_Snapshot.deleteMany({
+          where: {
             inventoryId,
-            equipmentId: item.equipmentId,
-            shelfId: item.shelfId,
             phase: 'FINALIZED',
-            quantity: item.quantity,
-            provenance: inventory.finalResultSource || (useThirdController ? 'THIRD_FULL_RECOUNT_FINAL' : 'PRIMARY_DOUBLE_COUNT_MATCH'),
           },
         });
-      }
 
-      // Serials
-      for (const item of acceptedSerialObservations.values()) {
-        await tx.inventory_SerialNumber_Snapshot.create({
-          data: {
+        await tx.inventory_SerialNumber_Snapshot.deleteMany({
+          where: {
             inventoryId,
-            equipmentId: item.equipmentId,
-            shelfId: item.shelfId,
-            serialNumberId: item.serialNumberId || null,
-            serialNumberCode: item.serialCode,
             phase: 'FINALIZED',
-            provenance: inventory.finalResultSource || (useThirdController ? 'THIRD_FULL_RECOUNT_FINAL' : 'PRIMARY_DOUBLE_COUNT_MATCH'),
           },
         });
-      }
 
-      // 2. Fetch baseline: live at launch snapshot
-      const launchQuantitySnapshots = await tx.inventory_Equipment_Shelf_Snapshot.findMany({
-        where: { inventoryId, phase: 'LIVE_AT_LAUNCH' },
-      });
-      const launchSerialSnapshots = await tx.inventory_SerialNumber_Snapshot.findMany({
-        where: { inventoryId, phase: 'LIVE_AT_LAUNCH' },
-      });
+        for (
+          const value of
+          accepted.physical.values()
+        ) {
+          await tx.inventory_Equipment_Shelf_Snapshot.create({
+            data: {
+              inventoryId,
+              equipmentId:
+                value.equipmentId,
+              shelfId:
+                value.shelfId,
+              phase: 'FINALIZED',
+              quantity:
+                value.quantity,
+              provenance:
+                'PER_UNIT_ACCEPTED_ATTEMPT',
+            },
+          });
+        }
 
-      // 3. Movement Reconciliation & Investigation Issue Generation
-      await tx.inventoryInvestigationIssue.deleteMany({
-        where: { inventoryId },
-      });
+        for (
+          const serial of
+          accepted.serials.values()
+        ) {
+          await tx.inventory_SerialNumber_Snapshot.create({
+            data: {
+              inventoryId,
+              equipmentId:
+                serial.equipmentId,
+              shelfId:
+                serial.shelfId,
+              serialNumberId:
+                serial.serialNumberId,
+              serialNumberCode:
+                serial.serialCode,
+              phase: 'FINALIZED',
+              provenance:
+                'PER_UNIT_ACCEPTED_ATTEMPT',
+            },
+          });
+        }
 
-      // Non-serialized shortage detection
-      for (const launchSnap of launchQuantitySnapshots) {
-        const key = `${launchSnap.equipmentId}:${launchSnap.shelfId}`;
-        const finalItem = acceptedPhysicalCounts.get(key);
-        const finalQty = finalItem ? finalItem.quantity : 0;
-        const delta = finalQty - launchSnap.quantity;
-
-        if (delta < 0) {
-          // Shortage detected! Check movement records
-          const movements = await tx.mouvement.findMany({
+        const launchPhysical =
+          await tx.inventory_Equipment_Shelf_Snapshot.findMany({
             where: {
-              items: {
-                some: {
-                  equipmentId: launchSnap.equipmentId,
-                  OR: [
-                    { sourceShelfId: launchSnap.shelfId },
-                    { destinationShelfId: launchSnap.shelfId },
-                  ],
-                }
+              inventoryId,
+              phase:
+                'LIVE_AT_LAUNCH',
+            },
+          });
+
+        const launchSerials =
+          await tx.inventory_SerialNumber_Snapshot.findMany({
+            where: {
+              inventoryId,
+              phase:
+                'LIVE_AT_LAUNCH',
+            },
+          });
+
+        await tx.inventoryInvestigationIssue.deleteMany({
+          where: { inventoryId },
+        });
+
+        await this.createVarianceIssues(
+          tx,
+          inventoryId,
+          launchPhysical,
+          launchSerials,
+          accepted,
+        );
+
+        const allEquipmentIds =
+          new Set<string>();
+
+        for (
+          const row of
+          launchPhysical
+        ) {
+          allEquipmentIds.add(
+            row.equipmentId,
+          );
+        }
+
+        for (
+          const row of
+          accepted.physical.values()
+        ) {
+          allEquipmentIds.add(
+            row.equipmentId,
+          );
+        }
+
+        const equipmentRows =
+          await tx.equipment.findMany({
+            where: {
+              equipmentId: {
+                in: [
+                  ...allEquipmentIds,
+                ],
               },
             },
-          });
-
-          const hasMissingTimestamp = movements.some((m) => !m.createdAt);
-          const explanation = hasMissingTimestamp
-            ? 'MOVEMENT_HISTORY_UNAVAILABLE'
-            : 'UNEXPLAINED_VARIANCE';
-
-          // Create normalized Investigation Issue
-          await tx.inventoryInvestigationIssue.create({
-            data: {
-              inventoryId,
-              issueType: 'QUANTITY_SHORTAGE',
-              status: 'OPEN',
-              equipmentId: launchSnap.equipmentId,
-              expectedShelfId: launchSnap.shelfId,
-              expectedQuantity: launchSnap.quantity,
-              finalQuantity: finalQty,
-              deltaQuantity: Math.abs(delta),
-              movementExplanation: explanation,
+            select: {
+              equipmentId: true,
+              hasSerialNumber: true,
             },
           });
-        }
+
+        const serializedByEquipment =
+          new Map(
+            equipmentRows.map(
+              (item) => [
+                item.equipmentId,
+                item.hasSerialNumber,
+              ],
+            ),
+          );
+
+        await this.applyStandardInventoryAdjustments(
+          tx,
+          inventory,
+          finalizerId,
+          launchPhysical,
+          accepted.physical,
+          serializedByEquipment,
+        );
+
+        await this.applySerializedInventoryAdjustments(
+          tx,
+          inventory,
+          finalizerId,
+          launchSerials,
+          accepted.serials,
+        );
+
+        const updated =
+          await tx.inventory.update({
+            where: { inventoryId },
+            data: {
+              status: 'FINALIZED',
+              finalizedAt:
+                new Date(),
+              adjustmentApproverId:
+                finalizerId ||
+                null,
+              adjustmentReason:
+                "Ajustements d'inventaire appliqués par mouvements append-only.",
+              finalResultSource:
+                'PER_UNIT_ACCEPTED_ATTEMPT',
+              thirdCountRequired:
+                false,
+            },
+          });
+
+        this.logger.log(
+          `Inventory ${inventoryId} finalized with per-unit accepted attempts.`,
+        );
+
+        return updated;
+      },
+      {
+        isolationLevel:
+          'Serializable',
+        timeout: 60_000,
+      },
+    );
+  }
+
+  private buildAcceptedPhysicalTruth(
+    workUnits: any[],
+  ) {
+    const standard =
+      new Map<
+        string,
+        CanonicalStandardValue
+      >();
+
+    const serials =
+      new Map<
+        string,
+        CanonicalSerialValue
+      >();
+
+    const physical =
+      new Map<
+        string,
+        CanonicalStandardValue
+      >();
+
+    for (
+      const unit of workUnits
+    ) {
+      const attempt =
+        unit.acceptedAttempt;
+
+      if (!attempt) {
+        continue;
       }
 
-      // Serialized missing serial detection
-      for (const launchSn of launchSerialSnapshots) {
-        let foundInFinal = false;
-        let foundInDifferentLocation = false;
-        let actualFoundShelfId: string | null = null;
+      const canonical =
+        this.canonicalizeAttempt(
+          unit,
+          attempt,
+        );
 
-        for (const finalSn of acceptedSerialObservations.values()) {
-          if (finalSn.serialCode.toLowerCase() === launchSn.serialNumberCode.toLowerCase()) {
-            foundInFinal = true;
-            if (finalSn.shelfId !== launchSn.shelfId) {
-              foundInDifferentLocation = true;
-              actualFoundShelfId = finalSn.shelfId;
-            }
-            break;
-          }
-        }
+      for (
+        const [
+          key,
+          value,
+        ] of canonical.standard
+      ) {
+        const existing =
+          standard.get(key);
 
-        if (!foundInFinal) {
-          // Missing serial issue!
-          await tx.inventoryInvestigationIssue.create({
-            data: {
-              inventoryId,
-              issueType: 'SERIAL_MISSING',
-              status: 'OPEN',
-              equipmentId: launchSn.equipmentId,
-              serialNumberId: launchSn.serialNumberId,
-              serialNumberCode: launchSn.serialNumberCode,
-              expectedShelfId: launchSn.shelfId,
-              expectedQuantity: 1,
-              finalQuantity: 0,
-              deltaQuantity: 1,
-              movementExplanation: 'UNEXPLAINED_VARIANCE',
-            },
-          });
-        } else if (foundInDifferentLocation && actualFoundShelfId) {
-          // Serial location change issue
-          await tx.inventoryInvestigationIssue.create({
-            data: {
-              inventoryId,
-              issueType: 'LOCATION_MISMATCH',
-              status: 'OPEN',
-              equipmentId: launchSn.equipmentId,
-              serialNumberId: launchSn.serialNumberId,
-              serialNumberCode: launchSn.serialNumberCode,
-              expectedShelfId: launchSn.shelfId,
-              finalObservedShelfId: actualFoundShelfId,
-              expectedQuantity: 1,
-              finalQuantity: 1,
-              deltaQuantity: 0,
-              movementExplanation: 'UNEXPLAINED_VARIANCE',
-            },
-          });
-        }
+        standard.set(
+          key,
+          {
+            ...value,
+            quantity:
+              (
+                existing?.quantity ??
+                0
+              ) +
+              value.quantity,
+          },
+        );
+
+        const physicalExisting =
+          physical.get(key);
+
+        physical.set(
+          key,
+          {
+            ...value,
+            quantity:
+              (
+                physicalExisting
+                  ?.quantity ??
+                0
+              ) +
+              value.quantity,
+          },
+        );
       }
 
-      // 4. Update Inventory to FINALIZED
-      const updated = await tx.inventory.update({
-        where: { inventoryId },
+      for (
+        const [
+          code,
+          serial,
+        ] of canonical.serials
+      ) {
+        const existing =
+          serials.get(code);
+
+        if (
+          existing &&
+          (
+            existing.equipmentId.toLowerCase() !==
+              serial.equipmentId.toLowerCase() ||
+            (
+              existing.shelfId ?? ''
+            ).toLowerCase() !==
+              (
+                serial.shelfId ?? ''
+              ).toLowerCase()
+          )
+        ) {
+          throw new BadRequestException(
+            `Le numéro de série '${serial.serialCode}' apparaît comme résultat accepté dans plusieurs positions.`,
+          );
+        }
+
+        serials.set(
+          code,
+          serial,
+        );
+
+        if (
+          serial.equipmentId &&
+          serial.shelfId
+        ) {
+          const key =
+            `${serial.equipmentId.toLowerCase()}:${serial.shelfId.toLowerCase()}`;
+
+          const current =
+            physical.get(key);
+
+          physical.set(
+            key,
+            {
+              equipmentId:
+                serial.equipmentId,
+              shelfId:
+                serial.shelfId,
+              quantity:
+                (
+                  current?.quantity ??
+                  0
+                ) + 1,
+            },
+          );
+        }
+      }
+    }
+
+    return {
+      standard,
+      serials,
+      physical,
+    };
+  }
+
+  private async createVarianceIssues(
+    tx: Prisma.TransactionClient,
+    inventoryId: string,
+    launchPhysical: any[],
+    launchSerials: any[],
+    accepted: ReturnType<
+      InventoryService['buildAcceptedPhysicalTruth']
+    >,
+  ) {
+    const launchMap =
+      new Map<
+        string,
+        {
+          equipmentId: string;
+          shelfId: string;
+          quantity: number;
+        }
+      >();
+
+    for (
+      const row of launchPhysical
+    ) {
+      launchMap.set(
+        `${row.equipmentId.toLowerCase()}:${row.shelfId.toLowerCase()}`,
+        {
+          equipmentId:
+            row.equipmentId,
+          shelfId:
+            row.shelfId,
+          quantity:
+            row.quantity,
+        },
+      );
+    }
+
+    const quantityKeys =
+      new Set([
+        ...launchMap.keys(),
+        ...accepted.physical.keys(),
+      ]);
+
+    for (
+      const key of quantityKeys
+    ) {
+      const before =
+        launchMap.get(key);
+
+      const after =
+        accepted.physical.get(key);
+
+      const expected =
+        before?.quantity ?? 0;
+
+      const final =
+        after?.quantity ?? 0;
+
+      const delta =
+        final - expected;
+
+      if (delta === 0) {
+        continue;
+      }
+
+      await tx.inventoryInvestigationIssue.create({
         data: {
-          status: 'FINALIZED',
-          finalResultSource: useThirdController ? 'THIRD_FULL_RECOUNT_FINAL' : (inventory.finalResultSource || 'PRIMARY_DOUBLE_COUNT_MATCH'),
-          finalizedAt: new Date(),
+          inventoryId,
+          issueType:
+            delta < 0
+              ? 'QUANTITY_SHORTAGE'
+              : 'QUANTITY_OVERAGE',
+          status: 'OPEN',
+          equipmentId:
+            after?.equipmentId ??
+            before?.equipmentId ??
+            null,
+          expectedShelfId:
+            after?.shelfId ??
+            before?.shelfId ??
+            null,
+          expectedQuantity:
+            expected,
+          finalQuantity:
+            final,
+          deltaQuantity:
+            Math.abs(delta),
+          movementExplanation:
+            'UNEXPLAINED_VARIANCE',
+        },
+      });
+    }
+
+    const launchSerialMap =
+      new Map<string, any>(
+        launchSerials.map(
+          (row) => [
+            row.serialNumberCode
+              .trim()
+              .toLowerCase(),
+            row,
+          ],
+        ),
+      );
+
+    const serialCodes =
+      new Set([
+        ...launchSerialMap.keys(),
+        ...accepted.serials.keys(),
+      ]);
+
+    for (
+      const code of serialCodes
+    ) {
+      const before =
+        launchSerialMap.get(code);
+
+      const after =
+        accepted.serials.get(code);
+
+      if (
+        before &&
+        !after
+      ) {
+        await tx.inventoryInvestigationIssue.create({
+          data: {
+            inventoryId,
+            issueType:
+              'SERIAL_MISSING',
+            status: 'OPEN',
+            equipmentId:
+              before.equipmentId,
+            serialNumberId:
+              before.serialNumberId,
+            serialNumberCode:
+              before.serialNumberCode,
+            expectedShelfId:
+              before.shelfId,
+            expectedQuantity: 1,
+            finalQuantity: 0,
+            deltaQuantity: 1,
+            movementExplanation:
+              'UNEXPLAINED_VARIANCE',
+          },
+        });
+
+        continue;
+      }
+
+      if (
+        !before &&
+        after
+      ) {
+        await tx.inventoryInvestigationIssue.create({
+          data: {
+            inventoryId,
+            issueType:
+              after.serialNumberId
+                ? 'SERIAL_UNEXPECTED'
+                : 'SERIAL_UNKNOWN',
+            status: 'OPEN',
+            equipmentId:
+              after.equipmentId ||
+              null,
+            serialNumberId:
+              after.serialNumberId,
+            serialNumberCode:
+              after.serialCode,
+            finalObservedShelfId:
+              after.shelfId,
+            expectedQuantity: 0,
+            finalQuantity: 1,
+            deltaQuantity: 1,
+            movementExplanation:
+              'UNEXPLAINED_VARIANCE',
+          },
+        });
+
+        continue;
+      }
+
+      if (
+        before &&
+        after &&
+        (
+          before.equipmentId.toLowerCase() !==
+            after.equipmentId.toLowerCase() ||
+          (
+            before.shelfId ?? ''
+          ).toLowerCase() !==
+            (
+              after.shelfId ?? ''
+            ).toLowerCase()
+        )
+      ) {
+        await tx.inventoryInvestigationIssue.create({
+          data: {
+            inventoryId,
+            issueType:
+              before.equipmentId.toLowerCase() !==
+              after.equipmentId.toLowerCase()
+                ? 'SERIAL_EQUIPMENT_MISMATCH'
+                : 'LOCATION_MISMATCH',
+            status: 'OPEN',
+            equipmentId:
+              after.equipmentId ||
+              before.equipmentId,
+            serialNumberId:
+              after.serialNumberId ??
+              before.serialNumberId,
+            serialNumberCode:
+              after.serialCode,
+            expectedShelfId:
+              before.shelfId,
+            finalObservedShelfId:
+              after.shelfId,
+            expectedQuantity: 1,
+            finalQuantity: 1,
+            deltaQuantity: 0,
+            movementExplanation:
+              'UNEXPLAINED_VARIANCE',
+          },
+        });
+      }
+    }
+  }
+
+  private async applyStandardInventoryAdjustments(
+    tx: Prisma.TransactionClient,
+    inventory: any,
+    finalizerId: string,
+    launchPhysical: any[],
+    acceptedPhysical:
+      Map<
+        string,
+        CanonicalStandardValue
+      >,
+    serializedByEquipment:
+      Map<string, boolean>,
+  ) {
+    const launchMap =
+      new Map<
+        string,
+        {
+          equipmentId: string;
+          shelfId: string;
+          quantity: number;
+        }
+      >();
+
+    for (
+      const row of launchPhysical
+    ) {
+      if (
+        serializedByEquipment.get(
+          row.equipmentId,
+        )
+      ) {
+        continue;
+      }
+
+      launchMap.set(
+        `${row.equipmentId.toLowerCase()}:${row.shelfId.toLowerCase()}`,
+        {
+          equipmentId:
+            row.equipmentId,
+          shelfId:
+            row.shelfId,
+          quantity:
+            row.quantity,
+        },
+      );
+    }
+
+    const acceptedStandard =
+      new Map<
+        string,
+        CanonicalStandardValue
+      >();
+
+    for (
+      const [
+        key,
+        value,
+      ] of acceptedPhysical
+    ) {
+      if (
+        serializedByEquipment.get(
+          value.equipmentId,
+        )
+      ) {
+        continue;
+      }
+
+      acceptedStandard.set(
+        key,
+        value,
+      );
+    }
+
+    const keys =
+      new Set([
+        ...launchMap.keys(),
+        ...acceptedStandard.keys(),
+      ]);
+
+    for (
+      const key of keys
+    ) {
+      const before =
+        launchMap.get(key);
+
+      const after =
+        acceptedStandard.get(key);
+
+      const beforeQuantity =
+        before?.quantity ?? 0;
+
+      const afterQuantity =
+        after?.quantity ?? 0;
+
+      const delta =
+        afterQuantity -
+        beforeQuantity;
+
+      if (delta === 0) {
+        continue;
+      }
+
+      const equipmentId =
+        after?.equipmentId ??
+        before!.equipmentId;
+
+      const shelfId =
+        after?.shelfId ??
+        before!.shelfId;
+
+      const unitOrder =
+        this.findUnitOrderForAdjustment(
+          inventory,
+          equipmentId,
+          shelfId,
+        );
+
+      await this.appendAdjustmentMovement(
+        tx,
+        {
+          inventoryId:
+            inventory.inventoryId,
+          finalizerId,
+          equipmentId,
+          quantity:
+            Math.abs(delta),
+          movementType:
+            delta > 0
+              ? 'IN'
+              : 'OUT',
+          sourceShelfId:
+            delta < 0
+              ? shelfId
+              : null,
+          destinationShelfId:
+            delta > 0
+              ? shelfId
+              : null,
+          serialNumberId: null,
+          equipmentTypeSnapshot:
+            'STANDARD',
+          reason:
+            `Ajustement inventaire - unité #${unitOrder + 1}`,
+        },
+      );
+    }
+  }
+
+  private async applySerializedInventoryAdjustments(
+    tx: Prisma.TransactionClient,
+    inventory: any,
+    finalizerId: string,
+    launchSerials: any[],
+    acceptedSerials:
+      Map<
+        string,
+        CanonicalSerialValue
+      >,
+  ) {
+    const launch =
+      new Map<string, any>(
+        launchSerials.map(
+          (row) => [
+            row.serialNumberCode
+              .trim()
+              .toLowerCase(),
+            row,
+          ],
+        ),
+      );
+
+    const codes =
+      new Set([
+        ...launch.keys(),
+        ...acceptedSerials.keys(),
+      ]);
+
+    for (
+      const code of codes
+    ) {
+      const before =
+        launch.get(code);
+
+      const after =
+        acceptedSerials.get(code);
+
+      const serialNumberId =
+        after?.serialNumberId ??
+        before?.serialNumberId ??
+        null;
+
+      // Unknown serials remain investigation issues and are never auto-created.
+      if (!serialNumberId) {
+        continue;
+      }
+
+      const current =
+        await tx.serialNumber.findUnique({
+          where: {
+            serialNumberId,
+          },
+          select: {
+            serialNumberId: true,
+            equipmentId: true,
+            shelfId: true,
+          },
+        });
+
+      if (!current) {
+        continue;
+      }
+
+      const targetShelfId =
+        after?.shelfId ??
+        null;
+
+      if (
+        current.shelfId ===
+        targetShelfId
+      ) {
+        continue;
+      }
+
+      const equipmentId =
+        after?.equipmentId ??
+        before?.equipmentId ??
+        current.equipmentId;
+
+      const unitOrder =
+        this.findUnitOrderForAdjustment(
+          inventory,
+          equipmentId,
+          targetShelfId ??
+            current.shelfId,
+        );
+
+      if (
+        current.shelfId &&
+        targetShelfId
+      ) {
+        await this.appendAdjustmentMovement(
+          tx,
+          {
+            inventoryId:
+              inventory.inventoryId,
+            finalizerId,
+            equipmentId,
+            quantity: 1,
+            movementType:
+              'TRANSFER',
+            sourceShelfId:
+              current.shelfId,
+            destinationShelfId:
+              targetShelfId,
+            serialNumberId,
+            equipmentTypeSnapshot:
+              'SERIALIZED',
+            reason:
+              `Ajustement inventaire série - unité #${unitOrder + 1}`,
+          },
+        );
+
+        continue;
+      }
+
+      if (
+        !current.shelfId &&
+        targetShelfId
+      ) {
+        await this.appendAdjustmentMovement(
+          tx,
+          {
+            inventoryId:
+              inventory.inventoryId,
+            finalizerId,
+            equipmentId,
+            quantity: 1,
+            movementType: 'IN',
+            sourceShelfId: null,
+            destinationShelfId:
+              targetShelfId,
+            serialNumberId,
+            equipmentTypeSnapshot:
+              'SERIALIZED',
+            reason:
+              `Ajustement inventaire série - unité #${unitOrder + 1}`,
+          },
+        );
+
+        continue;
+      }
+
+      if (
+        current.shelfId &&
+        !targetShelfId
+      ) {
+        await this.appendAdjustmentMovement(
+          tx,
+          {
+            inventoryId:
+              inventory.inventoryId,
+            finalizerId,
+            equipmentId,
+            quantity: 1,
+            movementType: 'OUT',
+            sourceShelfId:
+              current.shelfId,
+            destinationShelfId:
+              null,
+            serialNumberId,
+            equipmentTypeSnapshot:
+              'SERIALIZED',
+            reason:
+              `Ajustement inventaire série - unité #${unitOrder + 1}`,
+          },
+        );
+      }
+    }
+  }
+
+  private findUnitOrderForAdjustment(
+    inventory: any,
+    equipmentId: string,
+    shelfId: string | null,
+  ) {
+    const unit =
+      inventory.workUnits.find(
+        (item: any) =>
+          (
+            item.equipmentId &&
+            item.equipmentId.toLowerCase() ===
+              equipmentId.toLowerCase()
+          ) ||
+          (
+            shelfId &&
+            item.shelfId &&
+            item.shelfId.toLowerCase() ===
+              shelfId.toLowerCase()
+          ),
+      );
+
+    return unit?.unitOrder ?? 0;
+  }
+
+  private async appendAdjustmentMovement(
+    tx: Prisma.TransactionClient,
+    input: {
+      inventoryId: string;
+      finalizerId: string;
+      equipmentId: string;
+      quantity: number;
+      movementType:
+        | 'IN'
+        | 'OUT'
+        | 'TRANSFER';
+      sourceShelfId:
+        string | null;
+      destinationShelfId:
+        string | null;
+      serialNumberId:
+        string | null;
+      equipmentTypeSnapshot:
+        | 'STANDARD'
+        | 'SERIALIZED';
+      reason: string;
+    },
+  ) {
+    const shelfIds = [
+      input.sourceShelfId,
+      input.destinationShelfId,
+    ].filter(
+      (
+        value,
+      ): value is string =>
+        Boolean(value),
+    );
+
+    await this.acquireResourceLocks(
+      tx,
+      [input.equipmentId],
+      shelfIds,
+      input.serialNumberId
+        ? [input.serialNumberId]
+        : [],
+    );
+
+    await this.assertNoOtherActiveInventory(
+      tx,
+      input.inventoryId,
+      [input.equipmentId],
+      shelfIds,
+    );
+
+    await this.assertAdjustmentResourcesActive(
+      tx,
+      input.equipmentId,
+      shelfIds,
+    );
+
+    const header =
+      await tx.mouvement.create({
+        data: {
+          mouvementStatus:
+            input.movementType,
+          mouvementQuantity:
+            input.quantity,
+          sourceShelfId:
+            input.sourceShelfId,
+          destinationShelfId:
+            input.destinationShelfId,
+          equipmentId: null,
+          serialNumberId: null,
+          createdByUserId:
+            input.finalizerId ||
+            null,
+          inventoryId:
+            input.inventoryId,
+          origin:
+            'INVENTORY_ADJUSTMENT',
+          reason:
+            input.reason,
+        },
+        select: {
+          mouvementId: true,
         },
       });
 
-      this.logger.log(`Inventory ${inventoryId} finalized successfully.`);
-      return updated;
+    if (input.sourceShelfId) {
+      const allocation =
+        await tx.equipmentShelfs.updateMany({
+          where: {
+            equipmentId:
+              input.equipmentId,
+            shelfId:
+              input.sourceShelfId,
+            equipmentQuantity: {
+              gte:
+                input.quantity,
+            },
+          },
+          data: {
+            equipmentQuantity: {
+              decrement:
+                input.quantity,
+            },
+          },
+        });
+
+      if (
+        allocation.count !== 1
+      ) {
+        throw new BadRequestException(
+          "La quantité source est insuffisante pour appliquer l'ajustement d'inventaire.",
+        );
+      }
+
+      const sourceShelf =
+        await tx.shelf.updateMany({
+          where: {
+            shelfId:
+              input.sourceShelfId,
+            shelfQuantity: {
+              gte:
+                input.quantity,
+            },
+          },
+          data: {
+            shelfQuantity: {
+              decrement:
+                input.quantity,
+            },
+          },
+        });
+
+      if (
+        sourceShelf.count !== 1
+      ) {
+        throw new BadRequestException(
+          "La quantité globale de l'emplacement source est incohérente.",
+        );
+      }
+    }
+
+    if (input.destinationShelfId) {
+      const existing =
+        await tx.equipmentShelfs.findUnique({
+          where: {
+            equipmentId_shelfId: {
+              equipmentId:
+                input.equipmentId,
+              shelfId:
+                input.destinationShelfId,
+            },
+          },
+        });
+
+      if (existing) {
+        if (
+          existing.equipmentQuantity >
+          SQL_INT_MAX -
+            input.quantity
+        ) {
+          throw new BadRequestException(
+            'La quantité destination dépasse la capacité SQL Server.',
+          );
+        }
+
+        await tx.equipmentShelfs.update({
+          where: {
+            equipmentShelfId:
+              existing.equipmentShelfId,
+          },
+          data: {
+            equipmentQuantity: {
+              increment:
+                input.quantity,
+            },
+          },
+        });
+      } else {
+        await tx.equipmentShelfs.create({
+          data: {
+            equipmentId:
+              input.equipmentId,
+            shelfId:
+              input.destinationShelfId,
+            equipmentQuantity:
+              input.quantity,
+          },
+        });
+      }
+
+      const destination =
+        await tx.shelf.findUnique({
+          where: {
+            shelfId:
+              input.destinationShelfId,
+          },
+          select: {
+            shelfQuantity: true,
+          },
+        });
+
+      if (!destination) {
+        throw new NotFoundException(
+          'Emplacement destination introuvable.',
+        );
+      }
+
+      if (
+        destination.shelfQuantity >
+        SQL_INT_MAX -
+          input.quantity
+      ) {
+        throw new BadRequestException(
+          "La quantité globale de l'emplacement destination dépasse la capacité SQL Server.",
+        );
+      }
+
+      await tx.shelf.update({
+        where: {
+          shelfId:
+            input.destinationShelfId,
+        },
+        data: {
+          shelfQuantity: {
+            increment:
+              input.quantity,
+          },
+        },
+      });
+    }
+
+    if (
+      input.movementType === 'IN'
+    ) {
+      const equipment =
+        await tx.equipment.updateMany({
+          where: {
+            equipmentId:
+              input.equipmentId,
+            equipmentStatus:
+              'ACTIVE',
+            equipmentQuantity: {
+              lte:
+                SQL_INT_MAX -
+                input.quantity,
+            },
+          },
+          data: {
+            equipmentQuantity: {
+              increment:
+                input.quantity,
+            },
+          },
+        });
+
+      if (
+        equipment.count !== 1
+      ) {
+        throw new BadRequestException(
+          "Impossible d'augmenter le stock article pendant l'ajustement.",
+        );
+      }
+    }
+
+    if (
+      input.movementType === 'OUT'
+    ) {
+      const equipment =
+        await tx.equipment.updateMany({
+          where: {
+            equipmentId:
+              input.equipmentId,
+            equipmentStatus:
+              'ACTIVE',
+            equipmentQuantity: {
+              gte:
+                input.quantity,
+            },
+          },
+          data: {
+            equipmentQuantity: {
+              decrement:
+                input.quantity,
+            },
+          },
+        });
+
+      if (
+        equipment.count !== 1
+      ) {
+        throw new BadRequestException(
+          "La quantité article globale est insuffisante pendant l'ajustement.",
+        );
+      }
+    }
+
+    if (input.serialNumberId) {
+      const expectedShelfId =
+        input.movementType === 'IN'
+          ? null
+          : input.sourceShelfId;
+
+      const nextShelfId =
+        input.movementType === 'OUT'
+          ? null
+          : input.destinationShelfId;
+
+      const serial =
+        await tx.serialNumber.updateMany({
+          where: {
+            serialNumberId:
+              input.serialNumberId,
+            equipmentId:
+              input.equipmentId,
+            shelfId:
+              expectedShelfId,
+          },
+          data: {
+            shelfId:
+              nextShelfId,
+          },
+        });
+
+      if (
+        serial.count !== 1
+      ) {
+        throw new BadRequestException(
+          "La position du numéro de série a changé. Actualisez avant de finaliser l'inventaire.",
+        );
+      }
+    }
+
+    await tx.mouvementEquipment.create({
+      data: {
+        mouvementId:
+          header.mouvementId,
+        rowNum: 1,
+        equipmentId:
+          input.equipmentId,
+        equipmentTypeSnapshot:
+          input.equipmentTypeSnapshot,
+        serialNumberId:
+          input.serialNumberId,
+        mouvementQuantity:
+          input.quantity,
+        mouvementStatus:
+          input.movementType,
+        sourceShelfId:
+          input.sourceShelfId,
+        destinationShelfId:
+          input.destinationShelfId,
+      },
     });
   }
 
-  /**
-   * Retrieves full admin report: physical truth, delta vs previous inventory, and movement explanation
-   */
-  async getInventoryReport(inventoryId: string) {
-    const inventory = await this.prisma.inventory.findUnique({
-      where: { inventoryId },
-      include: {
-        Inventory_User: {
-          include: {
-            User: { select: { userId: true, userName: true, userEmail: true } },
-          },
-          orderBy: { sequence: 'asc' },
+  private async assertAdjustmentResourcesActive(
+    tx: Prisma.TransactionClient,
+    equipmentId: string,
+    shelfIds: string[],
+  ) {
+    const equipment =
+      await tx.equipment.findUnique({
+        where: { equipmentId },
+        select: {
+          equipmentId: true,
+          equipmentStatus: true,
         },
-        workUnits: {
-          include: {
-            attempts: {
-              where: { status: 'SUBMITTED' },
-              include: {
-                orders: {
-                  include: {
-                    equipment: true,
-                    shelf: true,
-                    serialNumber: true,
-                  },
+      });
+
+    if (!equipment) {
+      throw new NotFoundException(
+        'Article introuvable pendant la finalisation.',
+      );
+    }
+
+    if (
+      equipment.equipmentStatus !==
+      'ACTIVE'
+    ) {
+      throw new BadRequestException(
+        'Un article INACTIVE ne peut pas recevoir un mouvement d’ajustement.',
+      );
+    }
+
+    if (!shelfIds.length) {
+      return;
+    }
+
+    const shelves =
+      await tx.shelf.findMany({
+        where: {
+          shelfId: {
+            in: shelfIds,
+          },
+        },
+        select: {
+          shelfId: true,
+          shelfName: true,
+          stock: {
+            select: {
+              stockName: true,
+              stockStatus: {
+                select: {
+                  stockStatusName: true,
                 },
               },
             },
           },
-          orderBy: { unitOrder: 'asc' },
         },
-        investigationIssues: {
-          include: {
-            equipment: { select: { equipmentId: true, equipmentName: true } },
-            serialNumber: { select: { serialNumberId: true, serialNumberCode: true } },
-            expectedShelf: { select: { shelfId: true, shelfName: true } },
-            finalObservedShelf: { select: { shelfId: true, shelfName: true } },
-            resolutionShelf: { select: { shelfId: true, shelfName: true } },
-            resolvedByUser: { select: { userId: true, userName: true } },
+      });
+
+    if (
+      shelves.length !== shelfIds.length
+    ) {
+      throw new NotFoundException(
+        "Un emplacement d'ajustement est introuvable.",
+      );
+    }
+
+    const inactive =
+      shelves.find(
+        (shelf) =>
+          shelf.stock
+            .stockStatus
+            .stockStatusName !==
+          'ACTIVE',
+      );
+
+    if (inactive) {
+      throw new BadRequestException(
+        `L'emplacement '${inactive.shelfName ?? inactive.shelfId}' appartient à un stock INACTIVE. Aucun mouvement d'ajustement n'est autorisé.`,
+      );
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Report + issues
+  // --------------------------------------------------------------------------
+
+  async getInventoryReport(
+    inventoryId: string,
+  ) {
+    const comparison =
+      await this.getInventoryComparison(
+        inventoryId,
+      );
+
+    const inventory =
+      await this.prisma.inventory.findUnique({
+        where: { inventoryId },
+        include: {
+          Inventory_User: {
+            include: {
+              User: {
+                select: {
+                  userId: true,
+                  userName: true,
+                  userEmail: true,
+                },
+              },
+            },
+            orderBy: {
+              sequence: 'asc',
+            },
+          },
+          investigationIssues: {
+            include: {
+              equipment: {
+                select: {
+                  equipmentId: true,
+                  equipmentName: true,
+                },
+              },
+              serialNumber: {
+                select: {
+                  serialNumberId: true,
+                  serialNumberCode: true,
+                },
+              },
+              expectedShelf: {
+                select: {
+                  shelfId: true,
+                  shelfName: true,
+                },
+              },
+              finalObservedShelf: {
+                select: {
+                  shelfId: true,
+                  shelfName: true,
+                },
+              },
+              resolutionShelf: {
+                select: {
+                  shelfId: true,
+                  shelfName: true,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+          },
+          adjustmentMovements: {
+            orderBy: {
+              createdAt: 'asc',
+            },
+            include: {
+              items: {
+                orderBy: {
+                  rowNum: 'asc',
+                },
+                include: {
+                  equipment: true,
+                  serialNumber: true,
+                },
+              },
+              sourceShelf: true,
+              destinationShelf: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    if (!inventory) throw new NotFoundException('Inventaire introuvable');
-
-    // Fetch snapshots
-    const launchSnapshots = await this.prisma.inventory_Equipment_Shelf_Snapshot.findMany({
-      where: { inventoryId, phase: 'LIVE_AT_LAUNCH' },
-    });
-    let finalSnapshots = await this.prisma.inventory_Equipment_Shelf_Snapshot.findMany({
-      where: { inventoryId, phase: 'FINALIZED' },
-    });
-    const launchSerials = await this.prisma.inventory_SerialNumber_Snapshot.findMany({
-      where: { inventoryId, phase: 'LIVE_AT_LAUNCH' },
-    });
-    let finalSerials = await this.prisma.inventory_SerialNumber_Snapshot.findMany({
-      where: { inventoryId, phase: 'FINALIZED' },
-    });
-
-    // If inventory is not finalized yet, derive provisional accepted results from the authoritative attempts
-    if (inventory.status !== 'FINALIZED' || finalSnapshots.length === 0) {
-      const useThirdController =
-        inventory.finalResultSource === 'THIRD_FULL_RECOUNT_FINAL' ||
-        inventory.status === 'THIRD_COUNT_REQUIRED';
-      const targetPurpose = useThirdController ? 'FINAL_RECOUNT' : 'PRIMARY_1';
-
-      const acceptedPhysicalCounts = new Map<string, { equipmentId: string; shelfId: string; quantity: number }>();
-      const acceptedSerialObservations = new Map<string, { equipmentId: string; shelfId: string; serialCode: string; serialNumberId?: string }>();
-
-      for (const unit of inventory.workUnits) {
-        const authoritativeAttempt = unit.attempts.find((a) => a.purpose === targetPurpose);
-        if (!authoritativeAttempt) continue;
-
-        for (const order of authoritativeAttempt.orders) {
-          if (order.scannedSerialCode) {
-            const key = `${order.equipmentId || ''}:${order.shelfId || ''}:${order.scannedSerialCode.toLowerCase()}`;
-            acceptedSerialObservations.set(key, {
-              equipmentId: order.equipmentId!,
-              shelfId: order.shelfId!,
-              serialCode: order.scannedSerialCode,
-              serialNumberId: order.serialNumberId || undefined,
-            });
-
-            if (order.equipmentId && order.shelfId) {
-              const eqShelfKey = `${order.equipmentId}:${order.shelfId}`;
-              const existing = acceptedPhysicalCounts.get(eqShelfKey);
-              if (existing) {
-                existing.quantity += 1;
-              } else {
-                acceptedPhysicalCounts.set(eqShelfKey, {
-                  equipmentId: order.equipmentId,
-                  shelfId: order.shelfId,
-                  quantity: 1,
-                });
-              }
-            }
-          } else if (order.equipmentId && order.shelfId) {
-            const key = `${order.equipmentId}:${order.shelfId}`;
-            const existing = acceptedPhysicalCounts.get(key);
-            const qty = (order.quantityCalculated || 0);
-            if (existing) {
-              existing.quantity += qty;
-            } else {
-              acceptedPhysicalCounts.set(key, {
-                equipmentId: order.equipmentId,
-                shelfId: order.shelfId,
-                quantity: qty,
-              });
-            }
-          }
-        }
-      }
-
-      finalSnapshots = Array.from(acceptedPhysicalCounts.values()).map((item) => ({
-        snapshotId: `prov-${item.equipmentId}-${item.shelfId}`,
-        inventoryId,
-        equipmentId: item.equipmentId,
-        shelfId: item.shelfId,
-        phase: 'FINALIZED',
-        quantity: item.quantity,
-        provenance: targetPurpose,
-        sourceInventoryId: null,
-        coverage: null,
-      }));
-
-      finalSerials = Array.from(acceptedSerialObservations.values()).map((item) => ({
-        snapshotId: `prov-sn-${item.serialCode}`,
-        inventoryId,
-        phase: 'FINALIZED',
-        serialNumberId: item.serialNumberId || null,
-        serialNumberCode: item.serialCode,
-        equipmentId: item.equipmentId,
-        shelfId: item.shelfId,
-        serialNumberStatus: 'ACTIVE',
-        provenance: targetPurpose,
-        sourceInventoryId: null,
-        createdAt: new Date(),
-      }));
+    if (!inventory) {
+      throw new NotFoundException(
+        'Inventaire introuvable',
+      );
     }
 
-    // Compute Summary Stats directly based on the actual Controller counts & variances
-    let compliantCount = 0;
-    let shortageCount = 0;
-    let excessCount = 0;
-    let missingSerialsCount = 0;
-    let relocatedSerialsCount = 0;
-    const unexplainedCount = inventory.investigationIssues.filter((i) => i.status === 'OPEN').length;
+    const [
+      launchQuantities,
+      finalQuantities,
+      launchSerials,
+      finalSerials,
+    ] = await Promise.all([
+      this.prisma.inventory_Equipment_Shelf_Snapshot.findMany({
+        where: {
+          inventoryId,
+          phase:
+            'LIVE_AT_LAUNCH',
+        },
+      }),
 
-    // Aggregate items across all work units
-    const itemComparisonMap = new Map<string, {
-      equipmentId: string;
-      hasSerialNumber: boolean;
-      c1Qty: number;
-      c2Qty: number;
-      c3Qty: number;
-      c1Serials: Set<string>;
-      c2Serials: Set<string>;
-      c3Serials: Set<string>;
-      unexpectedCount: number;
-    }>();
+      this.prisma.inventory_Equipment_Shelf_Snapshot.findMany({
+        where: {
+          inventoryId,
+          phase: 'FINALIZED',
+        },
+      }),
 
-    for (const unit of inventory.workUnits) {
-      const c1Attempt = unit.attempts.find((a) => a.purpose === 'PRIMARY_1');
-      const c2Attempt = unit.attempts.find((a) => a.purpose === 'PRIMARY_2');
-      const c3Attempt = unit.attempts.find((a) => a.purpose === 'FINAL_RECOUNT');
+      this.prisma.inventory_SerialNumber_Snapshot.findMany({
+        where: {
+          inventoryId,
+          phase:
+            'LIVE_AT_LAUNCH',
+        },
+      }),
 
-      const processOrders = (orders: any[], role: 'c1' | 'c2' | 'c3') => {
-        for (const o of orders) {
-          const eqId = o.equipmentId || unit.equipmentId || 'UNKNOWN';
-          const sn = (o.scannedSerialCode || o.serialNumber?.serialNumberCode || '').trim().toLowerCase();
-          const hasSn = o.equipment?.hasSerialNumber ?? (!!sn);
-
-          if (!itemComparisonMap.has(eqId)) {
-            itemComparisonMap.set(eqId, {
-              equipmentId: eqId,
-              hasSerialNumber: hasSn,
-              c1Qty: 0,
-              c2Qty: 0,
-              c3Qty: 0,
-              c1Serials: new Set<string>(),
-              c2Serials: new Set<string>(),
-              c3Serials: new Set<string>(),
-              unexpectedCount: 0,
-            });
-          }
-
-          const entry = itemComparisonMap.get(eqId)!;
-          if (o.isUnexpected) entry.unexpectedCount++;
-
-          if (role === 'c1') {
-            if (sn) entry.c1Serials.add(sn);
-            else entry.c1Qty += Number(o.quantityCalculated ?? 0);
-          } else if (role === 'c2') {
-            if (sn) entry.c2Serials.add(sn);
-            else entry.c2Qty += Number(o.quantityCalculated ?? 0);
-          } else if (role === 'c3') {
-            if (sn) entry.c3Serials.add(sn);
-            else entry.c3Qty += Number(o.quantityCalculated ?? 0);
-          }
-        }
-      };
-
-      if (c1Attempt) processOrders(c1Attempt.orders, 'c1');
-      if (c2Attempt) processOrders(c2Attempt.orders, 'c2');
-      if (c3Attempt) processOrders(c3Attempt.orders, 'c3');
-    }
-
-    // Now evaluate each controlled article
-    for (const item of itemComparisonMap.values()) {
-      if (item.hasSerialNumber) {
-        // Serialized equipment comparison
-        let isMatching = false;
-        if (item.c1Serials.size === item.c2Serials.size) {
-          isMatching = true;
-          for (const s of item.c1Serials) {
-            if (!item.c2Serials.has(s)) {
-              isMatching = false;
-              break;
-            }
-          }
-        }
-
-        if (isMatching) {
-          compliantCount++;
-        } else {
-          // Count serials present in C1 but missing in C2
-          for (const s of item.c1Serials) {
-            if (!item.c2Serials.has(s)) missingSerialsCount++;
-          }
-          for (const s of item.c2Serials) {
-            if (!item.c1Serials.has(s)) missingSerialsCount++;
-          }
-        }
-      } else {
-        // Non-serialized quantitative comparison
-        const delta = item.c1Qty - item.c2Qty;
-        if (delta === 0) {
-          compliantCount++;
-        } else if (delta > 0) {
-          // C2 counted less than C1 -> deficit
-          shortageCount += delta;
-        } else {
-          // C2 counted more than C1 -> surplus
-          excessCount += Math.abs(delta);
-        }
-      }
-
-      relocatedSerialsCount += item.unexpectedCount;
-    }
+      this.prisma.inventory_SerialNumber_Snapshot.findMany({
+        where: {
+          inventoryId,
+          phase: 'FINALIZED',
+        },
+      }),
+    ]);
 
     return {
       inventory: {
-        inventoryId: inventory.inventoryId,
-        title: inventory.title,
-        typeInventory: inventory.typeInventory,
-        status: inventory.status,
-        policyVersion: inventory.policyVersion,
-        finalResultSource: inventory.finalResultSource,
-        thirdCountRequired: inventory.thirdCountRequired,
-        launchedAt: inventory.launchedAt,
-        finalizedAt: inventory.finalizedAt,
-        participants: inventory.Inventory_User.map((u) => ({
-          userId: u.userId,
-          name: u.User?.userName || u.User?.userEmail || 'Utilisateur',
-          sequence: u.sequence,
-          responsibility: u.responsibility,
-          roleSnapshot: u.roleSnapshot,
-        })),
+        inventoryId:
+          inventory.inventoryId,
+        title:
+          inventory.title,
+        typeInventory:
+          inventory.typeInventory,
+        status:
+          inventory.status,
+        createdAt:
+          inventory.createdAt,
+        launchedAt:
+          inventory.launchedAt,
+        finalizedAt:
+          inventory.finalizedAt,
+        policyVersion:
+          inventory.policyVersion,
       },
-      summary: {
-        compliantCount,
-        shortageCount,
-        excessCount,
-        missingSerialsCount,
-        relocatedSerialsCount,
-        unexplainedCount,
-      },
-      physicalTruth: {
-        quantities: finalSnapshots,
-        serials: finalSerials,
-      },
+
+      controllers:
+        inventory.Inventory_User.map(
+          (participant) => ({
+            sequence:
+              participant.sequence,
+            responsibility:
+              participant.responsibility,
+            user:
+              participant.User,
+          }),
+        ),
+
+      units:
+        comparison.units,
+
+      summary:
+        comparison.summary,
+
       baselineLaunch: {
-        quantities: launchSnapshots,
-        serials: launchSerials,
+        quantities:
+          launchQuantities,
+        serials:
+          launchSerials,
       },
-      investigationIssues: inventory.investigationIssues,
+
+      physicalTruth: {
+        quantities:
+          finalQuantities,
+        serials:
+          finalSerials,
+      },
+
+      investigationIssues:
+        inventory.investigationIssues,
+
+      adjustmentMovements:
+        inventory.adjustmentMovements,
     };
   }
 
-  /**
-   * Retrieves investigation issues for an inventory
-   */
-  async getInventoryIssues(inventoryId: string) {
+  async getInventoryIssues(
+    inventoryId: string,
+  ) {
     return this.prisma.inventoryInvestigationIssue.findMany({
       where: { inventoryId },
       include: {
@@ -2302,166 +5064,97 @@ export class InventoryService {
         finalObservedShelf: true,
         resolutionShelf: true,
         resolvedByUser: {
-          select: { userId: true, userName: true, userEmail: true },
+          select: {
+            userId: true,
+            userName: true,
+            userEmail: true,
+          },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
   }
 
-  /**
-   * Admin resolution of a missing item investigation issue.
-   * Explicitly supports:
-   *   Outcome A — FOUND_IN_ANOTHER_LOCATION
-   *   Outcome B — MOVED_WITHOUT_RECORDED_MOVEMENT
-   *   Outcome C — LOST
-   *
-   * Idempotent: cannot be resolved twice or alter stock twice.
-   * Never mutates frozen historical inventory observations.
-   */
   async resolveInvestigationIssue(
     inventoryId: string,
     issueId: string,
     userId: string,
-    dto: ResolveIssueDTO
+    dto: ResolveIssueDTO,
   ) {
+    const data =
+      resolveIssueSchema.parse(dto);
+
     return this.prisma.$transaction(async (tx) => {
-      const issue = await tx.inventoryInvestigationIssue.findUnique({
+      const issue =
+        await tx.inventoryInvestigationIssue.findUnique({
+          where: { issueId },
+        });
+
+      if (!issue) {
+        throw new NotFoundException(
+          "Problème d'investigation introuvable",
+        );
+      }
+
+      if (
+        issue.inventoryId !== inventoryId
+      ) {
+        throw new BadRequestException(
+          'Le problème ne correspond pas à cet inventaire.',
+        );
+      }
+
+      if (
+        issue.status === 'RESOLVED'
+      ) {
+        throw new BadRequestException(
+          'Ce problème a déjà été résolu.',
+        );
+      }
+
+      if (data.resolutionShelfId) {
+        const shelf =
+          await tx.shelf.findUnique({
+            where: {
+              shelfId:
+                data.resolutionShelfId,
+            },
+            select: {
+              shelfId: true,
+            },
+          });
+
+        if (!shelf) {
+          throw new NotFoundException(
+            'Emplacement de résolution introuvable.',
+          );
+        }
+      }
+
+      // No direct stock mutation here. Finalization uses adjustment movements.
+      return tx.inventoryInvestigationIssue.update({
         where: { issueId },
-      });
-
-      if (!issue) throw new NotFoundException('Problème d\'investigation introuvable');
-      if (issue.inventoryId !== inventoryId) {
-        throw new BadRequestException('Le problème ne correspond pas à cet inventaire.');
-      }
-      if (issue.status === 'RESOLVED') {
-        throw new BadRequestException('Ce problème a déjà été résolu.');
-      }
-
-      if (dto.resolutionType === 'FOUND_IN_ANOTHER_LOCATION') {
-        if (!dto.resolutionShelfId) {
-          throw new BadRequestException('L\'emplacement réel où l\'article a été trouvé est requis.');
-        }
-
-        // Apply live stock correction to reflect found location
-        if (issue.serialNumberId) {
-          await tx.serialNumber.update({
-            where: { serialNumberId: issue.serialNumberId },
-            data: {
-              shelfId: dto.resolutionShelfId,
-              serialNumberStatus: 'AVAILABLE',
-            },
-          });
-        } else if (issue.equipmentId) {
-          const qty = issue.deltaQuantity || 1;
-          // Decrement expected shelf if stock existed, increment actual found shelf
-          if (issue.expectedShelfId) {
-            const expEs = await tx.equipmentShelfs.findFirst({
-              where: { equipmentId: issue.equipmentId, shelfId: issue.expectedShelfId },
-            });
-            if (expEs && (expEs.equipmentQuantity || 0) >= qty) {
-              await tx.equipmentShelfs.update({
-                where: { equipmentShelfId: expEs.equipmentShelfId },
-                data: { equipmentQuantity: { decrement: qty } },
-              });
-            }
-          }
-
-          const actEs = await tx.equipmentShelfs.findFirst({
-            where: { equipmentId: issue.equipmentId, shelfId: dto.resolutionShelfId },
-          });
-          if (actEs) {
-            await tx.equipmentShelfs.update({
-              where: { equipmentShelfId: actEs.equipmentShelfId },
-              data: { equipmentQuantity: { increment: qty } },
-            });
-          } else {
-            await tx.equipmentShelfs.create({
-              data: {
-                equipmentId: issue.equipmentId,
-                shelfId: dto.resolutionShelfId,
-                equipmentQuantity: qty,
-              },
-            });
-          }
-        }
-
-        await tx.inventoryInvestigationIssue.update({
-          where: { issueId },
-          data: {
-            status: 'RESOLVED',
-            resolutionType: 'FOUND_IN_ANOTHER_LOCATION',
-            resolutionShelfId: dto.resolutionShelfId,
-            resolutionNotes: dto.notes || null,
-            resolvedByUserId: userId,
-            resolvedAt: new Date(),
-          },
-        });
-      } else if (dto.resolutionType === 'MOVED_WITHOUT_RECORDED_MOVEMENT') {
-        // Recorded legitimate past movement not logged in app
-        await tx.inventoryInvestigationIssue.update({
-          where: { issueId },
-          data: {
-            status: 'RESOLVED',
-            resolutionType: 'MOVED_WITHOUT_RECORDED_MOVEMENT',
-            resolutionNotes: dto.notes || null,
-            resolvedByUserId: userId,
-            resolvedAt: new Date(),
-          },
-        });
-      } else if (dto.resolutionType === 'LOST') {
-        // Confirmed LOST
-        if (issue.serialNumberId) {
-          await tx.serialNumber.update({
-            where: { serialNumberId: issue.serialNumberId },
-            data: {
-              serialNumberStatus: 'LOST',
-              shelfId: null, // Removed from shelf
-            },
-          });
-        } else if (issue.equipmentId) {
-          const qty = issue.deltaQuantity || 1;
-          if (issue.expectedShelfId) {
-            const expEs = await tx.equipmentShelfs.findFirst({
-              where: { equipmentId: issue.equipmentId, shelfId: issue.expectedShelfId },
-            });
-            if (expEs) {
-              await tx.equipmentShelfs.update({
-                where: { equipmentShelfId: expEs.equipmentShelfId },
-                data: {
-                  equipmentQuantity: Math.max(0, (expEs.equipmentQuantity || 0) - qty),
-                },
-              });
-            }
-          }
-
-          // Decrement global equipment quantity safely
-          await tx.equipment.update({
-            where: { equipmentId: issue.equipmentId },
-            data: {
-              equipmentQuantity: { decrement: qty },
-            },
-          });
-        }
-
-        await tx.inventoryInvestigationIssue.update({
-          where: { issueId },
-          data: {
-            status: 'RESOLVED',
-            resolutionType: 'LOST',
-            resolutionNotes: dto.notes || null,
-            resolvedByUserId: userId,
-            resolvedAt: new Date(),
-          },
-        });
-      }
-
-      this.logger.log(`Investigation issue ${issueId} resolved with outcome ${dto.resolutionType}.`);
-      return tx.inventoryInvestigationIssue.findUnique({
-        where: { issueId },
+        data: {
+          status: 'RESOLVED',
+          resolutionType:
+            data.resolutionType,
+          resolutionShelfId:
+            data.resolutionShelfId ??
+            null,
+          resolutionNotes:
+            data.notes ?? null,
+          resolvedByUserId:
+            userId,
+          resolvedAt:
+            new Date(),
+        },
         include: {
           equipment: true,
           serialNumber: true,
+          expectedShelf: true,
+          finalObservedShelf: true,
           resolutionShelf: true,
           resolvedByUser: true,
         },
@@ -2470,136 +5163,290 @@ export class InventoryService {
   }
 
   // --------------------------------------------------------------------------
-  // LEGACY V1 BACKWARD-COMPATIBILITY ENDPOINTS (Safe guards for V2)
+  // Delete
   // --------------------------------------------------------------------------
 
-  async getAdjudicationUnit(unitId: string) {
-    const unit = await this.prisma.inventoryWorkUnit.findUnique({
-      where: { unitId },
-      include: {
-        inventory: true,
-        attempts: {
-          include: {
-            orders: {
-              include: { serialNumber: true, equipment: true, shelf: true },
+  async deleteInventory(
+    inventoryId: string,
+  ) {
+    const existing =
+      await this.prisma.inventory.findUnique({
+        where: { inventoryId },
+      });
+
+    if (!existing) {
+      throw new NotFoundException(
+        'Inventaire introuvable',
+      );
+    }
+
+    if (
+      existing.status !== 'DRAFT'
+    ) {
+      throw new BadRequestException(
+        "Seul un inventaire DRAFT peut être supprimé. Après lancement, l'historique doit être conservé.",
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.inventory_User.deleteMany({
+        where: { inventoryId },
+      });
+
+      return tx.inventory.delete({
+        where: { inventoryId },
+      });
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // Legacy compatibility
+  // --------------------------------------------------------------------------
+
+  async getAdjudicationUnit(
+    unitId: string,
+  ) {
+    const unit =
+      await this.prisma.inventoryWorkUnit.findUnique({
+        where: { unitId },
+        include: {
+          inventory: true,
+          attempts: {
+            include: {
+              orders: {
+                include: {
+                  serialNumber: true,
+                  equipment: true,
+                  shelf: true,
+                },
+              },
             },
           },
         },
-      },
-    });
-    if (!unit) throw new NotFoundException('Unité introuvable');
+      });
+
+    if (!unit) {
+      throw new NotFoundException(
+        'Unité introuvable',
+      );
+    }
+
     return unit;
   }
 
-  async manualAdjudicate(unitId: string, adjudicatorId: string, data: AdjudicateDTO) {
-    const unit = await this.prisma.inventoryWorkUnit.findUnique({
-      where: { unitId },
-      include: { inventory: true },
-    });
-    if (!unit) throw new NotFoundException('Unité introuvable');
+  async manualAdjudicate(
+    unitId: string,
+    _adjudicatorId: string,
+    _data: AdjudicateDTO,
+  ) {
+    const unit =
+      await this.prisma.inventoryWorkUnit.findUnique({
+        where: { unitId },
+        include: {
+          inventory: true,
+        },
+      });
 
-    if ((unit.inventory.policyVersion ?? 1) >= 2) {
-      throw new BadRequestException('L\'adjudication manuelle par unité est dépréciée dans la politique V2. L\'inventaire V2 utilise le recomptage complet par le 3ème contrôleur.');
+    if (!unit) {
+      throw new NotFoundException(
+        'Unité introuvable',
+      );
     }
 
-    return { success: true, message: 'Legacy adjudication processed' };
+    if (
+      (
+        unit.inventory.policyVersion ??
+        1
+      ) >= 2
+    ) {
+      throw new BadRequestException(
+        "L'adjudication manuelle est désactivée. Les écarts C1/C2 déclenchent automatiquement C3 uniquement pour l'unité concernée.",
+      );
+    }
+
+    return {
+      success: true,
+      message:
+        'Legacy adjudication processed',
+    };
   }
 
   async assignThirdUser(
     inventoryId: string,
-    unitId: string,
-    thirdUserId: string,
-    currentUserId: string,
-    notes?: string
+    _unitId: string,
+    _thirdUserId: string,
+    _currentUserId: string,
+    _notes?: string,
   ) {
-    const inv = await this.prisma.inventory.findUnique({ where: { inventoryId } });
-    if (inv && (inv.policyVersion ?? 1) >= 2) {
-      throw new BadRequestException('L\'assignation individuelle par unité d\'un 3ème utilisateur est dépréciée en V2. Le 3ème contrôleur est préassigné à la création.');
+    const inventory =
+      await this.prisma.inventory.findUnique({
+        where: { inventoryId },
+      });
+
+    if (
+      inventory &&
+      (
+        inventory.policyVersion ??
+        1
+      ) >= 2
+    ) {
+      throw new BadRequestException(
+        "Le troisième contrôleur est préassigné à la création. Sa tâche est créée automatiquement uniquement pour une unité en écart.",
+      );
     }
-    return { success: true, message: 'Legacy third user assigned' };
+
+    return {
+      success: true,
+      message:
+        'Legacy third user assigned',
+    };
   }
 
   async assignThirdUserToAll(
     inventoryId: string,
-    thirdUserId: string,
-    currentUserId: string,
-    notes?: string
+    _thirdUserId: string,
+    _currentUserId: string,
+    _notes?: string,
   ) {
-    const inv = await this.prisma.inventory.findUnique({ where: { inventoryId } });
-    if (inv && (inv.policyVersion ?? 1) >= 2) {
-      throw new BadRequestException('L\'assignation individuelle d\'un 3ème utilisateur est dépréciée en V2. Le 3ème contrôleur est préassigné à la création.');
-    }
-    return { success: true, message: 'Legacy third user assigned' };
-  }
-
-  async autoCompleteCounts(inventoryId: string, currentUserId: string) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new ForbiddenException('La complétion automatique de test est désactivée en production.');
-    }
-    return { success: true, message: 'Auto-complete bypass route' };
-  }
-
-  async notifyPendingControllerForUnit(inventoryId: string, unitId: string, senderUserId?: string) {
-    return { success: true, message: 'Notification envoyée' };
-  }
-
-  async notifyAllPendingControllers(inventoryId: string, senderUserId?: string) {
-    return { success: true, message: 'Notifications envoyées' };
-  }
-
-  async deleteInventory(inventoryId: string) {
-    const existing = await this.prisma.inventory.findUnique({
-      where: { inventoryId },
-    });
-    if (!existing) throw new NotFoundException('Inventaire introuvable');
-
-    return this.prisma.$transaction(async (tx) => {
-      const units = tx.inventoryWorkUnit?.findMany ? await tx.inventoryWorkUnit.findMany({
+    const inventory =
+      await this.prisma.inventory.findUnique({
         where: { inventoryId },
-        select: { unitId: true },
-      }) : [];
-      const unitIds = units.map((u: any) => u.unitId);
+      });
 
-      let attemptIds: string[] = [];
-      if (unitIds.length > 0 && tx.inventoryCountAttempt?.findMany) {
-        const attempts = await tx.inventoryCountAttempt.findMany({
-          where: { unitId: { in: unitIds } },
-          select: { attemptId: true },
-        });
-        attemptIds = attempts.map((a: any) => a.attemptId);
-      }
+    if (
+      inventory &&
+      (
+        inventory.policyVersion ??
+        1
+      ) >= 2
+    ) {
+      throw new BadRequestException(
+        'Le recomptage global C3 est supprimé. C3 est déclenché uniquement pour les unités en écart.',
+      );
+    }
 
-      // Unlink any child/sub-inventories if any
-      if (tx.inventory?.updateMany) {
-        await tx.inventory.updateMany({
-          where: { parentInventoryId: inventoryId },
-          data: { parentInventoryId: null },
-        });
-      }
+    return {
+      success: true,
+      message:
+        'Legacy third user assigned',
+    };
+  }
 
-      if (tx.order?.deleteMany) {
-        await tx.order.deleteMany({
-          where: {
-            OR: [
-              { inventoryId },
-              ...(attemptIds.length > 0 ? [{ attemptId: { in: attemptIds } }] : []),
+  async autoCompleteCounts(
+    _inventoryId: string,
+    _currentUserId: string,
+  ) {
+    if (
+      process.env.NODE_ENV ===
+      'production'
+    ) {
+      throw new ForbiddenException(
+        'La complétion automatique de test est désactivée en production.',
+      );
+    }
+
+    return {
+      success: true,
+      message:
+        'Auto-complete bypass route',
+    };
+  }
+
+  async notifyPendingControllerForUnit(
+    inventoryId: string,
+    unitId: string,
+    _senderUserId?: string,
+  ) {
+    const attempt =
+      await this.prisma.inventoryCountAttempt.findFirst({
+        where: {
+          unitId,
+          unit: {
+            inventoryId,
+          },
+          status: {
+            in: [
+              'AVAILABLE',
+              'IN_PROGRESS',
             ],
           },
-        });
-      }
+        },
+        orderBy: {
+          sequence: 'asc',
+        },
+      });
 
-      if (unitIds.length > 0 && tx.inventoryCountAttempt?.deleteMany) {
-        await tx.inventoryCountAttempt.deleteMany({ where: { unitId: { in: unitIds } } });
-      }
+    if (!attempt) {
+      throw new NotFoundException(
+        'Aucune tâche en attente pour cette unité.',
+      );
+    }
 
-      if (tx.inventory_Equipment_Shelf_Snapshot?.deleteMany) await tx.inventory_Equipment_Shelf_Snapshot.deleteMany({ where: { inventoryId } });
-      if (tx.inventory_SerialNumber_Snapshot?.deleteMany) await tx.inventory_SerialNumber_Snapshot.deleteMany({ where: { inventoryId } });
-      if (tx.inventoryInvestigationIssue?.deleteMany) await tx.inventoryInvestigationIssue.deleteMany({ where: { inventoryId } });
-      if (tx.inventoryWorkUnit?.deleteMany) await tx.inventoryWorkUnit.deleteMany({ where: { inventoryId } });
-      if (tx.inventory_User?.deleteMany) await tx.inventory_User.deleteMany({ where: { inventoryId } });
-      if (tx.inventory?.delete) await tx.inventory.delete({ where: { inventoryId } });
-
-      return { success: true, message: 'Inventaire supprimé avec succès' };
+    await this.prisma.notification.create({
+      data: {
+        recipientId:
+          attempt.assignedUserId,
+        eventType:
+          'INVENTORY_TASK_REMINDER',
+        payload: JSON.stringify({
+          inventoryId,
+          unitId,
+          taskId:
+            attempt.attemptId,
+        }),
+      },
     });
+
+    return {
+      success: true,
+      message:
+        'Notification envoyée',
+    };
+  }
+
+  async notifyAllPendingControllers(
+    inventoryId: string,
+    _senderUserId?: string,
+  ) {
+    const attempts =
+      await this.prisma.inventoryCountAttempt.findMany({
+        where: {
+          unit: {
+            inventoryId,
+          },
+          status: {
+            in: [
+              'AVAILABLE',
+              'IN_PROGRESS',
+            ],
+          },
+        },
+      });
+
+    for (
+      const attempt of attempts
+    ) {
+      await this.prisma.notification.create({
+        data: {
+          recipientId:
+            attempt.assignedUserId,
+          eventType:
+            'INVENTORY_TASK_REMINDER',
+          payload: JSON.stringify({
+            inventoryId,
+            taskId:
+              attempt.attemptId,
+          }),
+        },
+      });
+    }
+
+    return {
+      success: true,
+      count:
+        attempts.length,
+      message:
+        'Notifications envoyées',
+    };
   }
 }

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   calculateMovementAudit,
   flattenMovementLines,
-} from '../src/lib/movement-ledger';
+} from '../src/lib/movement-ledger.ts';
 
 const equipmentId =
   '11111111-1111-4111-8111-111111111111';

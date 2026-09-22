@@ -1,25 +1,44 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import {
+  useEffect,
+} from 'react';
+import {
+  useParams,
+  useRouter,
+} from 'next/navigation';
+import {
+  Loader2,
+} from 'lucide-react';
 
 export default function InventoryIdRedirectPage() {
-  const params = useParams();
-  const router = useRouter();
-  const id = params?.id as string;
+  const params =
+    useParams();
+
+  const router =
+    useRouter();
+
+  const inventoryId =
+    params?.id as string;
 
   useEffect(() => {
-    if (id) {
-      router.replace(`/inventory/${id}/report`);
+    if (inventoryId) {
+      router.replace(
+        `/inventory/${inventoryId}/report`,
+      );
     } else {
-      router.replace('/inventory');
+      router.replace(
+        '/inventory',
+      );
     }
-  }, [id, router]);
+  }, [
+    inventoryId,
+    router,
+  ]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#2b2622]">
-      <Loader2 className="w-5 h-5 animate-spin text-[#aea69c]" />
-    </div>
+    <main className="flex min-h-screen items-center justify-center bg-[#2b2622] text-white">
+      <Loader2 className="h-5 w-5 animate-spin" />
+    </main>
   );
 }

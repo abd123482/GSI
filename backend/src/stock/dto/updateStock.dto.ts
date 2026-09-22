@@ -7,10 +7,11 @@ export const updateStockSchema = z.object({
     .min(5, 'Stock name must be at least 5 characters')
     .max(50, 'Stock name must not exceed 50 characters')
     .optional(),
+
   stockStatus: z
-    .string()
-    .trim()
+    .enum(['ACTIVE', 'INACTIVE'])
     .optional(),
 });
 
-export type UpdateStockDTO = z.infer<typeof updateStockSchema>;
+export type UpdateStockDTO =
+  z.infer<typeof updateStockSchema>;
