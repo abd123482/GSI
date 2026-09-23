@@ -481,6 +481,21 @@ export class EquipmentService {
           );
         }
 
+        const resource = `SOMIPHARM:EQUIPMENT:${equipmentId.toLowerCase()}`;
+        const lockQuery = await tx.$queryRaw<Array<{ lockResult: number }>>`
+          DECLARE @lockResult int;
+          EXEC @lockResult = sys.sp_getapplock
+            @Resource = ${resource},
+            @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction',
+            @LockTimeout = 10000;
+          SELECT @lockResult AS lockResult;
+        `;
+        const lockResult = Number(lockQuery[0]?.lockResult);
+        if (!Number.isFinite(lockResult) || lockResult < 0) {
+          throw new BadRequestException('Equipment is currently busy. Please try again.');
+        }
+
         if (
           current.hasSerialNumber
         ) {

@@ -1,23 +1,38 @@
-# SOMIPHARM database hardening audit pack
+# Direct Clerk → production ADMIN bootstrap
 
-This is the next phase after DB target alignment.
+Use this when `list-production-auth-users.ps1` shows no local SQL users, so the
+normal first authenticated request has not created the PENDING SQL row.
 
-Files:
+This script does not invent a Clerk ID.
 
-- `backend/scripts/audit-db-hardening.mjs`
-- `scripts/run-db-hardening-audit.ps1`
-- `backend/sql/final_hardening_readonly_audit.sql`
-- `docs/DB_HARDENING_AUDIT.md`
+It uses the configured `CLERK_SECRET_KEY` to find exactly one Clerk user with
+the requested email, then safely creates or links that exact Clerk identity in
+`yacinedb.dbo.User` and assigns:
 
-Everything in this package is read-only.
+```text
+userStatus = ACTIVE
+role = ADMIN
+```
 
-The runner refuses to run if the previous DB alignment report does not confirm
-that Nest runtime `DB_*` and Prisma CLI `DATABASE_URL` point to the same SQL
-Server/database.
+It stops if:
+- the email does not exist in Clerk;
+- multiple Clerk users match;
+- an SQL email is linked to a different Clerk identity;
+- the ADMIN role is missing;
+- the active DB is not exactly `yacinedb`.
 
-After running, send the contents of:
+Run from project root:
 
-`backend/sql/db-hardening-audit-report.json`
+```powershell
+.\scripts\bootstrap-admin-from-clerk.ps1 `
+  -Email "abdkkassl@gmail.com" `
+  -Confirmation "I CONFIRM CREATE OR LINK THIS CLERK USER AS PRODUCTION ADMIN"
+```
 
-The final SQL hardening patch can then be limited to objects that are actually
-missing.
+Then verify:
+
+```powershell
+.\scripts\list-production-auth-users.ps1
+```
+
+Finally sign out and sign in again in the frontend.

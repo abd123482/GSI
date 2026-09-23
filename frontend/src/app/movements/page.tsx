@@ -103,9 +103,9 @@ export default function MovementsPage() {
       query,
       Boolean(
         isLoaded &&
-          isSignedIn &&
-          !permissions.isLoading &&
-          permissions.canReadMovement,
+        isSignedIn &&
+        !permissions.isLoading &&
+        permissions.canReadMovement,
       ),
     );
 
@@ -196,26 +196,9 @@ export default function MovementsPage() {
               Mouvements
             </h1>
 
-            <p className="mt-1 text-xs text-[#aea69c]">
-              Création directe depuis cette page. IN / OUT / TRANSFER uniquement.
-            </p>
           </div>
 
           <div className="flex items-center gap-2">
-            {permissions.canCreateMovement && (
-              <button
-                type="button"
-                onClick={() =>
-                  setCreateOpen(
-                    true,
-                  )
-                }
-                className="inline-flex items-center gap-2 rounded bg-[#f7f5f0] px-3.5 py-2 text-xs font-semibold text-[#2b2622]"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Nouveau mouvement
-              </button>
-            )}
 
             <button
               type="button"
@@ -229,11 +212,10 @@ export default function MovementsPage() {
               title="Actualiser"
             >
               <RefreshCw
-                className={`h-3.5 w-3.5 ${
-                  movementsQuery.isFetching
+                className={`h-3.5 w-3.5 ${movementsQuery.isFetching
                     ? 'animate-spin'
                     : ''
-                }`}
+                  }`}
               />
             </button>
           </div>
@@ -255,8 +237,8 @@ export default function MovementsPage() {
                 setMovementType(
                   event.target
                     .value as
-                    | MovementType
-                    | '',
+                  | MovementType
+                  | '',
                 );
                 setPage(1);
               }}
@@ -308,6 +290,17 @@ export default function MovementsPage() {
               </option>
             </select>
           </label>
+
+          {permissions.canCreateMovement && (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              className="mt-3 inline-flex h-9 items-center justify-center gap-2 rounded bg-[#f7f5f0] px-3 text-xs font-semibold text-[#2b2622] sm:ml-auto sm:mt-0"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Nouveau mouvement
+            </button>
+          )}
         </section>
 
         <MovementListTable

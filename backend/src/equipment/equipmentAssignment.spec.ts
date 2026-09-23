@@ -41,6 +41,7 @@ describe('Equipment + SerialNumber V3', () => {
       equipmentShelfs: {
         deleteMany: vi.fn(),
       },
+      $queryRaw: vi.fn().mockResolvedValue([{ lockResult: 0 }]),
     };
 
     prisma = {

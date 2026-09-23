@@ -77,9 +77,9 @@ export default function StocksPage() {
     <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-[#f7f5f0]">
       <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
         <div className="flex flex-col justify-between gap-4 border-b border-[#3f3a36] pb-4 sm:flex-row sm:items-center">
-          <div><div className="mb-1 flex items-center gap-2 font-mono text-xs text-[#aea69c]"><Link href="/" className="hover:text-white">somepharm</Link><span>/</span><span className="text-white">stocks</span></div><h1 className="text-2xl font-normal tracking-tight">Gestion des Stocks</h1><p className="mt-1 text-xs text-[#c9c0ad]">Statuts disponibles : ACTIVE et INACTIVE uniquement. Aucun UUID n’est affiché.</p></div>
-          <button type="button" onClick={() => setIsCreateOpen(true)} disabled={!canCreateStock} className="inline-flex items-center justify-center gap-2 rounded bg-[#f7f5f0] px-3.5 py-2 text-xs font-semibold text-[#2b2622] disabled:opacity-40"><Plus className="h-3.5 w-3.5" />Nouveau stock</button>
+          <div><div className="mb-1 flex items-center gap-2 font-mono text-xs text-[#aea69c]"><Link href="/" className="hover:text-white">somepharm</Link><span>/</span><span className="text-white">stocks</span></div><h1 className="text-2xl font-normal tracking-tight">Gestion des Stocks</h1></div>
         </div>
+
 
         <div className="overflow-hidden rounded-lg border border-[#3f3a36] bg-[#383330]">
           <div className="flex flex-col gap-3 border-b border-[#3f3a36] p-3 lg:flex-row lg:items-center lg:justify-between">
@@ -87,6 +87,17 @@ export default function StocksPage() {
             <div className="flex flex-wrap items-center gap-2">
               <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as StatusFilter); setCurrentPage(1); }} className="h-9 rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"><option value="ALL">Tous les statuts</option><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select>
               <select value={limit} onChange={(event) => { setLimit(Number(event.target.value)); setCurrentPage(1); }} className="h-9 rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"><option value={10}>10 / page</option><option value={20}>20 / page</option><option value={50}>50 / page</option></select>
+              
+              {canCreateStock && (
+                <button 
+                  type="button" 
+                  onClick={() => setIsCreateOpen(true)} 
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded bg-[#f7f5f0] px-3 text-xs font-semibold text-[#2b2622]"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Nouveau stock
+                </button>
+              )}
             </div>
           </div>
 

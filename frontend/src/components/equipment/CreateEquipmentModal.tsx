@@ -16,6 +16,7 @@ import {
   Info,
   PackagePlus,
   Plus,
+  RefreshCw,
   Trash2,
   X,
 } from 'lucide-react';
@@ -140,6 +141,16 @@ export function CreateEquipmentModal({
     ]);
   }
 
+  function generateSerialInput() {
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const code = `SN-${timestamp}-${random}`;
+    syncSerials([
+      ...serials,
+      code,
+    ]);
+  }
+
   function close() {
     reset();
     setSerials([]);
@@ -162,10 +173,10 @@ export function CreateEquipmentModal({
     const serialNumbers =
       values.hasSerialNumber
         ? serials
-            .map((code) =>
-              code.trim(),
-            )
-            .filter(Boolean)
+          .map((code) =>
+            code.trim(),
+          )
+          .filter(Boolean)
         : [];
 
     if (
@@ -215,9 +226,6 @@ export function CreateEquipmentModal({
                 Créer un article
               </h2>
 
-              <p className="mt-0.5 text-[10px] text-white/50">
-                Le stock physique démarre à 0.
-              </p>
             </div>
           </div>
 
@@ -319,9 +327,7 @@ export function CreateEquipmentModal({
                     Article sérialisé
                   </p>
 
-                  <p className="mt-0.5 text-[10px] text-white/50">
-                    Les codes sont saisis manuellement par l’utilisateur.
-                  </p>
+
                 </div>
               </div>
 
@@ -362,21 +368,29 @@ export function CreateEquipmentModal({
                   </div>
 
                   {canCreateSerialNumber && (
-                    <button
-                      type="button"
-                      onClick={
-                        addSerialInput
-                      }
-                      className="inline-flex items-center gap-1.5 rounded border border-[#4a4540] bg-[#383330] px-3 py-1.5 text-xs"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Ajouter
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={generateSerialInput}
+                        className="inline-flex items-center gap-1.5 rounded border border-[#4a4540] bg-[#383330] px-3 py-1.5 text-xs text-sky-300 hover:bg-[#4a4540]"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Générer
+                      </button>
+                      <button
+                        type="button"
+                        onClick={addSerialInput}
+                        className="inline-flex items-center gap-1.5 rounded border border-[#4a4540] bg-[#383330] px-3 py-1.5 text-xs hover:bg-[#4a4540]"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Ajouter
+                      </button>
+                    </div>
                   )}
                 </div>
 
                 {serials.length ===
-                0 ? (
+                  0 ? (
                   <div className="rounded-lg border border-dashed border-[#4a4540] p-4 text-center text-[11px] text-white/45">
                     Aucun numéro de série ajouté.
                   </div>
@@ -397,9 +411,11 @@ export function CreateEquipmentModal({
                             value={
                               code
                             }
+                            readOnly={code.startsWith('SN-')}
                             onChange={(
                               event,
                             ) => {
+                              if (code.startsWith('SN-')) return;
                               const next =
                                 [
                                   ...serials,
@@ -414,7 +430,8 @@ export function CreateEquipmentModal({
                               );
                             }}
                             placeholder={`Code série ${index + 1}`}
-                            className="h-9 min-w-0 flex-1 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-xs outline-none focus:border-white/40"
+                            className={`h-9 min-w-0 flex-1 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-xs outline-none focus:border-white/40 ${code.startsWith('SN-') ? 'opacity-60 cursor-not-allowed' : ''
+                              }`}
                           />
 
                           <button
@@ -444,14 +461,7 @@ export function CreateEquipmentModal({
             )}
           </div>
 
-          <div className="flex gap-2 rounded-lg border border-sky-400/20 bg-sky-400/5 p-3 text-[11px] text-sky-100">
-            <Info className="mt-0.5 h-4 w-4 shrink-0" />
 
-            <p>
-              La création d’un article ou d’un numéro de série ne modifie pas la quantité physique.
-              Le stock physique change uniquement via les mouvements.
-            </p>
-          </div>
 
           <footer className="flex justify-end gap-2 border-t border-[#3f3a36] pt-4">
             <button

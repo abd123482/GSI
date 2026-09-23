@@ -124,11 +124,7 @@ export function RoleListCards({
             </div>
 
             {/* Footer */}
-            <div className="pt-3 mt-4 border-t border-[#3f3a36] flex items-center justify-between text-xs text-[#aea69c] font-mono">
-              <span className="flex items-center gap-1 text-[10px]">
-                <Lock className="w-3 h-3 text-[#aea69c]" />
-                UUID: {role.roleId.slice(0, 8)}...
-              </span>
+            <div className="pt-3 mt-4 border-t border-[#3f3a36] flex flex-row-reverse items-center justify-between text-xs text-[#aea69c] font-mono">
               
               {canManageRoles && !isAdmin && onOpenEditRole && (
                 <button

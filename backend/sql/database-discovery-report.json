@@ -1,0 +1,54 @@
+{
+  "generatedAt": "2026-09-22T20:31:12.698Z",
+  "server": "DESKTOP-H8RGDSS",
+  "currentDatabase": "yacinedb",
+  "loginName": "admin_semepharm",
+  "expectedTables": [
+    "Stock",
+    "StockStatus",
+    "Shelf",
+    "Equipment",
+    "EquipmentShelfs",
+    "SerialNumber",
+    "Mouvement",
+    "MovementEquipment",
+    "Inventory",
+    "InventoryWorkUnit",
+    "InventoryCountAttempt",
+    "Order"
+  ],
+  "exactCandidateCount": 0,
+  "candidateCount": 0,
+  "exactCandidates": [],
+  "candidates": [],
+  "allAccessibleDatabases": [
+    {
+      "databaseName": "master",
+      "accessible": true,
+      "expectedCount": 0,
+      "strongHintCount": 0,
+      "totalUserTables": 0
+    },
+    {
+      "databaseName": "msdb",
+      "accessible": true,
+      "expectedCount": 0,
+      "strongHintCount": 0,
+      "totalUserTables": 0
+    },
+    {
+      "databaseName": "tempdb",
+      "accessible": true,
+      "expectedCount": 0,
+      "strongHintCount": 0,
+      "totalUserTables": 0
+    },
+    {
+      "databaseName": "yacinedb",
+      "accessible": true,
+      "expectedCount": 0,
+      "strongHintCount": 0,
+      "totalUserTables": 1
+    }
+  ]
+}

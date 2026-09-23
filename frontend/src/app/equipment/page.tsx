@@ -207,9 +207,6 @@ export default function EquipmentPage() {
               Articles & Numéros de Série
             </h1>
 
-            <p className="mt-1 text-xs text-[#c9c0ad]">
-              Les mouvements ne se créent plus depuis cette page.
-            </p>
           </div>
 
           {canCreateEquipment && (

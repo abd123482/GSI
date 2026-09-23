@@ -389,10 +389,8 @@ export class MovementService {
       shelves.push(
         ...result.shelves.filter(
           (shelf) =>
-            shelf.stock
-              ?.stockStatus
-              ?.stockStatusName ===
-            'ACTIVE',
+            shelf.stock?.stockStatus?.stockStatusName === 'ACTIVE' &&
+            shelf.shelfStatus?.shelfStatusName !== 'INACTIVE',
         ),
       );
 

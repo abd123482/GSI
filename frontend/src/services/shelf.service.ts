@@ -124,12 +124,20 @@ export class ShelfService {
     params?: ShelfPaginationQuery,
   ): Promise<PaginatedShelvesResponse> {
     try {
+      const isStatusSearch = name.trim().startsWith('status:');
+      const paramsObj: any = {
+        page: params?.page ?? 1,
+        limit: params?.limit ?? 12,
+      };
+
+      if (isStatusSearch) {
+        paramsObj.shelfStatus = name.trim().replace('status:', '');
+      } else {
+        paramsObj.shelfName = name.trim();
+      }
+
       const response = await client.get<PaginatedShelvesResponse>('/shelves/search', {
-        params: {
-          shelfName: name.trim(),
-          page: params?.page ?? 1,
-          limit: params?.limit ?? 12,
-        },
+        params: paramsObj,
       });
       return response.data;
     } catch (error: unknown) {

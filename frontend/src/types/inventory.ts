@@ -134,6 +134,12 @@ export interface SubmitInventoryTaskInput {
   notes?: string;
 }
 
+export interface ExpectedShelf {
+  shelfId: string;
+  shelfName: string;
+  quantity?: number;
+}
+
 export interface InventoryTask {
   attemptId: string;
   unitId: string;
@@ -145,6 +151,7 @@ export interface InventoryTask {
   draftData?: string | null;
   scopeLabel?: string;
   isSerialized?: boolean;
+  expectedShelves?: ExpectedShelf[];
   unit: InventoryWorkUnit & {
     inventory: Inventory;
   };

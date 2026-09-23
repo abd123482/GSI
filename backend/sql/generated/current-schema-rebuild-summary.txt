@@ -1,0 +1,24 @@
+﻿SOMIPHARM CURRENT-SCHEMA REBUILD CANDIDATE
+Generated: 2026-09-22T21:59:08.8546139+01:00
+
+SQL file:
+C:\Users\KS\Documents\yacineapp\somepharm-maintenance\backend\sql\generated\current-schema-rebuild-candidate.sql
+
+SHA256:
+060907E56C5F96675E95E5D0D5876E404BBBE2EF5E7F9080D496748C8A7F6848
+
+CREATE TABLE count:
+23
+
+CREATE INDEX count:
+0
+
+FOREIGN KEY occurrences:
+46
+
+Dangerous write/destructive keywords detected:
+0
+
+NOTE:
+Prisma migrate diff generates Prisma-supported schema objects.
+Custom triggers/views are NOT expected to be included and must be handled separately.

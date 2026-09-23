@@ -1,0 +1,80 @@
+{
+  "generatedAt": "2026-09-22T21:22:00.729Z",
+  "databaseName": "yacinedb_rebuild_test",
+  "identity": {
+    "currentServer": "DESKTOP-H8RGDSS",
+    "currentDatabase": "yacinedb_rebuild_test"
+  },
+  "candidateHash": "060907E56C5F96675E95E5D0D5876E404BBBE2EF5E7F9080D496748C8A7F6848",
+  "expectedTableCount": 20,
+  "foundTableCount": 20,
+  "missingTables": [],
+  "stockStatuses": [
+    {
+      "stockStatusId": "186ad930-2f8a-4a96-9475-b917839666f8",
+      "stockStatusName": "ACTIVE"
+    },
+    {
+      "stockStatusId": "b7187f3e-68d2-491b-be7c-fa6f84e799e4",
+      "stockStatusName": "INACTIVE"
+    }
+  ],
+  "roles": [
+    {
+      "roleName": "ADMIN",
+      "permissionCount": 28,
+      "permissions": [
+        "dashboard.read",
+        "equipment.create",
+        "equipment.delete",
+        "equipment.read",
+        "equipment.update",
+        "inventory.adjudicate",
+        "inventory.count",
+        "inventory.create",
+        "inventory.delete",
+        "inventory.finalize",
+        "inventory.launch",
+        "inventory.read",
+        "movement.create",
+        "movement.read",
+        "role.manage",
+        "serial-number.create",
+        "serial-number.delete",
+        "serial-number.read",
+        "serial-number.update",
+        "shelf.create",
+        "shelf.delete",
+        "shelf.read",
+        "shelf.update",
+        "stock.create",
+        "stock.delete",
+        "stock.read",
+        "stock.update",
+        "user.manage"
+      ]
+    },
+    {
+      "roleName": "TECHNICIAN",
+      "permissionCount": 5,
+      "permissions": [
+        "equipment.read",
+        "movement.create",
+        "movement.read",
+        "serial-number.read",
+        "shelf.read"
+      ]
+    }
+  ],
+  "businessCounts": {
+    "stocks": 0,
+    "shelves": 0,
+    "equipment": 0,
+    "serialNumbers": 0,
+    "movements": 0,
+    "inventories": 0
+  },
+  "foreignKeyProblems": [],
+  "customHardeningTriggersInstalled": false,
+  "nextPhase": "Install hardening triggers, then run API smoke tests against this isolated DB."
+}

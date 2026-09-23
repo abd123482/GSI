@@ -53,8 +53,8 @@ interface BasicForm {
   equipmentName: string;
   minEquipmentQuantity: number;
   equipmentStatus:
-    | 'ACTIVE'
-    | 'INACTIVE';
+  | 'ACTIVE'
+  | 'INACTIVE';
   convertToSerialized: boolean;
 }
 
@@ -132,7 +132,7 @@ export function EditEquipmentModal({
         isOpen &&
         Boolean(
           equipment &&
-            !equipment.hasSerialNumber,
+          !equipment.hasSerialNumber,
         ),
 
       staleTime: 10_000,
@@ -233,7 +233,7 @@ export function EditEquipmentModal({
               allocation.shelfId,
               allocation.shelf
                 ?.shelfName ??
-                'Emplacement',
+              'Emplacement',
             ],
           ),
         ),
@@ -259,15 +259,15 @@ export function EditEquipmentModal({
   const conversionBlocked =
     conversionEnabled &&
     equipment.equipmentQuantity >
-      0 &&
+    0 &&
     (
       !allocationQuery.data ||
       allocationQuery.data
         .unallocatedQuantity >
-        0 ||
+      0 ||
       allocationQuery.data
         .totalAllocated !==
-        equipment.equipmentQuantity
+      equipment.equipmentQuantity
     );
 
   async function submit(
@@ -397,9 +397,6 @@ export function EditEquipmentModal({
                 Modifier l’article
               </h2>
 
-              <p className="mt-0.5 text-[10px] text-white/50">
-                Métadonnées, statut et conversion Standard → Sérialisé
-              </p>
             </div>
           </div>
 
@@ -481,14 +478,6 @@ export function EditEquipmentModal({
             />
           </label>
 
-          <div className="flex gap-2 rounded-lg border border-sky-400/20 bg-sky-400/5 p-3 text-[11px] text-sky-100">
-            <Info className="mt-0.5 h-4 w-4 shrink-0" />
-
-            <p>
-              La quantité physique reste en lecture seule dans cette fiche.
-              Elle change uniquement via IN / OUT / TRANSFER.
-            </p>
-          </div>
 
           {equipment.hasSerialNumber ? (
             <div className="rounded-lg border border-[#3f3a36] bg-[#2b2622]/55 p-4">
@@ -517,9 +506,6 @@ export function EditEquipmentModal({
                       Convertir en article sérialisé
                     </p>
 
-                    <p className="mt-0.5 text-[10px] text-white/45">
-                      Conversion définitive Standard → Sérialisé.
-                    </p>
                   </div>
                 </div>
 
@@ -576,12 +562,12 @@ export function EditEquipmentModal({
                                     ];
 
                                   next[index] =
-                                    {
-                                      ...row,
-                                      serialNumberCode:
-                                        event.target
-                                          .value,
-                                    };
+                                  {
+                                    ...row,
+                                    serialNumberCode:
+                                      event.target
+                                        .value,
+                                  };
 
                                   setConversionCodes(
                                     next,

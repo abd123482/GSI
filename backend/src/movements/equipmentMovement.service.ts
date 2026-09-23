@@ -11,6 +11,7 @@ import type {
 import {
   PrismaService,
 } from '../prisma/prisma.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 import {
   type CreateEquipmentMovementDTO,
@@ -146,6 +147,7 @@ const movementInclude = {
 export class EquipmentMovementService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -225,7 +227,7 @@ export class EquipmentMovementService {
         dto,
       );
 
-    return this.prisma.$transaction(
+    const result = await this.prisma.$transaction(
       async (tx) => {
         const equipmentIds = [
           ...new Set(
@@ -573,6 +575,15 @@ export class EquipmentMovementService {
         timeout: 30_000,
       },
     );
+
+    const equipmentIds = [
+      ...new Set(
+        movement.items.map((item) => item.equipmentId),
+      ),
+    ];
+    await this.notificationsService.checkAndSendLowStockAlerts(equipmentIds);
+
+    return result;
   }
 
   async getMovements(

@@ -43,7 +43,7 @@ export class EquipmentController {
     );
   }
 
-  @RequirePermissions('equipment.read')
+  @RequirePermissions('equipment.read', 'inventory.count')
   @Get(':id/shelves')
   getEquipmentShelves(
     @Param('id', new ParseUUIDPipe({ version: '4' }))
@@ -52,7 +52,7 @@ export class EquipmentController {
     return this.equipmentService.getEquipmentShelves(id);
   }
 
-  @RequirePermissions('equipment.read')
+  @RequirePermissions('equipment.read', 'inventory.count')
   @Get(':id/serial-numbers')
   getSerialNumbersByEquipmentId(
     @Param('id', new ParseUUIDPipe({ version: '4' }))

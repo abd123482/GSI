@@ -23,6 +23,11 @@ const SHELF_SELECT = {
   shelfName: true,
   shelfQuantity: true,
   stockId: true,
+  shelfStatus: {
+    select: {
+      shelfStatusName: true,
+    },
+  },
 
   stock: {
     select: {
@@ -141,11 +146,20 @@ export class ShelfService {
       ),
     ]);
 
+    const shelfStatusObj = await this.prisma.shelfStatus.findUnique({
+      where: { shelfStatusName: data.shelfStatus ?? 'ACTIVE' },
+    });
+
+    if (!shelfStatusObj) {
+      throw new BadRequestException('Invalid shelf status');
+    }
+
     return this.prisma.shelf.create({
       data: {
         shelfName: data.shelfName,
         shelfQuantity: 0,
         stockId: data.stockId,
+        shelfStatusId: shelfStatusObj.shelfStatusId,
       },
       select: SHELF_SELECT,
     });
@@ -221,6 +235,12 @@ export class ShelfService {
     if (filters.stockId) {
       where.stockId =
         filters.stockId;
+    }
+
+    if (filters.shelfStatus) {
+      where.shelfStatus = {
+        shelfStatusName: filters.shelfStatus,
+      };
     }
 
     const skip =
@@ -337,6 +357,7 @@ export class ShelfService {
           shelfId: true,
           shelfName: true,
           stockId: true,
+          shelfQuantity: true,
         },
       });
 
@@ -344,6 +365,10 @@ export class ShelfService {
       throw new NotFoundException(
         `Shelf with ID '${shelfId}' not found`,
       );
+    }
+
+    if (data.shelfStatus === 'INACTIVE' && current.shelfQuantity > 0) {
+      throw new BadRequestException('Cannot set shelf to INACTIVE if it contains items');
     }
 
     const validations:
@@ -378,6 +403,17 @@ export class ShelfService {
       validations,
     );
 
+    let shelfStatusId: string | undefined;
+    if (data.shelfStatus !== undefined) {
+      const statusObj = await this.prisma.shelfStatus.findUnique({
+        where: { shelfStatusName: data.shelfStatus },
+      });
+      if (!statusObj) {
+        throw new BadRequestException('Invalid shelf status');
+      }
+      shelfStatusId = statusObj.shelfStatusId;
+    }
+
     return this.prisma.shelf.update({
       where: {
         shelfId,
@@ -392,6 +428,9 @@ export class ShelfService {
           undefined && {
           stockId:
             data.stockId,
+        }),
+        ...(shelfStatusId !== undefined && {
+          shelfStatusId,
         }),
       },
       select: SHELF_SELECT,

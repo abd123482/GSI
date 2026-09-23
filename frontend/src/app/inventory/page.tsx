@@ -158,10 +158,6 @@ export default function InventoryPage() {
             <h1 className="text-2xl font-normal tracking-tight">
               Inventaires
             </h1>
-
-            <p className="mt-1 text-xs text-[#aea69c]">
-              C1 et C2 sont comparés unité par unité. C3 intervient uniquement sur les unités en écart.
-            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -194,11 +190,10 @@ export default function InventoryPage() {
               className="inline-flex h-9 w-9 items-center justify-center rounded border border-[#3f3a36] bg-[#383330] text-[#aea69c] disabled:opacity-40"
             >
               <RefreshCw
-                className={`h-3.5 w-3.5 ${
-                  inventoriesQuery.isFetching
+                className={`h-3.5 w-3.5 ${inventoriesQuery.isFetching
                     ? 'animate-spin'
                     : ''
-                }`}
+                  }`}
               />
             </button>
           </div>
@@ -278,7 +273,7 @@ export default function InventoryPage() {
 
                         <td className="px-4 py-3 text-[#c9c0ad]">
                           {inventory.typeInventory ===
-                          'ByEquipment'
+                            'ByEquipment'
                             ? 'Par article'
                             : 'Par emplacement'}
                         </td>
@@ -426,7 +421,7 @@ export default function InventoryPage() {
                 {Math.max(
                   inventoriesQuery.data
                     ?.totalPages ??
-                    1,
+                  1,
                   1,
                 )}
               </span>

@@ -75,6 +75,7 @@ const EMPTY_PERMISSIONS: string[] =
 
 export function usePermissions() {
   const {
+    userId,
     isSignedIn,
     isLoaded,
   } = useAuth();
@@ -87,7 +88,7 @@ export function usePermissions() {
     error,
     refetch,
   } = useQuery<AuthMeResponse>({
-    queryKey: ['auth', 'me'],
+    queryKey: ['auth', 'me', userId],
 
     queryFn: async () => {
       const response =
@@ -100,7 +101,8 @@ export function usePermissions() {
 
     enabled:
       Boolean(isSignedIn) &&
-      isLoaded,
+      isLoaded &&
+      Boolean(userId),
 
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,

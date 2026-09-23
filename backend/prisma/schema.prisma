@@ -112,6 +112,7 @@ model Shelf {
   shelfName             String?                           @db.VarChar(100)
   shelfQuantity         Int                               @default(0, map: "DF_Shelf_ShelfQuantity")
   stockId               String                            @db.UniqueIdentifier
+  shelfStatusId         String                            @db.UniqueIdentifier
   equipmentShelfs       EquipmentShelfs[]
   sourceMouvements      Mouvement[]                       @relation("SourceShelf")
   destinationMouvements Mouvement[]                       @relation("DestinationShelf")
@@ -122,6 +123,7 @@ model Shelf {
   observedIssues        InventoryInvestigationIssue[]     @relation("ObservedShelf")
   resolutionIssues      InventoryInvestigationIssue[]     @relation("ResolutionShelf")
   stock                 Stock                             @relation(fields: [stockId], references: [stockId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Shelf_Stock")
+  shelfStatus           ShelfStatus                       @relation(fields: [shelfStatusId], references: [shelfStatusId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Shelf_ShelfStatus")
 
   @@index([shelfId], map: "INDEX_Shelf_ShelfId")
   @@index([shelfName], map: "INDEX_Shelf_ShelfName")
@@ -136,6 +138,14 @@ model StockStatus {
   stocks          Stock[]
 
   @@map("StockStatus")
+}
+
+model ShelfStatus {
+  shelfStatusId   String  @id(map: "PK_ShelfStatus") @default(dbgenerated("newid()"), map: "DF_ShelfStatus_shelfStatusId") @db.UniqueIdentifier
+  shelfStatusName String  @unique(map: "UQ_ShelfStatus_Name") @db.VarChar(50)
+  shelves         Shelf[]
+
+  @@map("ShelfStatus")
 }
 
 model Stock {

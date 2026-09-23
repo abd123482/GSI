@@ -15,6 +15,8 @@ export const createShelfSchema = z.object({
     .uuid(
       'Stock ID must be a valid UUID',
     ),
+
+  shelfStatus: z.enum(['ACTIVE', 'INACTIVE']).optional(),
 });
 
 export type CreateShelfDTO =

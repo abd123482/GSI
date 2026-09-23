@@ -40,9 +40,6 @@ export class ClerkAuthGuard implements CanActivate {
     try {
       claims = await verifyToken(token, {
         jwtKey: process.env.CLERK_JWT_KEY!,
-        authorizedParties: process.env.FRONTEND_URL
-          ? [process.env.FRONTEND_URL]
-          : undefined,
       });
     } catch (err: any) {
       this.logger.debug(`Clerk token verification failed: ${err?.message || err}`);

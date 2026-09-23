@@ -178,27 +178,32 @@ export class StockService {
       statusId = status.stockStatusId;
     }
 
-    return this.prisma.stock.update({
-      where: {
-        stockId,
-      },
-      data: {
-        ...(validated.stockName !==
-          undefined && {
-          stockName: validated.stockName,
-        }),
-        ...(statusId !== undefined && {
-          stockStatusId: statusId,
-        }),
-      },
-      include: {
-        stockStatus: true,
-        _count: {
-          select: {
-            shelves: true,
-          },
+    return this.prisma.$transaction(async (tx) => {
+      const updatedStock = await tx.stock.update({
+        where: { stockId },
+        data: {
+          ...(validated.stockName !== undefined && { stockName: validated.stockName }),
+          ...(statusId !== undefined && { stockStatusId: statusId }),
         },
-      },
+        include: {
+          stockStatus: true,
+          _count: { select: { shelves: true } },
+        },
+      });
+
+      if (validated.stockStatus === 'INACTIVE') {
+        const inactiveShelfStatus = await tx.shelfStatus.findUnique({
+          where: { shelfStatusName: 'INACTIVE' },
+        });
+        if (inactiveShelfStatus) {
+          await tx.shelf.updateMany({
+            where: { stockId },
+            data: { shelfStatusId: inactiveShelfStatus.shelfStatusId },
+          });
+        }
+      }
+
+      return updatedStock;
     });
   }
 

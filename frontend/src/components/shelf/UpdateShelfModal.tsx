@@ -44,12 +44,13 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
     defaultValues: {
       shelfName: shelf?.shelfName ?? '',
       stockId: shelf?.stockId ?? '',
+      shelfStatus: shelf?.shelfStatus?.shelfStatusName ?? 'ACTIVE',
     },
   });
 
   useEffect(() => {
     if (!shelf) return;
-    reset({ shelfName: shelf.shelfName ?? '', stockId: shelf.stockId });
+    reset({ shelfName: shelf.shelfName ?? '', stockId: shelf.stockId, shelfStatus: shelf.shelfStatus?.shelfStatusName ?? 'ACTIVE' });
   }, [shelf, reset]);
 
   useEffect(() => {
@@ -96,12 +97,13 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
       return;
     }
 
-    const data: { shelfName?: string; stockId?: string } = {};
+    const data: { shelfName?: string; stockId?: string; shelfStatus?: 'ACTIVE' | 'INACTIVE' } = {};
     const nextName = values.shelfName?.trim();
     if (nextName && nextName !== (currentShelf.shelfName ?? '')) data.shelfName = nextName;
     if (values.stockId && values.stockId !== currentShelf.stockId) data.stockId = values.stockId;
+    if (values.shelfStatus && values.shelfStatus !== (currentShelf.shelfStatus?.shelfStatusName ?? 'ACTIVE')) data.shelfStatus = values.shelfStatus;
 
-    if (data.shelfName === undefined && data.stockId === undefined) {
+    if (data.shelfName === undefined && data.stockId === undefined && data.shelfStatus === undefined) {
       onClose();
       return;
     }
@@ -130,6 +132,18 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
             <span className="text-xs font-semibold">Nom</span>
             <input {...register('shelfName')} className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50" />
             {errors.shelfName && <p className="text-[11px] text-rose-300">{errors.shelfName.message}</p>}
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold">Statut de l'emplacement</span>
+            <select {...register('shelfStatus')} disabled={busy} className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50">
+              <option value="ACTIVE">Actif (ACTIVE)</option>
+              <option value="INACTIVE" disabled={currentShelf.shelfQuantity > 0}>Inactif (INACTIVE)</option>
+            </select>
+            {errors.shelfStatus && <p className="text-[11px] text-rose-300">{errors.shelfStatus.message}</p>}
+            {currentShelf.shelfQuantity > 0 && (
+              <p className="text-[10px] text-amber-400">Impossible de désactiver un emplacement contenant des articles.</p>
+            )}
           </label>
 
           <label className="block space-y-1.5">

@@ -350,3 +350,15 @@ export function useEquipments(
       deleteMutation.isPending,
   };
 }
+
+export function useEquipmentAllocations(equipmentId: string, enabled = true) {
+  const api = useApi();
+  const { permissions } = usePermissions();
+
+  return useQuery({
+    queryKey: ['equipment', equipmentId, 'allocations'],
+    queryFn: () => EquipmentService.getEquipmentShelves(api, equipmentId, permissions),
+    enabled: enabled && Boolean(equipmentId),
+    staleTime: 30_000,
+  });
+}

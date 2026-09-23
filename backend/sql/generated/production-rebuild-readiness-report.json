@@ -1,0 +1,33 @@
+{
+  "generatedAt": "2026-09-22T21:48:57.952Z",
+  "testDatabase": "yacinedb_rebuild_test",
+  "productionDatabase": "yacinedb",
+  "testDb": {
+    "identity": {
+      "currentServer": "DESKTOP-H8RGDSS",
+      "currentDatabase": "yacinedb_rebuild_test"
+    },
+    "tableCount": 20,
+    "missingTables": [],
+    "triggerCount": 6,
+    "badTriggers": [],
+    "fkProblems": [],
+    "statusNames": [
+      "ACTIVE",
+      "INACTIVE"
+    ],
+    "passed": true
+  },
+  "prodDb": {
+    "identity": {
+      "currentServer": "DESKTOP-H8RGDSS",
+      "currentDatabase": "yacinedb"
+    },
+    "userTableCount": 0,
+    "userTables": [],
+    "passed": true
+  },
+  "smokeMarkerPresent": true,
+  "ready": true,
+  "problems": []
+}

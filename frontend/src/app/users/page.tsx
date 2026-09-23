@@ -21,7 +21,7 @@ import { UserStatus, Role } from '@/types/user-role';
 
 export default function UsersAndRolesPage() {
   const { isSignedIn, isLoaded } = useAuth();
-  const { canManageUsers, canManageRoles, roleName, user: currentAuthUser, isAdmin } =
+  const { canManageUsers, canManageRoles, roleName, user: currentAuthUser, isAdmin, isLoading, error } =
     usePermissions();
 
   const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users');
@@ -141,8 +141,20 @@ export default function UsersAndRolesPage() {
           </div>
         </div>
 
-        {/* Access Status Banner */}
-        {isSignedIn && !isAdmin && !canManageRoles && !canManageUsers && (
+        {/* Error / Access Status Banner */}
+        {error ? (
+          <div className="p-3 bg-[#383330] border border-[#f5c6cb] rounded-[4px] text-xs text-[#b82a2a] flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 shrink-0" />
+            <span>
+              Erreur d'authentification : {error instanceof Error ? error.message : 'Impossible de joindre le serveur'}
+            </span>
+          </div>
+        ) : isLoading ? (
+          <div className="p-3 bg-[#383330] border border-[#3f3a36] rounded-[4px] text-xs text-[#c9c0ad] flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 shrink-0 animate-spin" />
+            <span>Chargement des permissions...</span>
+          </div>
+        ) : isSignedIn && !isAdmin && !canManageRoles && !canManageUsers && (
           <div className="p-3 bg-[#383330] border border-[#453316] rounded-[4px] text-xs text-[#f59e0b] flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 shrink-0 text-[#f59e0b]" />
             <span>

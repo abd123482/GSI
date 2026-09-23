@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 import { PrismaMssql } from '@prisma/adapter-mssql';
+import { ALL_SYSTEM_PERMISSIONS } from '../src/auth/constants/permissions.constant.js';
 
 const adapter = new PrismaMssql({
   server: process.env.DB_HOST!,
@@ -16,103 +17,88 @@ const adapter = new PrismaMssql({
 
 const prisma = new PrismaClient({ adapter });
 
-const ADMIN_PERMISSIONS = [
-  'equipment.read',
-  'equipment.create',
-  'equipment.update',
-  'equipment.delete',
-  'serial-number.read',
-  'serial-number.create',
-  'serial-number.update',
-  'serial-number.delete',
-  'movement.read',
-  'movement.create',
-  'shelf.read',
-  'shelf.create',
-  'shelf.update',
-  'shelf.delete',
-  'user.manage',
-  'role.manage',
-];
-
 const TECHNICIAN_PERMISSIONS = [
   'equipment.read',
   'serial-number.read',
   'movement.read',
   'movement.create',
   'shelf.read',
-];
+] as const;
+
+async function ensureRole(roleName: string) {
+  let role = await prisma.role.findFirst({
+    where: { roleName },
+  });
+
+  if (!role) {
+    role = await prisma.role.create({
+      data: { roleName },
+    });
+  }
+
+  return role;
+}
+
+async function ensurePermission(
+  roleId: string,
+  permissionName: string,
+) {
+  const existing = await prisma.permission.findFirst({
+    where: {
+      roleId,
+      permissionName,
+    },
+  });
+
+  if (!existing) {
+    await prisma.permission.create({
+      data: {
+        roleId,
+        permissionName,
+      },
+    });
+  }
+}
+
+async function ensureStockStatus(stockStatusName: 'ACTIVE' | 'INACTIVE') {
+  await prisma.stockStatus.upsert({
+    where: { stockStatusName },
+    update: {},
+    create: { stockStatusName },
+  });
+}
 
 async function main() {
-  console.log('Seeding roles and permissions idempotently...');
+  console.log('Seeding SOMIPHARM reference/security data idempotently...');
 
-  // 1. ADMIN Role
-  let adminRole = await prisma.role.findFirst({
-    where: { roleName: 'ADMIN' },
-  });
-  if (!adminRole) {
-    adminRole = await prisma.role.create({
-      data: { roleName: 'ADMIN' },
-    });
-    console.log('Created ADMIN role.');
+  await ensureStockStatus('ACTIVE');
+  await ensureStockStatus('INACTIVE');
+
+  const adminRole = await ensureRole('ADMIN');
+  const technicianRole = await ensureRole('TECHNICIAN');
+
+  for (const permissionName of ALL_SYSTEM_PERMISSIONS) {
+    await ensurePermission(adminRole.roleId, permissionName);
   }
 
-  // 2. TECHNICIAN Role
-  let techRole = await prisma.role.findFirst({
-    where: { roleName: 'TECHNICIAN' },
-  });
-  if (!techRole) {
-    techRole = await prisma.role.create({
-      data: { roleName: 'TECHNICIAN' },
-    });
-    console.log('Created TECHNICIAN role.');
+  for (const permissionName of TECHNICIAN_PERMISSIONS) {
+    await ensurePermission(technicianRole.roleId, permissionName);
   }
 
-  // 3. ADMIN Permissions
-  for (const permName of ADMIN_PERMISSIONS) {
-    const existing = await prisma.permission.findFirst({
-      where: {
-        roleId: adminRole.roleId,
-        permissionName: permName,
-      },
-    });
-    if (!existing) {
-      await prisma.permission.create({
-        data: {
-          roleId: adminRole.roleId,
-          permissionName: permName,
-        },
-      });
-    }
-  }
-  console.log(`Ensured ${ADMIN_PERMISSIONS.length} ADMIN permissions.`);
-
-  // 4. TECHNICIAN Permissions
-  for (const permName of TECHNICIAN_PERMISSIONS) {
-    const existing = await prisma.permission.findFirst({
-      where: {
-        roleId: techRole.roleId,
-        permissionName: permName,
-      },
-    });
-    if (!existing) {
-      await prisma.permission.create({
-        data: {
-          roleId: techRole.roleId,
-          permissionName: permName,
-        },
-      });
-    }
-  }
-  console.log(`Ensured ${TECHNICIAN_PERMISSIONS.length} TECHNICIAN permissions.`);
-
+  console.log(
+    `Ensured ${ALL_SYSTEM_PERMISSIONS.length} ADMIN permissions.`,
+  );
+  console.log(
+    `Ensured ${TECHNICIAN_PERMISSIONS.length} TECHNICIAN permissions.`,
+  );
+  console.log('Ensured StockStatus ACTIVE / INACTIVE.');
   console.log('Seed completed successfully.');
 }
 
 main()
-  .catch((err) => {
-    console.error('Seed error:', err);
-    process.exit(1);
+  .catch((error) => {
+    console.error('Seed error:', error);
+    process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();

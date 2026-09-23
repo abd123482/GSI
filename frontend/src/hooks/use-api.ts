@@ -31,6 +31,7 @@ export function useApi(): AxiosInstance {
             }
           } catch (err) {
             console.error('[useApi] Error acquiring Clerk session token:', err);
+            return Promise.reject(err);
           }
         }
         return config;

@@ -1,0 +1,46 @@
+{
+  "archivedAt": "2026-09-22T23:41:38.712Z",
+  "database": "yacinedb",
+  "server": "DESKTOP-H8RGDSS",
+  "backup": {
+    "backupFinish": "2026-09-22T23:38:34.000Z",
+    "backupDevice": "C:\\Program Files\\Microsoft SQL Server\\MSSQL17.MSSQLSERVER\\MSSQL\\Backup\\yacinedb_before_rebuild_20260922_233834.bak"
+  },
+  "baselineName": "20260923_baseline",
+  "validatedBaselineHash": "F7440A3E452DC331AACD085BD9CCFA12EC26D78E85A31E1791FBD4B64EDCAEF0",
+  "migrationRows": [
+    {
+      "id": "bb6b188c-49d1-45e6-870c-066190f30d8d",
+      "checksum": "0983c8c2474f18152b093842104ef9aef25f03fb78861c9e681da2249a64a385",
+      "finishedAt": "2026-09-22T11:09:45.038Z",
+      "migrationName": "0_init",
+      "logs": null,
+      "rolledBackAt": null,
+      "startedAt": "2026-09-22T11:09:45.033Z",
+      "appliedStepsCount": 1,
+      "derivedStatus": "APPLIED"
+    },
+    {
+      "id": "ae76253a-73f5-4900-a3fc-2031deb2b365",
+      "checksum": "a76ec50cb9168ee638ae8c9c3f1c235b6abc91ecbb8b547e657b12162f6e60f6",
+      "finishedAt": "2026-09-22T11:09:45.092Z",
+      "migrationName": "20260907_finish_clerk_auth",
+      "logs": null,
+      "rolledBackAt": null,
+      "startedAt": "2026-09-22T11:09:45.041Z",
+      "appliedStepsCount": 1,
+      "derivedStatus": "APPLIED"
+    },
+    {
+      "id": "0941c773-d011-4390-8f44-d72d8384c58e",
+      "checksum": "9df3e4af4d1979e21b0f95e9c8fe8be67b5e39b690502ecb33e1429c5a93c979",
+      "finishedAt": null,
+      "migrationName": "20260914_add_order_table",
+      "logs": "A migration failed to apply. New migrations cannot be applied before the error is recovered from. Read more about how to resolve migration issues in a production database: https://pris.ly/d/migrate-resolve\n\nMigration name: 20260914_add_order_table\n\nDatabase error code: 1767\n\nDatabase error:\nForeign key 'FK_Order_Inventory' references invalid table 'dbo.Inventory'.\n\n   0: sql_schema_connector::apply_migration::apply_script\n           with migration_name=\"20260914_add_order_table\"\n             at schema-engine\\connectors\\sql-schema-connector\\src\\apply_migration.rs:113\n   1: schema_commands::commands::apply_migrations::Applying migration\n           with migration_name=\"20260914_add_order_table\"\n             at schema-engine\\commands\\src\\commands\\apply_migrations.rs:95\n   2: schema_core::state::ApplyMigrations\n             at schema-engine\\core\\src\\state.rs:255",
+      "rolledBackAt": null,
+      "startedAt": "2026-09-22T11:09:45.093Z",
+      "appliedStepsCount": 0,
+      "derivedStatus": "FAILED_OR_INCOMPLETE"
+    }
+  ]
+}

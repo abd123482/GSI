@@ -290,9 +290,9 @@ export function CreateMovementModal({
         return allocations.filter(
           (allocation) =>
             allocation.shelfId ===
-              sourceShelfId &&
+            sourceShelfId &&
             allocation.equipmentQuantity >=
-              quantity,
+            quantity,
         );
       }
 
@@ -371,7 +371,7 @@ export function CreateMovementModal({
       return activeShelves.filter(
         (shelf) =>
           shelf.shelfId !==
-            sourceShelfId &&
+          sourceShelfId &&
           !allocatedShelfIds.has(
             shelf.shelfId,
           ),
@@ -385,11 +385,11 @@ export function CreateMovementModal({
 
   const routeDestinationAllowedForCurrentEquipment =
     movementType !==
-      'TRANSFER' ||
+    'TRANSFER' ||
     !destinationShelfId ||
     (
       destinationShelfId !==
-        sourceShelfId &&
+      sourceShelfId &&
       !allocatedShelfIds.has(
         destinationShelfId,
       )
@@ -439,7 +439,7 @@ export function CreateMovementModal({
     if (
       routeLocked ||
       movementType ===
-        'IN' ||
+      'IN' ||
       !selectedEquipment?.hasSerialNumber
     ) {
       return;
@@ -448,7 +448,7 @@ export function CreateMovementModal({
     setSourceShelfId(
       selectedSerial
         ?.shelfId ??
-        '',
+      '',
     );
   }, [
     movementType,
@@ -463,7 +463,7 @@ export function CreateMovementModal({
       selectedEquipment
         ?.hasSerialNumber ||
       movementType ===
-        'IN'
+      'IN'
     ) {
       return;
     }
@@ -493,7 +493,7 @@ export function CreateMovementModal({
     if (
       routeLocked ||
       movementType !==
-        'TRANSFER'
+      'TRANSFER'
     ) {
       return;
     }
@@ -614,7 +614,7 @@ export function CreateMovementModal({
 
     if (
       movementType !==
-        'IN' &&
+      'IN' &&
       !sourceShelfId
     ) {
       setError(
@@ -625,7 +625,7 @@ export function CreateMovementModal({
 
     if (
       movementType !==
-        'OUT' &&
+      'OUT' &&
       !destinationShelfId
     ) {
       setError(
@@ -636,7 +636,7 @@ export function CreateMovementModal({
 
     if (
       movementType ===
-        'TRANSFER' &&
+      'TRANSFER' &&
       !routeDestinationAllowedForCurrentEquipment
     ) {
       setError(
@@ -655,9 +655,9 @@ export function CreateMovementModal({
 
       if (
         movementType ===
-          'IN' &&
+        'IN' &&
         selectedSerial.shelfId !==
-          null
+        null
       ) {
         setError(
           'Pour une entrée, le numéro de série doit être hors emplacement.',
@@ -667,9 +667,9 @@ export function CreateMovementModal({
 
       if (
         movementType !==
-          'IN' &&
+        'IN' &&
         selectedSerial.shelfId !==
-          sourceShelfId
+        sourceShelfId
       ) {
         setError(
           'Ce numéro de série n’est pas présent dans la source du mouvement.',
@@ -694,7 +694,7 @@ export function CreateMovementModal({
         lines.some(
           (line) =>
             line.equipmentId ===
-              selectedEquipment.equipmentId &&
+            selectedEquipment.equipmentId &&
             !line.serialNumberId,
         )
       ) {
@@ -706,7 +706,7 @@ export function CreateMovementModal({
 
       if (
         movementType !==
-          'IN'
+        'IN'
       ) {
         const allocation =
           allocations.find(
@@ -718,7 +718,7 @@ export function CreateMovementModal({
         if (
           !allocation ||
           allocation.equipmentQuantity <
-            lineQuantity
+          lineQuantity
         ) {
           setError(
             'La source sélectionnée ne contient pas une quantité suffisante.',
@@ -805,52 +805,93 @@ export function CreateMovementModal({
     setError(null);
 
     if (!canCreateMovement) {
-      setError(
-        "Permission 'movement.create' requise.",
-      );
+      setError("Permission 'movement.create' requise.");
       return;
     }
 
-    if (!lines.length) {
-      setError(
-        'Ajoutez au moins une ligne.',
-      );
-      return;
+    let payloadItems = lines.map((line) => ({
+      equipmentId: line.equipmentId,
+      serialNumberId: line.serialNumberId,
+      movementQuantity: line.movementQuantity,
+    }));
+
+    if (payloadItems.length === 0) {
+      if (selectedEquipment) {
+        if (selectedEquipment.equipmentStatus !== 'ACTIVE') {
+          setError('Un article INACTIVE ne peut pas être déplacé.');
+          return;
+        }
+
+        const serialized = selectedEquipment.hasSerialNumber;
+        const lineQuantity = serialized ? 1 : Number(quantity);
+
+        if (!Number.isInteger(lineQuantity) || lineQuantity <= 0) {
+          setError('La quantité doit être un entier strictement positif.');
+          return;
+        }
+
+        if (movementType !== 'IN' && !sourceShelfId) {
+          setError('Sélectionnez une source contenant cet article.');
+          return;
+        }
+
+        if (movementType !== 'OUT' && !destinationShelfId) {
+          setError('Sélectionnez un emplacement destination ACTIVE.');
+          return;
+        }
+
+        if (movementType === 'TRANSFER' && !routeDestinationAllowedForCurrentEquipment) {
+          setError('La destination sélectionnée est déjà allouée à cet article. Choisissez un autre emplacement.');
+          return;
+        }
+
+        if (serialized) {
+          if (!selectedSerial) {
+            setError('Sélectionnez un numéro de série.');
+            return;
+          }
+          if (movementType === 'IN' && selectedSerial.shelfId !== null) {
+            setError('Pour une entrée, le numéro de série doit être hors emplacement.');
+            return;
+          }
+          if (movementType !== 'IN' && selectedSerial.shelfId !== sourceShelfId) {
+            setError('Ce numéro de série n’est pas présent dans la source du mouvement.');
+            return;
+          }
+        } else {
+          if (movementType !== 'IN') {
+            const allocation = allocations.find((item) => item.shelfId === sourceShelfId);
+            if (!allocation || allocation.equipmentQuantity < lineQuantity) {
+              setError('La source sélectionnée ne contient pas une quantité suffisante.');
+              return;
+            }
+          }
+        }
+
+        payloadItems = [{
+          equipmentId: selectedEquipment.equipmentId,
+          serialNumberId: selectedSerial?.serialNumberId ?? null,
+          movementQuantity: lineQuantity,
+        }];
+      } else {
+        setError('Ajoutez au moins une ligne en utilisant le bouton "+ Ajouter la ligne", ou remplissez le formulaire.');
+        document.querySelector('.overflow-y-auto')?.scrollTo(0, 0);
+        return;
+      }
     }
 
     try {
       await createMovement.mutateAsync({
         movementType,
-
-        sourceShelfId:
-          movementType ===
-          'IN'
-            ? null
-            : sourceShelfId,
-
-        destinationShelfId:
-          movementType ===
-          'OUT'
-            ? null
-            : destinationShelfId,
-
-        items:
-          lines.map(
-            (line) => ({
-              equipmentId:
-                line.equipmentId,
-              serialNumberId:
-                line.serialNumberId,
-              movementQuantity:
-                line.movementQuantity,
-            }),
-          ),
+        sourceShelfId: movementType === 'IN' ? null : sourceShelfId,
+        destinationShelfId: movementType === 'OUT' ? null : destinationShelfId,
+        items: payloadItems,
       });
 
       onSuccess?.();
       onClose();
     } catch (
-      cause: unknown
+    cause: unknown
     ) {
       setError(
         getErrorMessage(
@@ -869,10 +910,6 @@ export function CreateMovementModal({
             <h2 className="text-sm font-semibold">
               Nouveau mouvement
             </h2>
-
-            <p className="mt-0.5 text-[10px] text-white/45">
-              IN / OUT / TRANSFER uniquement
-            </p>
           </div>
 
           <button
@@ -903,7 +940,6 @@ export function CreateMovementModal({
                 ArrowDownToLine
               }
               title="Entrée"
-              subtitle="Extérieur → Stock"
               onClick={() =>
                 changeType(
                   'IN',
@@ -921,7 +957,6 @@ export function CreateMovementModal({
                 ArrowUpFromLine
               }
               title="Sortie"
-              subtitle="Stock → Extérieur"
               onClick={() =>
                 changeType(
                   'OUT',
@@ -939,7 +974,6 @@ export function CreateMovementModal({
                 ArrowRightLeft
               }
               title="Transfert"
-              subtitle="Emplacement → Emplacement"
               onClick={() =>
                 changeType(
                   'TRANSFER',
@@ -956,9 +990,6 @@ export function CreateMovementModal({
                   Ajouter une ligne
                 </h3>
 
-                <p className="mt-0.5 text-[10px] text-white/45">
-                  La première ligne définit le trajet commun. Les lignes suivantes doivent utiliser le même trajet.
-                </p>
               </div>
 
               {routeLocked && (
@@ -998,27 +1029,34 @@ export function CreateMovementModal({
 
                   {(equipmentQuery.data ??
                     []).map(
-                    (
-                      equipment,
-                    ) => (
-                      <option
-                        key={
-                          equipment.equipmentId
-                        }
-                        value={
-                          equipment.equipmentId
-                        }
-                      >
-                        {equipment.equipmentName ??
-                          'Article'}{' '}
-                        —{' '}
-                        {equipment.hasSerialNumber
-                          ? 'Sérialisé'
-                          : 'Standard'}
-                      </option>
-                    ),
-                  )}
+                      (
+                        equipment,
+                      ) => (
+                        <option
+                          key={
+                            equipment.equipmentId
+                          }
+                          value={
+                            equipment.equipmentId
+                          }
+                        >
+                          {equipment.equipmentName ??
+                            'Article'}{' '}
+                          —{' '}
+                          {equipment.hasSerialNumber
+                            ? 'Sérialisé'
+                            : 'Standard'}
+                        </option>
+                      ),
+                    )}
                 </select>
+
+                {selectedEquipment && allocations.length > 0 && (
+                  <div className="mt-2 text-[10px] text-[#aea69c]">
+                    <span className="font-semibold text-white/70">Stock actuel : </span>
+                    {allocations.map(a => `${a.shelf?.shelfName} (${a.equipmentQuantity})`).join(' • ')}
+                  </div>
+                )}
               </label>
 
               {selectedEquipment &&
@@ -1055,220 +1093,219 @@ export function CreateMovementModal({
 
             {selectedEquipment
               ?.hasSerialNumber && (
-              <label className="block space-y-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
-                  Numéro de série
-                </span>
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
+                    Numéro de série
+                  </span>
 
-                <select
-                  value={
-                    selectedSerialId
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setSelectedSerialId(
-                      event.target
-                        .value,
-                    )
-                  }
-                  disabled={
-                    busy ||
-                    serialsQuery.isLoading
-                  }
-                  className="h-10 w-full rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-xs"
-                >
-                  <option value="">
-                    Sélectionnez un numéro de série
-                  </option>
+                  <select
+                    value={
+                      selectedSerialId
+                    }
+                    onChange={(
+                      event,
+                    ) =>
+                      setSelectedSerialId(
+                        event.target
+                          .value,
+                      )
+                    }
+                    disabled={
+                      busy ||
+                      serialsQuery.isLoading
+                    }
+                    className="h-10 w-full rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-xs"
+                  >
+                    <option value="">
+                      Sélectionnez un numéro de série
+                    </option>
 
-                  {serialCandidates.map(
-                    (serial) => (
-                      <option
-                        key={
-                          serial.serialNumberId
-                        }
-                        value={
-                          serial.serialNumberId
-                        }
-                      >
-                        {
-                          serial.serialNumberCode
-                        }
-                        {serial.shelf
-                          ?.shelfName
-                          ? ` — ${serial.shelf.shelfName}`
-                          : movementType ===
+                    {serialCandidates.map(
+                      (serial) => (
+                        <option
+                          key={
+                            serial.serialNumberId
+                          }
+                          value={
+                            serial.serialNumberId
+                          }
+                        >
+                          {
+                            serial.serialNumberCode
+                          }
+                          {serial.shelf
+                            ?.shelfName
+                            ? ` — ${serial.shelf.shelfName}`
+                            : movementType ===
                               'IN'
-                            ? ' — Hors emplacement'
-                            : ''}
-                      </option>
-                    ),
-                  )}
-                </select>
+                              ? ' — Hors emplacement'
+                              : ''}
+                        </option>
+                      ),
+                    )}
+                  </select>
 
-                {!serialsQuery.isLoading &&
-                  serialCandidates.length ===
+                  {!serialsQuery.isLoading &&
+                    serialCandidates.length ===
                     0 && (
-                    <p className="text-[10px] text-amber-200">
-                      Aucun numéro de série éligible pour ce type de mouvement et ce trajet.
-                    </p>
-                  )}
-              </label>
-            )}
+                      <p className="text-[10px] text-amber-200">
+                        Aucun numéro de série éligible pour ce type de mouvement et ce trajet.
+                      </p>
+                    )}
+                </label>
+              )}
 
             {movementType !==
               'IN' && (
-              <label className="block space-y-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
-                  Source
-                </span>
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
+                    Source
+                  </span>
 
-                {selectedEquipment
-                  ?.hasSerialNumber ? (
-                  <div className="flex h-10 items-center rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs">
-                    {sourceName ||
-                      'Sélectionnez d’abord un numéro de série'}
-                  </div>
-                ) : (
-                  <select
-                    value={
-                      sourceShelfId
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setSourceShelfId(
-                        event.target
-                          .value,
-                      )
-                    }
-                    disabled={
-                      busy ||
-                      routeLocked ||
-                      !selectedEquipment ||
-                      allocationsQuery.isLoading
-                    }
-                    className="h-10 w-full rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs"
-                  >
-                    <option value="">
-                      Sélectionnez une source avec quantité suffisante
-                    </option>
+                  {selectedEquipment
+                    ?.hasSerialNumber ? (
+                    <div className="flex h-10 items-center rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs">
+                      {sourceName ||
+                        'Sélectionnez d’abord un numéro de série'}
+                    </div>
+                  ) : (
+                    <select
+                      value={
+                        sourceShelfId
+                      }
+                      onChange={(
+                        event,
+                      ) =>
+                        setSourceShelfId(
+                          event.target
+                            .value,
+                        )
+                      }
+                      disabled={
+                        busy ||
+                        routeLocked ||
+                        !selectedEquipment ||
+                        allocationsQuery.isLoading
+                      }
+                      className="h-10 w-full rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs"
+                    >
+                      <option value="">
+                        Sélectionnez une source avec quantité suffisante
+                      </option>
 
-                    {sourceCandidates.map(
-                      (
-                        allocation,
-                      ) => (
-                        <option
-                          key={
-                            allocation.equipmentShelfId
-                          }
-                          value={
-                            allocation.shelfId
-                          }
-                        >
-                          {allocation.shelf
-                            ?.shelfName ??
-                            'Emplacement'}{' '}
-                          — disponible:{' '}
-                          {
-                            allocation.equipmentQuantity
-                          }
-                        </option>
-                      ),
-                    )}
-                  </select>
-                )}
-              </label>
-            )}
+                      {sourceCandidates.map(
+                        (
+                          allocation,
+                        ) => (
+                          <option
+                            key={
+                              allocation.equipmentShelfId
+                            }
+                            value={
+                              allocation.shelfId
+                            }
+                          >
+                            {allocation.shelf
+                              ?.shelfName ??
+                              'Emplacement'}{' '}
+                            — disponible:{' '}
+                            {
+                              allocation.equipmentQuantity
+                            }
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  )}
+                </label>
+              )}
 
             {movementType !==
               'OUT' && (
-              <label className="block space-y-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
-                  Destination ACTIVE
-                </span>
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
+                    Destination ACTIVE
+                  </span>
 
-                {routeLocked ? (
-                  <div
-                    className={`flex h-10 items-center rounded border px-3 text-xs ${
-                      routeDestinationAllowedForCurrentEquipment
+                  {routeLocked ? (
+                    <div
+                      className={`flex h-10 items-center rounded border px-3 text-xs ${routeDestinationAllowedForCurrentEquipment
                         ? 'border-[#3f3a36] bg-[#1f1b18]'
                         : 'border-rose-400/40 bg-rose-950/20 text-rose-200'
-                    }`}
-                  >
-                    {destinationName ||
-                      'Destination du trajet'}
-                  </div>
-                ) : (
-                  <select
-                    value={
-                      destinationShelfId
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setDestinationShelfId(
-                        event.target
-                          .value,
-                      )
-                    }
-                    disabled={
-                      busy ||
-                      !selectedEquipment ||
-                      (
-                        movementType ===
+                        }`}
+                    >
+                      {destinationName ||
+                        'Destination du trajet'}
+                    </div>
+                  ) : (
+                    <select
+                      value={
+                        destinationShelfId
+                      }
+                      onChange={(
+                        event,
+                      ) =>
+                        setDestinationShelfId(
+                          event.target
+                            .value,
+                        )
+                      }
+                      disabled={
+                        busy ||
+                        !selectedEquipment ||
+                        (
+                          movementType ===
                           'TRANSFER' &&
-                        !sourceShelfId
-                      )
-                    }
-                    className="h-10 w-full rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs"
-                  >
-                    <option value="">
-                      Sélectionnez une destination
-                    </option>
+                          !sourceShelfId
+                        )
+                      }
+                      className="h-10 w-full rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs"
+                    >
+                      <option value="">
+                        Sélectionnez une destination
+                      </option>
 
-                    {destinationCandidates.map(
-                      (shelf) => (
-                        <option
-                          key={
-                            shelf.shelfId
-                          }
-                          value={
-                            shelf.shelfId
-                          }
-                        >
-                          {shelf.shelfName ??
-                            'Emplacement'}{' '}
-                          —{' '}
-                          {shelf.stock
-                            ?.stockName ??
-                            'Stock'}
-                        </option>
-                      ),
-                    )}
-                  </select>
-                )}
-
-                {movementType ===
-                  'TRANSFER' &&
-                  selectedEquipment &&
-                  !routeLocked && (
-                    <p className="text-[10px] text-white/40">
-                      Les emplacements déjà alloués à cet article, ainsi que la source actuelle, sont exclus des destinations.
-                    </p>
+                      {destinationCandidates.map(
+                        (shelf) => (
+                          <option
+                            key={
+                              shelf.shelfId
+                            }
+                            value={
+                              shelf.shelfId
+                            }
+                          >
+                            {shelf.shelfName ??
+                              'Emplacement'}{' '}
+                            —{' '}
+                            {shelf.stock
+                              ?.stockName ??
+                              'Stock'}
+                          </option>
+                        ),
+                      )}
+                    </select>
                   )}
 
-                {routeLocked &&
-                  movementType ===
+                  {movementType ===
                     'TRANSFER' &&
-                  !routeDestinationAllowedForCurrentEquipment && (
-                    <p className="text-[10px] text-rose-200">
-                      Cet article possède déjà une allocation dans la destination commune et ne peut pas être ajouté à ce transfert.
-                    </p>
-                  )}
-              </label>
-            )}
+                    selectedEquipment &&
+                    !routeLocked && (
+                      <p className="text-[10px] text-white/40">
+                        Les emplacements déjà alloués à cet article, ainsi que la source actuelle, sont exclus des destinations.
+                      </p>
+                    )}
+
+                  {routeLocked &&
+                    movementType ===
+                    'TRANSFER' &&
+                    !routeDestinationAllowedForCurrentEquipment && (
+                      <p className="text-[10px] text-rose-200">
+                        Cet article possède déjà une allocation dans la destination commune et ne peut pas être ajouté à ce transfert.
+                      </p>
+                    )}
+                </label>
+              )}
 
             <div className="flex justify-end">
               <button
@@ -1296,10 +1333,10 @@ export function CreateMovementModal({
 
                 <p className="mt-0.5 text-[10px] text-white/40">
                   {movementType ===
-                  'IN'
+                    'IN'
                     ? `Extérieur → ${destinationName || 'destination'}`
                     : movementType ===
-                        'OUT'
+                      'OUT'
                       ? `${sourceName || 'source'} → Extérieur`
                       : `${sourceName || 'source'} → ${destinationName || 'destination'}`}
                 </p>
@@ -1311,7 +1348,7 @@ export function CreateMovementModal({
             </div>
 
             {lines.length ===
-            0 ? (
+              0 ? (
               <div className="px-4 py-10 text-center text-xs text-white/45">
                 Aucune ligne ajoutée.
               </div>
@@ -1401,34 +1438,38 @@ export function CreateMovementModal({
           </div>
         </div>
 
-        <footer className="flex justify-end gap-2 border-t border-[#3f3a36] bg-[#26221f] px-5 py-3">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            className="rounded border border-[#3f3a36] px-4 py-2 text-xs"
-          >
-            Annuler
-          </button>
+        <footer className="flex items-center justify-between gap-2 border-t border-[#3f3a36] bg-[#26221f] px-5 py-3">
+          <div className="text-[10px] font-medium text-amber-200/80">
+            {lines.length === 0 && !selectedEquipment && 'Vous devez sélectionner un article ou ajouter une ligne avant de pouvoir enregistrer.'}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={busy}
+              className="rounded border border-[#3f3a36] px-4 py-2 text-xs"
+            >
+              Annuler
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              void submit();
-            }}
-            disabled={
-              busy ||
-              !canCreateMovement ||
-              lines.length ===
-                0
-            }
-            className="inline-flex items-center gap-1.5 rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622] disabled:opacity-40"
-          >
-            {busy && (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            )}
-            Enregistrer le mouvement
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                void submit();
+              }}
+              disabled={
+                busy ||
+                !canCreateMovement ||
+                (lines.length === 0 && !selectedEquipment)
+              }
+              className="inline-flex items-center gap-1.5 rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622] disabled:opacity-40"
+            >
+              {busy && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              )}
+              Enregistrer le mouvement
+            </button>
+          </div>
         </footer>
       </div>
     </div>
@@ -1439,17 +1480,15 @@ function TypeButton({
   active,
   icon: Icon,
   title,
-  subtitle,
   onClick,
   disabled,
 }: {
   active: boolean;
   icon:
-    | typeof ArrowDownToLine
-    | typeof ArrowUpFromLine
-    | typeof ArrowRightLeft;
+  | typeof ArrowDownToLine
+  | typeof ArrowUpFromLine
+  | typeof ArrowRightLeft;
   title: string;
-  subtitle: string;
   onClick: () => void;
   disabled: boolean;
 }) {
@@ -1458,11 +1497,10 @@ function TypeButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-lg border p-3 text-left transition ${
-        active
-          ? 'border-[#dad2c1] bg-[#f7f5f0] text-[#2b2622]'
-          : 'border-[#3f3a36] bg-[#2b2622] text-white hover:border-[#6b625b]'
-      } disabled:opacity-40`}
+      className={`rounded-lg border p-3 text-left transition ${active
+        ? 'border-[#dad2c1] bg-[#f7f5f0] text-[#2b2622]'
+        : 'border-[#3f3a36] bg-[#2b2622] text-white hover:border-[#6b625b]'
+        } disabled:opacity-40`}
     >
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4" />
@@ -1472,13 +1510,11 @@ function TypeButton({
       </div>
 
       <p
-        className={`mt-1 text-[10px] ${
-          active
-            ? 'text-[#5b534d]'
-            : 'text-white/40'
-        }`}
+        className={`mt-1 text-[10px] ${active
+          ? 'text-[#5b534d]'
+          : 'text-white/40'
+          }`}
       >
-        {subtitle}
       </p>
     </button>
   );

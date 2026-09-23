@@ -64,12 +64,28 @@ export class AuthService {
 
     // 3. Create matching SQL Server User with race condition protection
     try {
+      const userCount = await this.prisma.user.count();
+      const isFirstUser = userCount === 0;
+
+      let roleId = undefined;
+      if (isFirstUser) {
+        let adminRole = await this.prisma.role.findFirst({ where: { roleName: 'Admin' } });
+        if (!adminRole) {
+          adminRole = await this.prisma.role.findFirst({ where: { roleName: 'ADMIN' } });
+        }
+        if (!adminRole) {
+          adminRole = await this.prisma.role.create({ data: { roleName: 'Admin' } });
+        }
+        roleId = adminRole.roleId;
+      }
+
       return await this.prisma.user.create({
         data: {
           clerkUserId,
           userName: fullName,
           userEmail: email,
-          userStatus: 'PENDING',
+          userStatus: 'ACTIVE',
+          roleId: roleId,
         },
         include: {
           role: {
@@ -140,13 +156,29 @@ export class AuthService {
       return null;
     }
 
-    // If user does not exist yet, create with PENDING status
+    const userCount = await this.prisma.user.count();
+    const isFirstUser = userCount === 0;
+
+    let roleId = undefined;
+    if (isFirstUser) {
+      let adminRole = await this.prisma.role.findFirst({ where: { roleName: 'Admin' } });
+      if (!adminRole) {
+        adminRole = await this.prisma.role.findFirst({ where: { roleName: 'ADMIN' } });
+      }
+      if (!adminRole) {
+        adminRole = await this.prisma.role.create({ data: { roleName: 'Admin' } });
+      }
+      roleId = adminRole.roleId;
+    }
+
+    // If user does not exist yet, create with ACTIVE status
     return await this.prisma.user.create({
       data: {
         clerkUserId,
         ...(profile.userName != null && { userName: profile.userName }),
         userEmail: profile.userEmail,
-        userStatus: 'PENDING',
+        userStatus: 'ACTIVE',
+        roleId: roleId,
       },
     });
   }

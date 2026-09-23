@@ -24,9 +24,9 @@ interface EquipmentListTableProps {
   limit: number;
   searchTerm: string;
   equipmentStatus?:
-    | EquipmentStatus;
+  | EquipmentStatus;
   hasSerialNumber?:
-    | boolean;
+  | boolean;
 
   onSearchChange: (
     value: string,
@@ -126,7 +126,7 @@ export function EquipmentListTable({
                   'ALL'
                   ? undefined
                   : (event.target
-                      .value as EquipmentStatus),
+                    .value as EquipmentStatus),
               )
             }
             className="h-9 rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"
@@ -145,7 +145,7 @@ export function EquipmentListTable({
           <select
             value={
               hasSerialNumber ===
-              undefined
+                undefined
                 ? 'ALL'
                 : hasSerialNumber
                   ? 'SERIALIZED'
@@ -157,8 +157,8 @@ export function EquipmentListTable({
                   'ALL'
                   ? undefined
                   : event.target
-                      .value ===
-                    'SERIALIZED',
+                    .value ===
+                  'SERIALIZED',
               )
             }
             className="h-9 rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"
@@ -203,27 +203,15 @@ export function EquipmentListTable({
             className="inline-flex h-9 items-center gap-1.5 rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs disabled:opacity-40"
           >
             <RefreshCw
-              className={`h-3.5 w-3.5 ${
-                isLoading
+              className={`h-3.5 w-3.5 ${isLoading
                   ? 'animate-spin'
                   : ''
-              }`}
+                }`}
             />
             Actualiser
           </button>
 
-          {canCreateEquipment && (
-            <button
-              type="button"
-              onClick={
-                onOpenCreateModal
-              }
-              className="inline-flex h-9 items-center gap-1.5 rounded bg-[#f7f5f0] px-3 text-xs font-semibold text-[#2b2622]"
-            >
-              <PackagePlus className="h-3.5 w-3.5" />
-              Nouvel article
-            </button>
-          )}
+
         </div>
       </div>
 
@@ -254,7 +242,7 @@ export function EquipmentListTable({
 
           <tbody className="divide-y divide-[#3f3a36]">
             {isLoading &&
-            equipments.length ===
+              equipments.length ===
               0 ? (
               <tr>
                 <td
@@ -308,12 +296,11 @@ export function EquipmentListTable({
 
                     <td className="px-4 py-3">
                       <span
-                        className={`rounded border px-2 py-1 text-[10px] font-semibold ${
-                          equipment.equipmentStatus ===
-                          'ACTIVE'
+                        className={`rounded border px-2 py-1 text-[10px] font-semibold ${equipment.equipmentStatus ===
+                            'ACTIVE'
                             ? 'border-emerald-400/25 bg-emerald-950/25 text-emerald-300'
                             : 'border-amber-400/25 bg-amber-950/25 text-amber-300'
-                        }`}
+                          }`}
                       >
                         {
                           equipment.equipmentStatus

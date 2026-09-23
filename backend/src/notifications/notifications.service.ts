@@ -72,4 +72,57 @@ export class NotificationsService {
       },
     });
   }
+
+  async checkAndSendLowStockAlerts(equipmentIds: string[]) {
+    if (!equipmentIds || equipmentIds.length === 0) return;
+
+    // Filter unique IDs
+    const uniqueIds = Array.from(new Set(equipmentIds));
+
+    const equipments = await this.prisma.equipment.findMany({
+      where: {
+        equipmentId: { in: uniqueIds },
+      },
+    });
+
+    const lowStockEquipments = equipments.filter(
+      (eq) => eq.equipmentQuantity <= eq.minequipmentQuantity
+    );
+
+    if (lowStockEquipments.length === 0) return;
+
+    // Find all active users with 'equipment.update' permission (admins/managers)
+    const admins = await this.prisma.user.findMany({
+      where: {
+        userStatus: 'ACTIVE',
+        role: {
+          permissions: {
+            some: {
+              permissionName: 'equipment.update',
+            },
+          },
+        },
+      },
+    });
+
+    if (admins.length === 0) return;
+
+    // Dispatch notifications for each equipment to each admin
+    const notificationPromises = [];
+    for (const eq of lowStockEquipments) {
+      for (const admin of admins) {
+        notificationPromises.push(
+          this.createNotification(admin.userId, 'LOW_STOCK_ALERT', {
+            message: `Alerte Stock: L'article "${eq.equipmentName}" est tombé à ${eq.equipmentQuantity} (Min: ${eq.minequipmentQuantity})`,
+            equipmentId: eq.equipmentId,
+            equipmentName: eq.equipmentName,
+            quantity: eq.equipmentQuantity,
+            minQuantity: eq.minequipmentQuantity,
+          })
+        );
+      }
+    }
+
+    await Promise.all(notificationPromises);
+  }
 }

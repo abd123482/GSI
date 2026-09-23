@@ -34,6 +34,8 @@ import {
   NotificationBell,
 } from './NotificationBell';
 
+import { GSILogo } from './GSILogo';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -99,29 +101,13 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[#3f3a36] bg-[#2b2622]/95 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
-        <div className="flex items-center gap-3 sm:gap-6">
+        <div className="flex items-center gap-5 sm:gap-8">
           <Link
             href="/"
-            className="flex items-center gap-2.5"
+            className="flex items-center gap-3"
           >
-            <Image
-              src="/somepharm-logo.png"
-              alt="SomePharm"
-              width={28}
-              height={28}
-              className="h-7 w-7 object-contain"
-              priority
-            />
 
-            <span
-              className="whitespace-nowrap text-[20px] font-light tracking-[0.12em] text-[#f7f5f0]"
-              style={{
-                fontFamily:
-                  'Roboto, Arial, sans-serif',
-              }}
-            >
-              GSI
-            </span>
+            <GSILogo className="h-9 w-auto text-[#f7f5f0]" />
           </Link>
 
           <div className="hidden h-4 w-px bg-[#3f3a36] sm:block" />
@@ -129,11 +115,10 @@ export function Navbar() {
           <nav className="hidden items-center gap-1 sm:flex">
             <DropdownMenu>
               <DropdownMenuTrigger
-                className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs font-medium ${
-                  stockAreaActive
-                    ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
-                    : 'text-[#c9c0ad] hover:bg-[#383330]/70 hover:text-[#f7f5f0]'
-                }`}
+                className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs font-medium ${stockAreaActive
+                  ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
+                  : 'text-[#c9c0ad] hover:bg-[#383330]/70 hover:text-[#f7f5f0]'
+                  }`}
               >
                 <Warehouse className="h-3.5 w-3.5" />
                 Stocks
@@ -173,11 +158,10 @@ export function Navbar() {
             {permissions.canReadMovement && (
               <Link
                 href="/movements"
-                className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs font-medium ${
-                  active.movements
-                    ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
-                    : 'text-[#c9c0ad] hover:bg-[#383330]/70 hover:text-[#f7f5f0]'
-                }`}
+                className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs font-medium ${active.movements
+                  ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
+                  : 'text-[#c9c0ad] hover:bg-[#383330]/70 hover:text-[#f7f5f0]'
+                  }`}
               >
                 <ArrowRightLeft className="h-3.5 w-3.5" />
                 Mouvements
@@ -187,11 +171,10 @@ export function Navbar() {
             {permissions.canReadInventory && (
               <Link
                 href="/inventory"
-                className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs font-medium ${
-                  active.inventory
-                    ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
-                    : 'text-[#c9c0ad] hover:bg-[#383330]/70 hover:text-[#f7f5f0]'
-                }`}
+                className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs font-medium ${active.inventory
+                  ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
+                  : 'text-[#c9c0ad] hover:bg-[#383330]/70 hover:text-[#f7f5f0]'
+                  }`}
               >
                 <ClipboardList className="h-3.5 w-3.5" />
                 Inventaires
@@ -204,9 +187,9 @@ export function Navbar() {
           {isSignedIn && (
             <div className="hidden items-center gap-1.5 rounded border border-[#3f3a36] bg-[#383330] px-2.5 py-1 font-mono text-[11px] text-[#c9c0ad] md:flex">
               {permissions.isAdmin ||
-              permissions.canCreateEquipment ||
-              permissions.canCreateMovement ||
-              permissions.canCreateShelf ? (
+                permissions.canCreateEquipment ||
+                permissions.canCreateMovement ||
+                permissions.canCreateShelf ? (
                 <>
                   <ShieldCheck className="h-3 w-3 text-emerald-400" />
                   <span className="text-[#f7f5f0]">
@@ -387,11 +370,10 @@ function MobileLink({
     <Link
       href={href}
       onClick={close}
-      className={`block rounded p-2 text-xs font-medium ${
-        active
-          ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
-          : 'text-[#c9c0ad] hover:bg-[#383330]'
-      }`}
+      className={`block rounded p-2 text-xs font-medium ${active
+        ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
+        : 'text-[#c9c0ad] hover:bg-[#383330]'
+        }`}
     >
       {text}
     </Link>

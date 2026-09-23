@@ -13,6 +13,7 @@ export const createShelfSchema = z.object({
     .min(1, 'Le nom de l’emplacement est obligatoire')
     .max(100, 'Le nom ne peut pas dépasser 100 caractères'),
   stockId: requiredStockIdSchema,
+  shelfStatus: z.enum(['ACTIVE', 'INACTIVE']),
 });
 
 export type CreateShelfFormValues = z.infer<typeof createShelfSchema>;
@@ -26,9 +27,10 @@ export const updateShelfSchema = z
       .max(100, 'Le nom ne peut pas dépasser 100 caractères')
       .optional(),
     stockId: requiredStockIdSchema.optional(),
+    shelfStatus: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   })
   .refine(
-    (data) => data.shelfName !== undefined || data.stockId !== undefined,
+    (data) => data.shelfName !== undefined || data.stockId !== undefined || data.shelfStatus !== undefined,
     { message: 'Aucune modification à enregistrer.' },
   );
 

@@ -21,6 +21,10 @@ import {
 } from '@/components/users/UserAutocomplete';
 
 import {
+  SerialNumberTooltip,
+} from '@/components/inventory/SerialNumberTooltip';
+
+import {
   useCreateInventory,
 } from '@/hooks/use-inventory';
 
@@ -520,30 +524,38 @@ export default function CreateInventoryPage() {
                               equipment.equipmentId,
                             )
                           }
-                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[#383330]/45"
+                          className="group flex w-full flex-col px-4 py-3 text-left hover:bg-[#383330]/45"
                         >
-                          <div>
-                            <p className="text-xs font-semibold">
-                              {equipment.equipmentName ??
-                                'Article'}
-                            </p>
+                          <div className="flex w-full items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-semibold">
+                                {equipment.equipmentName ??
+                                  'Article'}
+                              </p>
 
-                            <p className="mt-0.5 text-[9px] text-[#8c827a]">
-                              {equipment.hasSerialNumber
-                                ? 'Sérialisé'
-                                : 'Standard'}
-                              {' • '}
-                              {
-                                equipment.equipmentStatus
+                              <p className="mt-0.5 text-[9px] text-[#8c827a]">
+                                {equipment.hasSerialNumber
+                                  ? 'Sérialisé'
+                                  : 'Standard'}
+                                {' • '}
+                                {
+                                  equipment.equipmentStatus
+                                }
+                              </p>
+                            </div>
+
+                            <SelectionBox
+                              checked={
+                                checked
                               }
-                            </p>
+                            />
                           </div>
 
-                          <SelectionBox
-                            checked={
-                              checked
-                            }
-                          />
+                          {equipment.hasSerialNumber && (
+                            <div className="hidden w-full mt-3 cursor-default rounded-md border border-[#3f3a36] bg-[#2f2a26] shadow-xl group-hover:block" onClick={(e) => e.stopPropagation()}>
+                              <SerialNumberTooltip equipmentId={equipment.equipmentId} />
+                            </div>
+                          )}
                         </button>
                       );
                     },
@@ -575,10 +587,21 @@ export default function CreateInventoryPage() {
                         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[#383330]/45"
                       >
                         <div>
-                          <p className="text-xs font-semibold">
-                            {shelf.shelfName ??
-                              'Emplacement'}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-semibold">
+                              {shelf.shelfName ??
+                                'Emplacement'}
+                            </p>
+                            <span
+                              className={`rounded border px-1.5 py-0.5 text-[8px] font-semibold ${
+                                shelf.shelfStatus?.shelfStatusName === 'ACTIVE'
+                                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+                                  : 'border-amber-500/20 bg-amber-500/10 text-amber-400'
+                              }`}
+                            >
+                              {shelf.shelfStatus?.shelfStatusName ?? 'ACTIVE'}
+                            </span>
+                          </div>
 
                           <p className="mt-0.5 text-[9px] text-[#8c827a]">
                             {shelf.stock

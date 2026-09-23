@@ -13,11 +13,14 @@ export const updateShelfSchema = z
       .string()
       .uuid('Stock ID must be a valid UUID')
       .optional(),
+      
+    shelfStatus: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   })
   .refine(
     (data) =>
       data.shelfName !== undefined ||
-      data.stockId !== undefined,
+      data.stockId !== undefined ||
+      data.shelfStatus !== undefined,
     {
       message: 'At least one editable field is required',
     },

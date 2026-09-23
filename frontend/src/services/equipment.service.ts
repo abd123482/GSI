@@ -179,10 +179,17 @@ export class EquipmentService {
     id: string,
     userPermissions?: string[],
   ): Promise<EquipmentWithShelvesResponse> {
-    ensurePermission(
-      userPermissions,
-      REQUIRED_EQUIPMENT_READ_PERMISSION,
-    );
+    if (
+      userPermissions &&
+      !userPermissions.includes(REQUIRED_EQUIPMENT_READ_PERMISSION) &&
+      !userPermissions.includes('inventory.count') &&
+      !userPermissions.includes('inventory.read')
+    ) {
+      ensurePermission(
+        userPermissions,
+        REQUIRED_EQUIPMENT_READ_PERMISSION,
+      );
+    }
 
     try {
       const response =

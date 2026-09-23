@@ -21,14 +21,14 @@ interface AuthMeResponse {
 }
 
 export function AuthStatusCard() {
-  const { isSignedIn, userId, getToken } = useAuth();
+  const { isLoaded, isSignedIn, userId, getToken } = useAuth();
   const api = useApi();
 
   const [copiedToken, setCopiedToken] = useState(false);
   const { data, isFetching: loading, error: queryError, refetch } = useQuery({
     queryKey: ['auth', 'me', userId],
     queryFn: async () => (await api.get<AuthMeResponse>('/auth/me')).data,
-    enabled: !!isSignedIn,
+    enabled: !!isLoaded && !!isSignedIn && !!userId,
     retry: false,
   });
   const error = queryError

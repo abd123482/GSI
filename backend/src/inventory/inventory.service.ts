@@ -8,6 +8,7 @@ import {
 
 import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 import {
   type AdjudicateDTO,
@@ -84,6 +85,7 @@ export class InventoryService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // --------------------------------------------------------------------------
@@ -1148,6 +1150,11 @@ async getTask(
 
   let scopeLabel = 'Unité de travail';
   let isSerialized = false;
+  let expectedShelves: Array<{
+    shelfId: string;
+    shelfName: string;
+    quantity: number;
+  }> = [];
 
   if (attempt.unit.equipmentId) {
     const equipment =
@@ -1170,6 +1177,86 @@ async getTask(
       Boolean(
         equipment?.hasSerialNumber,
       );
+
+    const equipmentShelfs = await this.prisma.equipmentShelfs.findMany({
+      where: {
+        equipmentId: attempt.unit.equipmentId,
+        equipmentQuantity: { gt: 0 },
+      },
+      select: {
+        shelfId: true,
+        equipmentQuantity: true,
+        shelf: {
+          select: {
+            shelfId: true,
+            shelfName: true,
+          },
+        },
+      },
+      orderBy: {
+        equipmentQuantity: 'desc',
+      },
+    });
+
+    const shelfMap = new Map<string, { shelfId: string; shelfName: string; quantity: number }>();
+    for (const es of equipmentShelfs) {
+      if (es.shelf && es.shelfId) {
+        shelfMap.set(es.shelfId, {
+          shelfId: es.shelfId,
+          shelfName: es.shelf.shelfName ?? 'Emplacement',
+          quantity: es.equipmentQuantity,
+        });
+      }
+    }
+
+    if (isSerialized) {
+      const serialShelvesCounts = await this.prisma.serialNumber.groupBy({
+        by: ['shelfId'],
+        where: {
+          equipmentId: attempt.unit.equipmentId,
+          shelfId: { not: null },
+        },
+        _count: {
+          _all: true,
+        },
+      });
+
+      const missingShelfIds = serialShelvesCounts
+        .map(g => g.shelfId)
+        .filter((id): id is string => Boolean(id) && !shelfMap.has(id as string));
+
+      let missingShelvesMap = new Map<string, string>();
+      if (missingShelfIds.length > 0) {
+        const missingShelves = await this.prisma.shelf.findMany({
+          where: { shelfId: { in: missingShelfIds } },
+          select: { shelfId: true, shelfName: true },
+        });
+        for (const s of missingShelves) {
+          missingShelvesMap.set(s.shelfId, s.shelfName ?? 'Emplacement');
+        }
+      }
+
+      for (const group of serialShelvesCounts) {
+        if (!group.shelfId) continue;
+        const sId = group.shelfId;
+        const count = group._count._all;
+
+        const existing = shelfMap.get(sId);
+        if (existing) {
+          if (count > 0 && existing.quantity === 0) {
+            existing.quantity = count;
+          }
+        } else {
+          shelfMap.set(sId, {
+            shelfId: sId,
+            shelfName: missingShelvesMap.get(sId) ?? 'Emplacement',
+            quantity: count,
+          });
+        }
+      }
+    }
+
+    expectedShelves = Array.from(shelfMap.values());
   } else if (attempt.unit.shelfId) {
     const shelf =
       await this.prisma.shelf.findUnique({
@@ -1191,6 +1278,7 @@ async getTask(
     ...attempt,
     scopeLabel,
     isSerialized,
+    expectedShelves,
   };
 }
 
@@ -3439,7 +3527,7 @@ private summarizeUnitReports(
     inventoryId: string,
     finalizerId: string,
   ) {
-    return this.prisma.$transaction(
+    const result = await this.prisma.$transaction(
       async (tx) => {
         const inventory =
           await tx.inventory.findUnique({
@@ -3713,6 +3801,21 @@ private summarizeUnitReports(
         timeout: 60_000,
       },
     );
+
+    const equipmentIdsQuery = await this.prisma.inventoryWorkUnit.findMany({
+      where: { inventoryId },
+      select: { equipmentId: true }
+    });
+    const uniqueEquipmentIds = [
+      ...new Set(
+        equipmentIdsQuery
+          .map((unit: { equipmentId: string | null }) => unit.equipmentId)
+          .filter(Boolean) as string[]
+      )
+    ];
+    await this.notificationsService.checkAndSendLowStockAlerts(uniqueEquipmentIds);
+
+    return result;
   }
 
   private buildAcceptedPhysicalTruth(
