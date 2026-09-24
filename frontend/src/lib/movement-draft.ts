@@ -253,8 +253,8 @@ export function buildMovementPayload({
 
   return {
     movementType,
-    sourceShelfId: source,
-    destinationShelfId: destination,
+    
+    
     items,
   };
 }

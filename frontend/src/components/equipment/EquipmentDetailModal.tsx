@@ -36,6 +36,11 @@ import {
   useSerialNumbers,
 } from '@/hooks/use-serial-numbers';
 
+import { useQuery } from '@tanstack/react-query';
+import { useApi } from '@/hooks/use-api';
+import { EquipmentService } from '@/services/equipment.service';
+import { MovementService } from '@/services/movement.service';
+
 import {
   usePermissions,
 } from '@/hooks/use-permissions';
@@ -145,6 +150,7 @@ export function EquipmentDetailModal({
   ] = useState('');
 
   const {
+    permissions,
     canCreateSerialNumber,
     canUpdateSerialNumber,
   } = usePermissions();
@@ -204,6 +210,22 @@ export function EquipmentDetailModal({
             ?.equipmentId,
         ),
     );
+
+  const api = useApi();
+
+  const allocationQuery = useQuery({
+    queryKey: ['equipment-allocations', equipment?.equipmentId],
+    queryFn: () => EquipmentService.getEquipmentShelves(api, equipment!.equipmentId, permissions),
+    enabled: isOpen && Boolean(equipment?.equipmentId),
+    staleTime: 10_000,
+  });
+
+  const allSerialsQuery = useQuery({
+    queryKey: ['equipment-all-serials', equipment?.equipmentId],
+    queryFn: () => MovementService.getAllEquipmentSerials(api, equipment!.equipmentId, permissions),
+    enabled: isOpen && serialized && Boolean(equipment?.equipmentId),
+    staleTime: 60_000,
+  });
 
   if (
     !isOpen ||
@@ -329,6 +351,47 @@ export function EquipmentDetailModal({
               }
             />
           </div>
+
+          <section className="overflow-hidden rounded-xl border border-[#3f3a36] bg-[#2b2622]/55">
+            <div className="border-b border-[#3f3a36] px-4 py-3">
+              <h3 className="text-xs font-semibold">Répartition par emplacement</h3>
+              <p className="mt-0.5 text-[10px] text-white/45">
+                Où se trouve actuellement cet article.
+              </p>
+            </div>
+            
+            {allocationQuery.isLoading || (serialized && allSerialsQuery.isLoading) ? (
+              <div className="flex justify-center p-8"><Loader2 className="h-5 w-5 animate-spin text-white/40" /></div>
+            ) : (
+              <div className="divide-y divide-[#3f3a36]">
+                {(allocationQuery.data?.equipmentShelfs ?? []).map((alloc) => (
+                  <div key={alloc.equipmentShelfId} className="px-4 py-3 text-xs">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-semibold text-white/80">{alloc.shelf?.shelfName ?? 'Emplacement inconnu'}</span>
+                      <span className="font-mono">{alloc.equipmentQuantity} u.</span>
+                    </div>
+                    {serialized && allSerialsQuery.data && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {allSerialsQuery.data
+                          .filter(s => s.shelfId === alloc.shelfId)
+                          .map(s => (
+                            <span key={s.serialNumberId} className="rounded bg-[#1f1b18] px-1.5 py-0.5 font-mono text-[10px] text-white/60 border border-[#3f3a36]">
+                              {s.serialNumberCode}
+                            </span>
+                          ))}
+                        {allSerialsQuery.data.filter(s => s.shelfId === alloc.shelfId).length === 0 && (
+                          <span className="text-[10px] text-white/30 italic">Aucun numéro de série alloué ici</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {!allocationQuery.data?.equipmentShelfs?.length && (
+                  <div className="px-4 py-6 text-center text-xs text-white/45">Aucun emplacement alloué.</div>
+                )}
+              </div>
+            )}
+          </section>
 
           {serialized && (
             <section className="overflow-hidden rounded-xl border border-[#3f3a36] bg-[#2b2622]/55">

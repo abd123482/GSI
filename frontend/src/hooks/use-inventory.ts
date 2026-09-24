@@ -11,6 +11,7 @@ import {
 } from 'sonner';
 
 import { useApi } from './use-api';
+import { useAuthQueryContext } from './use-auth-query-context';
 import { getErrorMessage } from '@/lib/error-message';
 
 import type {
@@ -28,9 +29,11 @@ export function useInventories(
   limit = 20,
 ) {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   return useQuery<PaginatedInventoriesResponse>({
-    queryKey: ['inventories', page, limit],
+    queryKey: ['inventories', page, limit, userId],
+    enabled: authReady && authReady,
     queryFn: async () => {
       const response =
         await api.get<PaginatedInventoriesResponse>(
@@ -50,9 +53,11 @@ export function useInventoryById(
   inventoryId?: string | null,
 ) {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   return useQuery<Inventory>({
-    queryKey: ['inventories', 'detail', inventoryId],
+    queryKey: ['inventories', 'detail', inventoryId, userId],
+    
     queryFn: async () => {
       const response =
         await api.get<Inventory>(
@@ -67,9 +72,11 @@ export function useInventoryById(
 
 export function useMyTasks() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   return useQuery<InventoryTask[]>({
-    queryKey: ['inventory', 'my-tasks'],
+    queryKey: ['inventory', 'my-tasks', userId],
+    enabled: authReady && authReady,
     queryFn: async () => {
       const response =
         await api.get<InventoryTask[]>(
@@ -86,9 +93,11 @@ export function useInventoryTask(
   taskId?: string | null,
 ) {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   return useQuery<InventoryTask>({
-    queryKey: ['inventory', 'task', taskId],
+    queryKey: ['inventory', 'task', taskId, userId],
+    
     queryFn: async () => {
       const response =
         await api.get<InventoryTask>(
@@ -103,6 +112,7 @@ export function useInventoryTask(
 
 export function useCreateInventory() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -120,7 +130,7 @@ export function useCreateInventory() {
 
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ['inventories'],
+        queryKey: ['inventories', userId],
       });
 
       toast.success('Inventaire créé');
@@ -139,6 +149,7 @@ export function useCreateInventory() {
 
 export function useLaunchInventory() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -156,13 +167,13 @@ export function useLaunchInventory() {
     onSuccess: async (_, inventoryId) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: ['inventories'],
+          queryKey: ['inventories', userId],
         }),
         queryClient.invalidateQueries({
-          queryKey: ['inventories', 'detail', inventoryId],
+          queryKey: ['inventories', 'detail', inventoryId, userId],
         }),
         queryClient.invalidateQueries({
-          queryKey: ['inventory', 'my-tasks'],
+          queryKey: ['inventory', 'my-tasks', userId],
         }),
       ]);
 
@@ -182,6 +193,7 @@ export function useLaunchInventory() {
 
 export function useSaveInventoryTaskDraft() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -206,7 +218,7 @@ export function useSaveInventoryTaskDraft() {
 
     onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({
-        queryKey: ['inventory', 'task', variables.taskId],
+        queryKey: ['inventory', 'task', variables.taskId, userId],
       });
 
       toast.success('Brouillon enregistré');
@@ -216,6 +228,7 @@ export function useSaveInventoryTaskDraft() {
 
 export function useSubmitInventoryTask() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -241,16 +254,16 @@ export function useSubmitInventoryTask() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: ['inventory', 'my-tasks'],
+          queryKey: ['inventory', 'my-tasks', userId],
         }),
         queryClient.invalidateQueries({
-          queryKey: ['inventories'],
+          queryKey: ['inventories', userId],
         }),
         queryClient.invalidateQueries({
-          queryKey: ['inventory-progress'],
+          queryKey: ['inventory-progress', userId],
         }),
         queryClient.invalidateQueries({
-          queryKey: ['inventory-report'],
+          queryKey: ['inventory-report', userId],
         }),
       ]);
 
@@ -272,9 +285,11 @@ export function useInventoryProgress(
   inventoryId?: string | null,
 ) {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   return useQuery<InventoryProgress>({
-    queryKey: ['inventory-progress', inventoryId],
+    queryKey: ['inventory-progress', inventoryId, userId],
+    enabled: authReady && Boolean(inventoryId),
     queryFn: async () => {
       const response =
         await api.get<InventoryProgress>(
@@ -283,7 +298,7 @@ export function useInventoryProgress(
 
       return response.data;
     },
-    enabled: Boolean(inventoryId),
+    
     refetchInterval: (query) =>
       query.state.data?.status === 'IN_PROGRESS'
         ? 3000
@@ -295,9 +310,11 @@ export function useInventoryReport(
   inventoryId?: string | null,
 ) {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   return useQuery<InventoryReport>({
-    queryKey: ['inventory-report', inventoryId],
+    queryKey: ['inventory-report', inventoryId, userId],
+    enabled: authReady && Boolean(inventoryId),
     queryFn: async () => {
       const response =
         await api.get<InventoryReport>(
@@ -306,7 +323,7 @@ export function useInventoryReport(
 
       return response.data;
     },
-    enabled: Boolean(inventoryId),
+    
     refetchInterval: (query) =>
       query.state.data?.inventory?.status === 'IN_PROGRESS'
         ? 3000
@@ -316,6 +333,7 @@ export function useInventoryReport(
 
 export function useFinalizeInventory() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -333,13 +351,28 @@ export function useFinalizeInventory() {
     onSuccess: async (_, inventoryId) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: ['inventories'],
+          queryKey: ['inventories', userId],
         }),
         queryClient.invalidateQueries({
-          queryKey: ['inventory-progress', inventoryId],
+          queryKey: ['inventory-progress', inventoryId, userId],
         }),
         queryClient.invalidateQueries({
-          queryKey: ['inventory-report', inventoryId],
+          queryKey: ['inventory-report', inventoryId, userId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['equipments', userId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['equipment-allocations'],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['equipment-all-serials'],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['serial-numbers', userId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['movements', userId],
         }),
       ]);
 
@@ -359,6 +392,7 @@ export function useFinalizeInventory() {
 
 export function useDeleteInventory() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -375,7 +409,7 @@ export function useDeleteInventory() {
 
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ['inventories'],
+        queryKey: ['inventories', userId],
       });
 
       toast.success('Inventaire supprimé');

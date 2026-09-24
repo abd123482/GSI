@@ -19,6 +19,7 @@ import {
 import {
   useApi,
 } from './use-api';
+import { useAuthQueryContext } from './use-auth-query-context';
 
 export interface AppNotification {
   notificationId: string;
@@ -80,6 +81,7 @@ function notificationDestination(
 
 export function useNotifications() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
   const router = useRouter();
 
   const knownIdsRef =
@@ -93,10 +95,10 @@ export function useNotifications() {
   const query =
     useQuery<AppNotification[]>({
       queryKey: [
-        'notifications',
-      ],
+        'notifications', userId],
 
-      queryFn: async () => {
+      enabled: authReady && authReady,
+    queryFn: async () => {
         const response =
           await api.get<AppNotification[]>(
             '/notifications',
@@ -192,15 +194,16 @@ export function useNotifications() {
 
 export function useUnreadNotificationsCount() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   return useQuery<{
     count: number;
   }>({
     queryKey: [
       'notifications',
-      'unread-count',
-    ],
+      'unread-count', userId],
 
+    
     queryFn: async () => {
       const response =
         await api.get<{
@@ -225,6 +228,7 @@ export function useMarkNotificationRead() {
     useQueryClient();
 
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   return useMutation({
     mutationFn: async (
@@ -241,8 +245,7 @@ export function useMarkNotificationRead() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: [
-          'notifications',
-        ],
+          'notifications', userId],
       });
     },
   });
@@ -253,6 +256,7 @@ export function useMarkAllNotificationsRead() {
     useQueryClient();
 
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   return useMutation({
     mutationFn:
@@ -269,8 +273,7 @@ export function useMarkAllNotificationsRead() {
       async () => {
         await queryClient.invalidateQueries({
           queryKey: [
-            'notifications',
-          ],
+            'notifications', userId],
         });
       },
   });

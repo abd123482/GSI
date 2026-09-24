@@ -113,47 +113,55 @@ export function Navbar() {
           <div className="hidden h-4 w-px bg-[#3f3a36] sm:block" />
 
           <nav className="hidden items-center gap-1 sm:flex">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs font-medium ${stockAreaActive
-                  ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
-                  : 'text-[#c9c0ad] hover:bg-[#383330]/70 hover:text-[#f7f5f0]'
-                  }`}
-              >
-                <Warehouse className="h-3.5 w-3.5" />
-                Stocks
-                <ChevronDown className="h-3 w-3" />
-              </DropdownMenuTrigger>
+            {(permissions.canReadStock || permissions.canReadShelf || permissions.canReadEquipment) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-xs font-medium ${stockAreaActive
+                    ? 'border border-[#3f3a36] bg-[#383330] text-[#f7f5f0]'
+                    : 'text-[#c9c0ad] hover:bg-[#383330]/70 hover:text-[#f7f5f0]'
+                    }`}
+                >
+                  <Warehouse className="h-3.5 w-3.5" />
+                  Stocks
+                  <ChevronDown className="h-3 w-3" />
+                </DropdownMenuTrigger>
 
-              <DropdownMenuContent
-                align="start"
-                className="w-52 border-[#3f3a36] bg-[#2f2a26] text-[#c9c0ad]"
-              >
-                <NavItem
-                  href="/stocks"
-                  icon={
-                    <Warehouse className="h-3.5 w-3.5" />
-                  }
-                  text="Vue d'ensemble"
-                />
+                <DropdownMenuContent
+                  align="start"
+                  className="w-52 border-[#3f3a36] bg-[#2f2a26] text-[#c9c0ad]"
+                >
+                  {permissions.canReadStock && (
+                    <NavItem
+                      href="/stocks"
+                      icon={
+                        <Warehouse className="h-3.5 w-3.5" />
+                      }
+                      text="Vue d'ensemble"
+                    />
+                  )}
 
-                <NavItem
-                  href="/shelves"
-                  icon={
-                    <Layers className="h-3.5 w-3.5" />
-                  }
-                  text="Emplacements"
-                />
+                  {permissions.canReadShelf && (
+                    <NavItem
+                      href="/shelves"
+                      icon={
+                        <Layers className="h-3.5 w-3.5" />
+                      }
+                      text="Emplacements"
+                    />
+                  )}
 
-                <NavItem
-                  href="/equipment"
-                  icon={
-                    <Cpu className="h-3.5 w-3.5" />
-                  }
-                  text="Articles"
-                />
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  {permissions.canReadEquipment && (
+                    <NavItem
+                      href="/equipment"
+                      icon={
+                        <Cpu className="h-3.5 w-3.5" />
+                      }
+                      text="Articles"
+                    />
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
             {permissions.canReadMovement && (
               <Link
@@ -192,15 +200,15 @@ export function Navbar() {
                 permissions.canCreateShelf ? (
                 <>
                   <ShieldCheck className="h-3 w-3 text-emerald-400" />
-                  <span className="text-[#f7f5f0]">
-                    Écriture
+                  <span className="text-[#f7f5f0] uppercase">
+                    {permissions.roleName || '...'}
                   </span>
                 </>
               ) : (
                 <>
                   <ShieldAlert className="h-3 w-3 text-amber-400" />
-                  <span>
-                    Lecture
+                  <span className="uppercase">
+                    {permissions.roleName || '...'}
                   </span>
                 </>
               )}
@@ -261,42 +269,48 @@ export function Navbar() {
 
       {mobileOpen && (
         <div className="space-y-1 border-t border-[#3f3a36] bg-[#2b2622] px-4 py-3 sm:hidden">
-          <MobileLink
-            href="/stocks"
-            text="Stocks"
-            active={active.stocks}
-            close={() =>
-              setMobileOpen(
-                false,
-              )
-            }
-          />
+          {permissions.canReadStock && (
+            <MobileLink
+              href="/stocks"
+              text="Stocks"
+              active={active.stocks}
+              close={() =>
+                setMobileOpen(
+                  false,
+                )
+              }
+            />
+          )}
 
-          <MobileLink
-            href="/shelves"
-            text="Emplacements"
-            active={
-              active.shelves
-            }
-            close={() =>
-              setMobileOpen(
-                false,
-              )
-            }
-          />
+          {permissions.canReadShelf && (
+            <MobileLink
+              href="/shelves"
+              text="Emplacements"
+              active={
+                active.shelves
+              }
+              close={() =>
+                setMobileOpen(
+                  false,
+                )
+              }
+            />
+          )}
 
-          <MobileLink
-            href="/equipment"
-            text="Articles"
-            active={
-              active.equipment
-            }
-            close={() =>
-              setMobileOpen(
-                false,
-              )
-            }
-          />
+          {permissions.canReadEquipment && (
+            <MobileLink
+              href="/equipment"
+              text="Articles"
+              active={
+                active.equipment
+              }
+              close={() =>
+                setMobileOpen(
+                  false,
+                )
+              }
+            />
+          )}
 
           {permissions.canReadMovement && (
             <MobileLink

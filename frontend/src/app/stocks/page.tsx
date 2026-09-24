@@ -13,6 +13,7 @@ import {
   Pencil,
   Plus,
   Search,
+  ShieldAlert,
   Warehouse,
 } from 'lucide-react';
 
@@ -29,7 +30,7 @@ type StatusFilter = 'ALL' | StockStatusName;
 export default function StocksPage() {
   const { isSignedIn, isLoaded } = useAuth();
   const api = useApi();
-  const { canCreateStock, canUpdateStock } = usePermissions();
+  const { canCreateStock, canUpdateStock, canReadStock, isLoading: permissionsLoading } = usePermissions();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
@@ -53,7 +54,7 @@ export default function StocksPage() {
       }
       return StockService.getAllStocks(api, { page: currentPage, limit });
     },
-    enabled: Boolean(isSignedIn && isLoaded),
+    enabled: Boolean(isSignedIn && isLoaded && !permissionsLoading && canReadStock),
     placeholderData: keepPreviousData,
   });
 
@@ -61,7 +62,7 @@ export default function StocksPage() {
   const totalStocks = data?.totalStocks ?? 0;
   const totalPages = data?.totalPages ?? 1;
 
-  if (!isLoaded) {
+  if (!isLoaded || permissionsLoading) {
     return <main className="flex min-h-screen items-center justify-center bg-[#2b2622] text-[#f7f5f0]"><div className="flex items-center gap-2 text-xs text-[#aea69c]"><Loader2 className="h-4 w-4 animate-spin" />Chargement des stocks...</div></main>;
   }
 
@@ -69,6 +70,18 @@ export default function StocksPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
         <div className="w-full max-w-md space-y-4 rounded-lg border border-[#3f3a36] bg-[#383330] p-8 text-center"><Warehouse className="mx-auto h-8 w-8" /><h1 className="text-base font-semibold">Connexion requise</h1><SignInButton mode="modal"><button type="button" className="w-full rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622]">Se connecter</button></SignInButton></div>
+      </main>
+    );
+  }
+
+  if (!canReadStock) {
+    return (
+      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
+        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#2f2a26] p-7 text-center">
+          <ShieldAlert className="mx-auto h-6 w-6 text-amber-400" />
+          <h1 className="mt-3 text-sm font-semibold">Accès non autorisé</h1>
+          <p className="mt-2 text-xs text-[#aea69c]">La permission stock.read est requise.</p>
+        </div>
       </main>
     );
   }

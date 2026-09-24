@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import {
   useParams,
+  useRouter,
 } from 'next/navigation';
 import {
   AlertTriangle,
@@ -13,12 +14,14 @@ import {
   Loader2,
   PlayCircle,
   RefreshCw,
+  Trash2,
   Users,
 } from 'lucide-react';
 
 import {
   useFinalizeInventory,
   useInventoryProgress,
+  useDeleteInventory,
   useInventoryReport,
   useLaunchInventory,
 } from '@/hooks/use-inventory';
@@ -145,9 +148,11 @@ export default function InventoryReportPage() {
 
   const launch =
     useLaunchInventory();
-
   const finalize =
     useFinalizeInventory();
+  const deleteMutation =
+    useDeleteInventory();
+  const router = useRouter();
 
   if (
     progress.isLoading ||
@@ -268,23 +273,34 @@ export default function InventoryReportPage() {
               <button
                 type="button"
                 onClick={() => {
-                  if (
-                    window.confirm(
-                      'Finaliser cet inventaire et appliquer les mouvements d’ajustement ?',
-                    )
-                  ) {
-                    void finalize.mutateAsync(
-                      inventoryId,
-                    );
-                  }
+                  void finalize.mutateAsync(
+                    inventoryId,
+                  );
                 }}
                 disabled={
                   finalize.isPending
                 }
-                className="inline-flex items-center gap-2 rounded bg-[#f7f5f0] px-3 py-2 text-xs font-semibold text-[#2b2622] disabled:opacity-40"
+                className="inline-flex items-center gap-2 rounded bg-[#d8a868] px-3 py-2 text-xs font-semibold text-[#1e1a17] disabled:opacity-40"
               >
                 <FileCheck2 className="h-3.5 w-3.5" />
                 Finaliser
+              </button>
+            )}
+
+            {permissions.canDeleteInventory && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (window.confirm('Voulez-vous vraiment supprimer cet inventaire ?')) {
+                    await deleteMutation.mutateAsync(inventoryId);
+                    router.push('/inventory');
+                  }
+                }}
+                disabled={deleteMutation.isPending}
+                className="inline-flex items-center gap-2 rounded bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40 hover:bg-rose-700"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Supprimer
               </button>
             )}
           </div>

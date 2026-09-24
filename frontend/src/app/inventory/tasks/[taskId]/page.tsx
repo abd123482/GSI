@@ -1,16 +1,9 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-'use client';
+"use client";
 
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
-import Link from 'next/link';
-import {
-  useParams,
-  useRouter,
-} from 'next/navigation';
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Barcode,
@@ -21,34 +14,23 @@ import {
   Send,
   Trash2,
   Warehouse,
-} from 'lucide-react';
+} from "lucide-react";
 
 import {
   useInventoryTask,
   useSaveInventoryTaskDraft,
   useSubmitInventoryTask,
-} from '@/hooks/use-inventory';
+} from "@/hooks/use-inventory";
 
-import {
-  useEquipments,
-  useEquipmentAllocations,
-} from '@/hooks/use-equipments';
+import { useEquipments, useEquipmentAllocations } from "@/hooks/use-equipments";
 
-import {
-  useShelves,
-} from '@/hooks/use-shelves';
+import { useShelves } from "@/hooks/use-shelves";
 
-import {
-  SerialCodeInput,
-} from '@/components/inventory/SerialCodeInput';
+import { SerialCodeInput } from "@/components/inventory/SerialCodeInput";
 
-import type {
-  CountObservationInput,
-} from '@/types/inventory';
+import type { CountObservationInput } from "@/types/inventory";
 
-import {
-  getErrorMessage,
-} from '@/lib/error-message';
+import { getErrorMessage } from "@/lib/error-message";
 
 interface StandardRow {
   id: string;
@@ -61,26 +43,23 @@ interface SerialRow {
   id: string;
   code: string;
   shelfId: string;
+  equipmentId?: string;
 }
 
 function newId() {
-  return `${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2)}`;
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function purposeText(
-  purpose?: string,
-) {
-  if (purpose === 'PRIMARY_1') {
-    return 'C1';
+function purposeText(purpose?: string) {
+  if (purpose === "PRIMARY_1") {
+    return "C1";
   }
 
-  if (purpose === 'PRIMARY_2') {
-    return 'C2';
+  if (purpose === "PRIMARY_2") {
+    return "C2";
   }
 
-  return 'C3';
+  return "C3";
 }
 
 export default function InventoryTaskPage() {
@@ -103,36 +82,66 @@ export default function InventoryTaskPage() {
   });
 
   const allocations = useEquipmentAllocations(
-    taskQuery.data?.unit.equipmentId ?? '',
-    taskQuery.data?.unit.inventory.typeInventory === 'ByEquipment'
+    taskQuery.data?.unit.equipmentId ?? "",
+    taskQuery.data?.unit.inventory.typeInventory === "ByEquipment",
   );
 
   const task = taskQuery.data;
 
-  const byEquipment =
-    task?.unit.inventory.typeInventory === 'ByEquipment';
+  const byEquipment = task?.unit.inventory.typeInventory === "ByEquipment";
 
-  const byShelf =
-    task?.unit.inventory.typeInventory === 'ByShelf';
+  const byShelf = task?.unit.inventory.typeInventory === "ByShelf";
 
   const expectedShelves = useMemo(() => {
-    if (task?.expectedShelves && task.expectedShelves.length > 0) {
-      return task.expectedShelves;
+    const fromStandard =
+      task?.expected?.standardItems.map((i: any) => ({
+        shelfId: i.shelfId,
+        shelfName: i.shelfName,
+        quantity: i.expectedQuantity,
+      })) || [];
+    const fromSerialized =
+      task?.expected?.serializedItems
+        .map((i: any) => ({
+          shelfId: i.expectedShelfId ?? "",
+          shelfName: i.expectedShelfName ?? "",
+          quantity: 1,
+        }))
+        .filter((i: any) => i.shelfId) || [];
+    const combined = [...fromStandard, ...fromSerialized];
+    if (combined.length > 0) {
+      const map = new Map();
+      for (const item of combined) {
+        if (!map.has(item.shelfId)) {
+          map.set(item.shelfId, { ...item });
+        } else {
+          map.get(item.shelfId).quantity += item.quantity;
+        }
+      }
+      return Array.from(map.values());
     }
     return (
-      allocations.data?.equipmentShelfs?.map((a) => ({
+      allocations.data?.equipmentShelfs?.map((a: any) => ({
         shelfId: a.shelfId,
-        shelfName: a.shelf?.shelfName ?? 'Emplacement',
+        shelfName: a.shelf?.shelfName ?? "Emplacement",
         quantity: a.equipmentQuantity,
       })) ?? []
     );
-  }, [task?.expectedShelves, allocations.data?.equipmentShelfs]);
+  }, [task?.expected, allocations.data?.equipmentShelfs]);
+
+  const expectedEquipments = useMemo(() => {
+    return task?.expectedEquipments ?? [];
+  }, [task]);
 
   const [standardRows, setStandardRows] = useState<StandardRow[]>([]);
   const [serialRows, setSerialRows] = useState<SerialRow[]>([]);
-  const [selectedAdditionalShelves, setSelectedAdditionalShelves] = useState<string[]>([]);
+  const [selectedAdditionalShelves, setSelectedAdditionalShelves] = useState<
+    string[]
+  >([]);
   const [isAddingShelf, setIsAddingShelf] = useState(false);
-  const [shelfToAdd, setShelfToAdd] = useState('');
+  const [shelfToAdd, setShelfToAdd] = useState("");
+  const [isAddingEquipment, setIsAddingEquipment] = useState(false);
+  const [equipmentToAdd, setEquipmentToAdd] = useState("");
+  const [selectedAdditionalEquipments, setSelectedAdditionalEquipments] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -149,11 +158,17 @@ export default function InventoryTaskPage() {
         const standard: StandardRow[] = [];
         const serial: SerialRow[] = [];
         const extraShelves: string[] = [];
+        const extraEquipments: string[] = [];
 
         for (const observation of parsed.observations ?? []) {
-          const sId = observation.observedShelfId ?? observation.shelfId ?? '';
+          const sId = observation.observedShelfId ?? observation.shelfId ?? "";
           if (sId && !expectedShelves.some((e) => e.shelfId === sId)) {
             extraShelves.push(sId);
+          }
+
+          const eId = observation.observedEquipmentId ?? observation.equipmentId ?? "";
+          if (byShelf && eId && !expectedEquipments.some((e: any) => e.equipmentId === eId)) {
+            extraEquipments.push(eId);
           }
 
           if (observation.scannedSerialCode) {
@@ -161,12 +176,12 @@ export default function InventoryTaskPage() {
               id: newId(),
               code: observation.scannedSerialCode,
               shelfId: sId,
+              equipmentId: eId,
             });
           } else {
             standard.push({
               id: newId(),
-              equipmentId:
-                observation.observedEquipmentId ?? observation.equipmentId ?? '',
+              equipmentId: eId,
               shelfId: sId,
               quantity: observation.quantityCalculated ?? 0,
             });
@@ -177,7 +192,12 @@ export default function InventoryTaskPage() {
         setSerialRows(serial);
         if (extraShelves.length > 0) {
           setSelectedAdditionalShelves((cur) =>
-            Array.from(new Set([...cur, ...extraShelves]))
+            Array.from(new Set([...cur, ...extraShelves])),
+          );
+        }
+        if (extraEquipments.length > 0) {
+          setSelectedAdditionalEquipments((cur) =>
+            Array.from(new Set([...cur, ...extraEquipments])),
           );
         }
         return;
@@ -191,11 +211,7 @@ export default function InventoryTaskPage() {
         setSerialRows((current) => {
           if (current.length > 0) return current;
           if (expectedShelves.length > 0) {
-            return expectedShelves.map((s) => ({
-              id: newId(),
-              code: '',
-              shelfId: s.shelfId,
-            }));
+            return expectedShelves.map((s) => ({ id: newId(), code: "", shelfId: s.shelfId }));
           }
           return [];
         });
@@ -203,50 +219,44 @@ export default function InventoryTaskPage() {
         setStandardRows((current) => {
           if (current.length > 0) return current;
           if (expectedShelves.length > 0) {
-            return expectedShelves.map((s) => ({
-              id: newId(),
-              equipmentId: task.unit.equipmentId ?? '',
-              shelfId: s.shelfId,
-              quantity: 0,
-            }));
+            return expectedShelves.map((s) => ({ id: newId(), equipmentId: task.unit.equipmentId ?? "", shelfId: s.shelfId, quantity: 0 }));
           }
           return [];
         });
       }
     } else {
-      if (task.isSerialized) {
-        setSerialRows((current) =>
-          current.length > 0
-            ? current
-            : [
-                {
-                  id: newId(),
-                  code: '',
-                  shelfId: task.unit.shelfId ?? '',
-                },
-              ]
-        );
-      } else {
-        setStandardRows((current) =>
-          current.length > 0
-            ? current
-            : [
-                {
-                  id: newId(),
-                  equipmentId: '',
-                  shelfId: task.unit.shelfId ?? '',
-                  quantity: 0,
-                },
-              ]
-        );
-      }
+      // ByShelf
+      setStandardRows((current) => {
+        if (current.length > 0) return current;
+        return expectedEquipments.filter(e => !e.hasSerialNumber).map((e) => ({
+          id: newId(), equipmentId: e.equipmentId, shelfId: task.unit.shelfId ?? "", quantity: 0
+        }));
+      });
+      setSerialRows((current) => {
+        if (current.length > 0) return current;
+        return expectedEquipments.filter(e => e.hasSerialNumber).map((e) => ({
+          id: newId(), equipmentId: e.equipmentId, code: "", shelfId: task.unit.shelfId ?? ""
+        }));
+      });
     }
   }, [task, byEquipment, expectedShelves]);
 
-  if (taskQuery.isLoading || !task) {
+  if (taskQuery.isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#2b2622] text-white">
         <Loader2 className="h-5 w-5 animate-spin" />
+      </main>
+    );
+  }
+  if (taskQuery.isError || !task) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-[#2b2622] text-white space-y-4">
+        <p className="text-rose-400">
+          Erreur lors du chargement de la tâche ou accès refusé.
+        </p>
+        <Link href="/inventory/tasks" className="text-sm underline">
+          Retour aux tâches
+        </Link>
       </main>
     );
   }
@@ -270,11 +280,15 @@ export default function InventoryTaskPage() {
       .filter((row) => (byEquipment ? row.shelfId : row.equipmentId))
       .map((row) => ({
         equipmentId: byEquipment
-          ? task.unit.equipmentId ?? row.equipmentId
+          ? (task.unit.equipmentId ?? row.equipmentId)
           : row.equipmentId,
         observedEquipmentId: byShelf ? row.equipmentId : undefined,
-        shelfId: byShelf ? task.unit.shelfId ?? undefined : row.shelfId || undefined,
-        observedShelfId: byEquipment ? row.shelfId || undefined : task.unit.shelfId ?? undefined,
+        shelfId: byShelf
+          ? (task.unit.shelfId ?? undefined)
+          : row.shelfId || undefined,
+        observedShelfId: byEquipment
+          ? row.shelfId || undefined
+          : (task.unit.shelfId ?? undefined),
         quantityCalculated: row.quantity,
         isExplicitZero: row.quantity === 0,
       }));
@@ -282,9 +296,16 @@ export default function InventoryTaskPage() {
     const serial = serialRows
       .filter((row) => row.code.trim())
       .map((row) => ({
-        equipmentId: byEquipment ? task.unit.equipmentId ?? undefined : undefined,
-        shelfId: byShelf ? task.unit.shelfId ?? undefined : row.shelfId || undefined,
-        observedShelfId: byEquipment ? row.shelfId || undefined : task.unit.shelfId ?? undefined,
+        equipmentId: byEquipment
+          ? (task.unit.equipmentId ?? undefined)
+          : row.equipmentId,
+        observedEquipmentId: byShelf ? row.equipmentId : undefined,
+        shelfId: byShelf
+          ? (task.unit.shelfId ?? undefined)
+          : row.shelfId || undefined,
+        observedShelfId: byEquipment
+          ? row.shelfId || undefined
+          : (task.unit.shelfId ?? undefined),
         scannedSerialCode: row.code.trim(),
         quantityCalculated: 1,
       }));
@@ -297,7 +318,7 @@ export default function InventoryTaskPage() {
     const observations = buildObservations();
 
     if (submit && observations.length === 0) {
-      setError('Ajoutez au moins une observation ou vérification.');
+      setError("Ajoutez au moins une observation ou vérification.");
       return;
     }
 
@@ -310,7 +331,7 @@ export default function InventoryTaskPage() {
           },
         });
 
-        router.push('/inventory/tasks');
+        router.push("/inventory/tasks");
       } else {
         await saveDraft.mutateAsync({
           taskId,
@@ -321,41 +342,45 @@ export default function InventoryTaskPage() {
         });
       }
     } catch (cause: unknown) {
-      setError(
-        getErrorMessage(
-          cause,
-          'Impossible d’enregistrer cette tâche.',
-        ),
-      );
+      setError(getErrorMessage(cause, "Impossible d’enregistrer cette tâche."));
     }
   }
 
-  const renderedShelfIds = Array.from(
+  const renderedEquipmentIds = Array.from(
     new Set([
-      ...expectedShelves.map((a) => a.shelfId),
-      ...standardRows.map((r) => r.shelfId).filter(Boolean),
-      ...serialRows.map((r) => r.shelfId).filter(Boolean),
-      ...selectedAdditionalShelves,
+      ...expectedEquipments.map((a: any) => a.equipmentId),
+      ...standardRows.map((r) => r.equipmentId).filter(Boolean),
+      ...serialRows.map((r) => r.equipmentId).filter(Boolean),
+      ...selectedAdditionalEquipments,
     ])
   );
 
-  function addSerialRow(shelfId: string = '') {
+  const renderedShelfIds = Array.from(
+    new Set([
+      ...expectedShelves.map((a: any) => a.shelfId),
+      ...standardRows.map((r) => r.shelfId).filter(Boolean),
+      ...serialRows.map((r) => r.shelfId).filter(Boolean),
+      ...selectedAdditionalShelves,
+    ]),
+  );
+
+  function addSerialRow(shelfId: string = "") {
     setSerialRows((current) => [
       ...current,
       {
         id: newId(),
-        code: '',
+        code: "",
         shelfId,
       },
     ]);
   }
 
-  function addStandardRow(shelfId: string = '') {
+  function addStandardRow(shelfId: string = "") {
     setStandardRows((current) => [
       ...current,
       {
         id: newId(),
-        equipmentId: task?.unit.equipmentId ?? '',
+        equipmentId: task?.unit.equipmentId ?? "",
         shelfId,
         quantity: 0,
       },
@@ -370,11 +395,13 @@ export default function InventoryTaskPage() {
 
   function confirmAddShelf() {
     if (!shelfToAdd) return;
-    setSelectedAdditionalShelves((cur) => Array.from(new Set([...cur, shelfToAdd])));
+    setSelectedAdditionalShelves((cur) =>
+      Array.from(new Set([...cur, shelfToAdd])),
+    );
     if (task?.isSerialized) {
       setSerialRows((cur) => [
         ...cur,
-        { id: newId(), code: '', shelfId: shelfToAdd },
+        { id: newId(), code: "", shelfId: shelfToAdd },
       ]);
     } else {
       setStandardRows((cur) => {
@@ -383,14 +410,14 @@ export default function InventoryTaskPage() {
           ...cur,
           {
             id: newId(),
-            equipmentId: task?.unit.equipmentId ?? '',
+            equipmentId: task?.unit.equipmentId ?? "",
             shelfId: shelfToAdd,
             quantity: 0,
           },
         ];
       });
     }
-    setShelfToAdd('');
+    setShelfToAdd("");
     setIsAddingShelf(false);
   }
 
@@ -413,9 +440,9 @@ export default function InventoryTaskPage() {
 
               <span
                 className={`rounded border px-2 py-1 text-[10px] font-semibold ${
-                  task.purpose === 'FINAL_RECOUNT'
-                    ? 'border-violet-400/30 bg-violet-950/20 text-violet-200'
-                    : 'border-sky-400/30 bg-sky-950/20 text-sky-200'
+                  task.purpose === "FINAL_RECOUNT"
+                    ? "border-violet-400/30 bg-violet-950/20 text-violet-200"
+                    : "border-sky-400/30 bg-sky-950/20 text-sky-200"
                 }`}
               >
                 {purposeText(task.purpose)}
@@ -424,15 +451,16 @@ export default function InventoryTaskPage() {
 
             <p className="mt-1 text-xs text-[#aea69c]">
               {task.unit.inventory.title}
-              {' • '}
+              {" • "}
               Unité #{task.unit.unitOrder + 1}
             </p>
           </div>
         </header>
 
-        {task.purpose === 'FINAL_RECOUNT' && (
+        {task.purpose === "FINAL_RECOUNT" && (
           <div className="rounded border border-violet-400/25 bg-violet-950/15 p-3 text-xs text-violet-100">
-            C1 et C2 ont donné des résultats différents pour cette unité. Votre résultat C3 deviendra le résultat accepté.
+            C1 et C2 ont donné des résultats différents pour cette unité. Votre
+            résultat C3 deviendra le résultat accepté.
           </div>
         )}
 
@@ -449,9 +477,7 @@ export default function InventoryTaskPage() {
             </p>
 
             <p className="mt-1 text-sm font-semibold">
-              {scopeEquipment?.equipmentName ??
-                task.scopeLabel ??
-                'Article'}
+              {scopeEquipment?.equipmentName ?? task.scopeLabel ?? "Article"}
             </p>
 
             {expectedShelves.length > 0 && (
@@ -460,7 +486,7 @@ export default function InventoryTaskPage() {
                   Emplacements attendus ({expectedShelves.length})
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {expectedShelves.map((allocation) => (
+                  {expectedShelves.map((allocation: any) => (
                     <span
                       key={allocation.shelfId}
                       className="inline-flex items-center rounded border border-[#3f3a36] bg-[#1f1b18] px-2 py-0.5 text-[10px] text-emerald-100"
@@ -481,9 +507,7 @@ export default function InventoryTaskPage() {
             </p>
 
             <p className="mt-1 text-sm font-semibold">
-              {scopeShelf?.shelfName ??
-                task.scopeLabel ??
-                'Emplacement'}
+              {scopeShelf?.shelfName ?? task.scopeLabel ?? "Emplacement"}
             </p>
           </div>
         )}
@@ -496,16 +520,7 @@ export default function InventoryTaskPage() {
                 <Package className="h-3.5 w-3.5" />
                 Comptage quantitatif par emplacement
               </h2>
-              {byShelf && (
-                <button
-                  type="button"
-                  onClick={() => addStandardRow(task.unit.shelfId ?? '')}
-                  className="inline-flex items-center gap-1 rounded border border-[#3f3a36] px-2 py-1 text-[10px]"
-                >
-                  <Plus className="h-3 w-3" />
-                  Ajouter
-                </button>
-              )}
+
             </div>
 
             <div className="divide-y divide-[#3f3a36]">
@@ -513,14 +528,21 @@ export default function InventoryTaskPage() {
                 <div className="p-4 space-y-4">
                   {renderedShelfIds.length === 0 ? (
                     <div className="rounded border border-[#3f3a36] bg-[#26221f] p-4 text-center text-xs text-white/50">
-                      Aucun emplacement attendu pour cet article. Utilisez le bouton ci-dessous pour ajouter un emplacement.
+                      Aucun emplacement attendu pour cet article. Utilisez le
+                      bouton ci-dessous pour ajouter un emplacement.
                     </div>
                   ) : (
                     renderedShelfIds.map((shelfId) => {
-                      const shelf = shelves.shelves.find((s) => s.shelfId === shelfId);
-                      const expected = expectedShelves.find((a) => a.shelfId === shelfId);
+                      const shelf = shelves.shelves.find(
+                        (s) => s.shelfId === shelfId,
+                      );
+                      const expected = expectedShelves.find(
+                        (a: any) => a.shelfId === shelfId,
+                      );
                       const isAdditional = !expected;
-                      const row = standardRows.find((r) => r.shelfId === shelfId);
+                      const row = standardRows.find(
+                        (r) => r.shelfId === shelfId,
+                      );
 
                       return (
                         <div
@@ -531,7 +553,9 @@ export default function InventoryTaskPage() {
                             <div className="flex items-center gap-2">
                               <Warehouse className="h-4 w-4 text-amber-400" />
                               <h3 className="text-sm font-semibold text-white">
-                                {expected?.shelfName ?? shelf?.shelfName ?? 'Emplacement'}
+                                {expected?.shelfName ??
+                                  shelf?.shelfName ??
+                                  "Emplacement"}
                               </h3>
                             </div>
                             <div className="flex items-center gap-2">
@@ -568,19 +592,27 @@ export default function InventoryTaskPage() {
                                   step={1}
                                   value={row?.quantity ?? 0}
                                   onChange={(event) => {
-                                    const val = Math.max(0, Number(event.target.value) || 0);
+                                    const val = Math.max(
+                                      0,
+                                      Number(event.target.value) || 0,
+                                    );
                                     setStandardRows((current) => {
-                                      const exists = current.some((r) => r.shelfId === shelfId);
+                                      const exists = current.some(
+                                        (r) => r.shelfId === shelfId,
+                                      );
                                       if (exists) {
                                         return current.map((r) =>
-                                          r.shelfId === shelfId ? { ...r, quantity: val } : r
+                                          r.shelfId === shelfId
+                                            ? { ...r, quantity: val }
+                                            : r,
                                         );
                                       }
                                       return [
                                         ...current,
                                         {
                                           id: newId(),
-                                          equipmentId: task.unit.equipmentId ?? '',
+                                          equipmentId:
+                                            task.unit.equipmentId ?? "",
                                           shelfId,
                                           quantity: val,
                                         },
@@ -589,7 +621,9 @@ export default function InventoryTaskPage() {
                                   }}
                                   className="h-10 w-28 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-sm font-semibold text-white focus:border-amber-500 focus:outline-none"
                                 />
-                                <span className="text-xs text-white/50">unités</span>
+                                <span className="text-xs text-white/50">
+                                  unités
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -603,7 +637,8 @@ export default function InventoryTaskPage() {
                     {!isAddingShelf ? (
                       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[#4a423a] bg-[#26221f]/50 p-6 text-center">
                         <p className="mb-3 text-xs text-white/60">
-                          Vous avez trouvé cet article dans un autre emplacement ?
+                          Vous avez trouvé cet article dans un autre emplacement
+                          ?
                         </p>
                         <button
                           type="button"
@@ -616,9 +651,12 @@ export default function InventoryTaskPage() {
                       </div>
                     ) : (
                       <div className="rounded-lg border border-[#4a423a] bg-[#26221f] p-5 shadow-lg">
-                        <h4 className="mb-1 text-xs font-semibold text-white">Ajouter un autre emplacement</h4>
+                        <h4 className="mb-1 text-xs font-semibold text-white">
+                          Ajouter un autre emplacement
+                        </h4>
                         <p className="mb-3 text-[11px] text-white/50">
-                          Sélectionnez l&apos;emplacement supplémentaire où vous observez cet article.
+                          Sélectionnez l&apos;emplacement supplémentaire où vous
+                          observez cet article.
                         </p>
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                           <select
@@ -626,9 +664,13 @@ export default function InventoryTaskPage() {
                             onChange={(e) => setShelfToAdd(e.target.value)}
                             className="h-10 flex-1 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs text-white focus:border-amber-500 focus:outline-none"
                           >
-                            <option value="">Sélectionnez l&apos;emplacement...</option>
+                            <option value="">
+                              Sélectionnez l&apos;emplacement...
+                            </option>
                             {shelves.shelves
-                              .filter((s) => !renderedShelfIds.includes(s.shelfId))
+                              .filter(
+                                (s) => !renderedShelfIds.includes(s.shelfId),
+                              )
                               .map((s) => (
                                 <option key={s.shelfId} value={s.shelfId}>
                                   {s.shelfName}
@@ -648,7 +690,7 @@ export default function InventoryTaskPage() {
                               type="button"
                               onClick={() => {
                                 setIsAddingShelf(false);
-                                setShelfToAdd('');
+                                setShelfToAdd("");
                               }}
                               className="h-10 rounded border border-[#3f3a36] px-3 text-xs text-white/70 hover:bg-white/5"
                             >
@@ -661,68 +703,144 @@ export default function InventoryTaskPage() {
                   </div>
                 </div>
               ) : (
-                standardRows.map((row) => (
-                  <div
-                    key={row.id}
-                    className="grid grid-cols-1 gap-2 px-4 py-3 sm:grid-cols-[1fr_1fr_120px_38px]"
-                  >
-                    <select
-                      value={row.equipmentId}
-                      onChange={(event) =>
-                        setStandardRows((current) =>
-                          current.map((item) =>
-                            item.id === row.id
-                              ? { ...item, equipmentId: event.target.value }
-                              : item
-                          )
-                        )
-                      }
-                      className="h-9 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs"
-                    >
-                      <option value="">Sélectionnez un article</option>
-                      {equipments.equipments.map((equipment) => (
-                        <option key={equipment.equipmentId} value={equipment.equipmentId}>
-                          {equipment.equipmentName}
-                        </option>
-                      ))}
-                    </select>
-
-                    <div className="flex h-9 items-center rounded border border-[#3f3a36] bg-[#383330]/50 px-3 text-xs">
-                      {scopeShelf?.shelfName ?? 'Emplacement'}
+                <div className="p-4 space-y-4">
+                  {renderedEquipmentIds.filter(id => {
+                    const eq = expectedEquipments.find((e: any) => e.equipmentId === id) ?? equipments.equipments.find((e) => e.equipmentId === id);
+                    return eq && !eq.hasSerialNumber;
+                  }).length === 0 ? (
+                    <div className="rounded border border-[#3f3a36] bg-[#26221f] p-4 text-center text-xs text-white/50">
+                      Aucun article standard attendu dans cet emplacement.
                     </div>
+                  ) : (
+                    renderedEquipmentIds.filter(id => {
+                      const eq = expectedEquipments.find((e: any) => e.equipmentId === id) ?? equipments.equipments.find((e) => e.equipmentId === id);
+                      return eq && !eq.hasSerialNumber;
+                    }).map((equipmentId) => {
+                      const equipment = equipments.equipments.find((e) => e.equipmentId === equipmentId);
+                      const expected = expectedEquipments.find((a: any) => a.equipmentId === equipmentId);
+                      const isAdditional = !expected;
+                      const row = standardRows.find((r) => r.equipmentId === equipmentId);
 
-                    <input
-                      type="number"
-                      min={0}
-                      value={row.quantity}
-                      onChange={(event) =>
-                        setStandardRows((current) =>
-                          current.map((item) =>
-                            item.id === row.id
-                              ? {
-                                  ...item,
-                                  quantity: Math.max(0, Number(event.target.value) || 0),
-                                }
-                              : item
-                          )
-                        )
-                      }
-                      className="h-9 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-xs"
-                    />
+                      return (
+                        <div
+                          key={equipmentId}
+                          className="overflow-hidden rounded-lg border border-[#3f3a36] bg-[#26221f]"
+                        >
+                          <div className="flex items-center justify-between border-b border-[#3f3a36] bg-[#1f1b18] px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <Package className="h-4 w-4 text-amber-400" />
+                              <h3 className="text-sm font-semibold text-white">
+                                {expected?.equipmentName ?? equipment?.equipmentName ?? "Article"}
+                              </h3>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {expected ? (
+                                <span className="rounded border border-emerald-500/20 bg-emerald-950/40 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                                  Attendu : {expected.quantity ?? 0}
+                                </span>
+                              ) : (
+                                <span className="rounded border border-amber-500/20 bg-amber-950/40 px-2 py-0.5 text-xs font-medium text-amber-300">
+                                  Article supplémentaire
+                                </span>
+                              )}
+                              {isAdditional && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedAdditionalEquipments(c => c.filter(x => x !== equipmentId))}
+                                  title="Retirer cet article supplémentaire"
+                                  className="ml-1 rounded p-1 text-white/40 transition hover:bg-rose-950/30 hover:text-rose-300"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="p-4">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <label className="text-xs text-white/70">
+                                Quantité comptée pour cet article :
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={1}
+                                  value={row?.quantity ?? 0}
+                                  onChange={(event) => {
+                                    const val = Math.max(0, Number(event.target.value) || 0);
+                                    setStandardRows((current) => {
+                                      const existing = current.find((r) => r.equipmentId === equipmentId);
+                                      if (existing) {
+                                        return current.map((r) => r.equipmentId === equipmentId ? { ...r, quantity: val } : r);
+                                      }
+                                      return [...current, { id: newId(), equipmentId, shelfId: task.unit.shelfId ?? "", quantity: val }];
+                                    });
+                                  }}
+                                  className="h-10 w-24 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-center font-mono text-sm font-semibold text-amber-100 focus:border-amber-500 focus:outline-none"
+                                />
+                                <span className="text-xs text-white/40">unités</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setStandardRows((current) =>
-                          current.filter((item) => item.id !== row.id)
-                        )
-                      }
-                      className="inline-flex h-9 w-9 items-center justify-center rounded text-rose-300 hover:bg-rose-950/20"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                  <div className="pt-2">
+                    {isAddingEquipment ? (
+                      <div className="rounded-lg border border-[#4a423a] bg-[#26221f] p-5 shadow-lg">
+                        <h4 className="mb-1 text-xs font-semibold text-white">Ajouter un autre article</h4>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <select
+                            value={equipmentToAdd}
+                            onChange={(e) => setEquipmentToAdd(e.target.value)}
+                            className="h-10 flex-1 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs text-white focus:border-amber-500 focus:outline-none"
+                          >
+                            <option value="">Sélectionnez un article...</option>
+                            {equipments.equipments
+                              .filter((e) => !renderedEquipmentIds.includes(e.equipmentId) && !e.hasSerialNumber)
+                              .map((e) => (
+                                <option key={e.equipmentId} value={e.equipmentId}>
+                                  {e.equipmentName}
+                                </option>
+                              ))}
+                          </select>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={!equipmentToAdd}
+                              onClick={() => {
+                                setSelectedAdditionalEquipments(c => [...c, equipmentToAdd]);
+                                setIsAddingEquipment(false);
+                                setEquipmentToAdd("");
+                              }}
+                              className="h-10 rounded bg-amber-600 px-4 text-xs font-semibold text-white transition hover:bg-amber-500 disabled:opacity-40"
+                            >
+                              Ajouter
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setIsAddingEquipment(false); setEquipmentToAdd(""); }}
+                              className="h-10 rounded border border-[#3f3a36] px-3 text-xs text-white/70 hover:bg-white/5"
+                            >
+                              Annuler
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingEquipment(true)}
+                        className="inline-flex items-center gap-2 rounded-lg border border-[#4a423a] bg-[#1f1b18] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:border-amber-500/50 hover:bg-[#2c2724] hover:text-amber-300"
+                      >
+                        <Plus className="h-4 w-4 text-amber-400" />
+                        Ajouter un autre article
+                      </button>
+                    )}
                   </div>
-                ))
+                </div>
               )}
             </div>
           </section>
@@ -736,16 +854,7 @@ export default function InventoryTaskPage() {
                 <Barcode className="h-3.5 w-3.5" />
                 Numéros de série observés par emplacement
               </h2>
-              {byShelf && (
-                <button
-                  type="button"
-                  onClick={() => addSerialRow(task.unit.shelfId ?? '')}
-                  className="inline-flex items-center gap-1 rounded border border-[#3f3a36] px-2 py-1 text-[10px]"
-                >
-                  <Plus className="h-3 w-3" />
-                  Ajouter
-                </button>
-              )}
+
             </div>
 
             <div className="divide-y divide-[#3f3a36]">
@@ -753,15 +862,24 @@ export default function InventoryTaskPage() {
                 <div className="p-4 space-y-4">
                   {renderedShelfIds.length === 0 ? (
                     <div className="rounded border border-[#3f3a36] bg-[#26221f] p-4 text-center text-xs text-white/50">
-                      Aucun emplacement attendu pour cet article. Utilisez le bouton ci-dessous pour ajouter un emplacement.
+                      Aucun emplacement attendu pour cet article. Utilisez le
+                      bouton ci-dessous pour ajouter un emplacement.
                     </div>
                   ) : (
                     renderedShelfIds.map((shelfId) => {
-                      const shelf = shelves.shelves.find((s) => s.shelfId === shelfId);
-                      const expected = expectedShelves.find((a) => a.shelfId === shelfId);
+                      const shelf = shelves.shelves.find(
+                        (s) => s.shelfId === shelfId,
+                      );
+                      const expected = expectedShelves.find(
+                        (a: any) => a.shelfId === shelfId,
+                      );
                       const isAdditional = !expected;
-                      const rowsInShelf = serialRows.filter((r) => r.shelfId === shelfId);
-                      const scannedCount = rowsInShelf.filter((r) => r.code.trim()).length;
+                      const rowsInShelf = serialRows.filter(
+                        (r) => r.shelfId === shelfId,
+                      );
+                      const scannedCount = rowsInShelf.filter((r) =>
+                        r.code.trim(),
+                      ).length;
 
                       return (
                         <div
@@ -772,7 +890,9 @@ export default function InventoryTaskPage() {
                             <div className="flex items-center gap-2">
                               <Warehouse className="h-4 w-4 text-amber-400" />
                               <h3 className="text-sm font-semibold text-white">
-                                {expected?.shelfName ?? shelf?.shelfName ?? 'Emplacement'}
+                                {expected?.shelfName ??
+                                  shelf?.shelfName ??
+                                  "Emplacement"}
                               </h3>
                             </div>
                             <div className="flex items-center gap-2">
@@ -788,8 +908,8 @@ export default function InventoryTaskPage() {
                               <span
                                 className={`rounded border px-2 py-0.5 text-xs font-medium ${
                                   expected && scannedCount === expected.quantity
-                                    ? 'border-emerald-500/30 bg-emerald-950/20 text-emerald-200'
-                                    : 'border-white/10 bg-white/5 text-white/70'
+                                    ? "border-emerald-500/30 bg-emerald-950/20 text-emerald-200"
+                                    : "border-white/10 bg-white/5 text-white/70"
                                 }`}
                               >
                                 Observé : {scannedCount}
@@ -811,7 +931,8 @@ export default function InventoryTaskPage() {
                             {rowsInShelf.length === 0 ? (
                               <div className="flex flex-col items-center justify-center py-4 text-center">
                                 <p className="mb-2 text-xs text-white/40">
-                                  Aucun numéro de série saisi pour cet emplacement.
+                                  Aucun numéro de série saisi pour cet
+                                  emplacement.
                                 </p>
                                 <button
                                   type="button"
@@ -826,7 +947,10 @@ export default function InventoryTaskPage() {
                               <>
                                 <div className="space-y-2">
                                   {rowsInShelf.map((row, idx) => (
-                                    <div key={row.id} className="flex items-center gap-2">
+                                    <div
+                                      key={row.id}
+                                      className="flex items-center gap-2"
+                                    >
                                       <span className="w-6 text-right font-mono text-[11px] text-white/40">
                                         {idx + 1}.
                                       </span>
@@ -835,8 +959,10 @@ export default function InventoryTaskPage() {
                                         onChange={(value) =>
                                           setSerialRows((current) =>
                                             current.map((item) =>
-                                              item.id === row.id ? { ...item, code: value } : item
-                                            )
+                                              item.id === row.id
+                                                ? { ...item, code: value }
+                                                : item,
+                                            ),
                                           )
                                         }
                                         placeholder="Code série observé (ex: SN-...)"
@@ -846,7 +972,9 @@ export default function InventoryTaskPage() {
                                         type="button"
                                         onClick={() =>
                                           setSerialRows((current) =>
-                                            current.filter((item) => item.id !== row.id)
+                                            current.filter(
+                                              (item) => item.id !== row.id,
+                                            ),
                                           )
                                         }
                                         title="Supprimer ce numéro"
@@ -880,7 +1008,8 @@ export default function InventoryTaskPage() {
                     {!isAddingShelf ? (
                       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[#4a423a] bg-[#26221f]/50 p-6 text-center">
                         <p className="mb-3 text-xs text-white/60">
-                          Vous avez trouvé un numéro de série dans un autre emplacement ?
+                          Vous avez trouvé un numéro de série dans un autre
+                          emplacement ?
                         </p>
                         <button
                           type="button"
@@ -893,9 +1022,12 @@ export default function InventoryTaskPage() {
                       </div>
                     ) : (
                       <div className="rounded-lg border border-[#4a423a] bg-[#26221f] p-5 shadow-lg">
-                        <h4 className="mb-1 text-xs font-semibold text-white">Ajouter un autre emplacement</h4>
+                        <h4 className="mb-1 text-xs font-semibold text-white">
+                          Ajouter un autre emplacement
+                        </h4>
                         <p className="mb-3 text-[11px] text-white/50">
-                          Sélectionnez l&apos;emplacement supplémentaire où vous observez des numéros de série de cet article.
+                          Sélectionnez l&apos;emplacement supplémentaire où vous
+                          observez des numéros de série de cet article.
                         </p>
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                           <select
@@ -903,9 +1035,13 @@ export default function InventoryTaskPage() {
                             onChange={(e) => setShelfToAdd(e.target.value)}
                             className="h-10 flex-1 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs text-white focus:border-amber-500 focus:outline-none"
                           >
-                            <option value="">Sélectionnez l&apos;emplacement...</option>
+                            <option value="">
+                              Sélectionnez l&apos;emplacement...
+                            </option>
                             {shelves.shelves
-                              .filter((s) => !renderedShelfIds.includes(s.shelfId))
+                              .filter(
+                                (s) => !renderedShelfIds.includes(s.shelfId),
+                              )
                               .map((s) => (
                                 <option key={s.shelfId} value={s.shelfId}>
                                   {s.shelfName}
@@ -925,7 +1061,7 @@ export default function InventoryTaskPage() {
                               type="button"
                               onClick={() => {
                                 setIsAddingShelf(false);
-                                setShelfToAdd('');
+                                setShelfToAdd("");
                               }}
                               className="h-10 rounded border border-[#3f3a36] px-3 text-xs text-white/70 hover:bg-white/5"
                             >
@@ -950,8 +1086,8 @@ export default function InventoryTaskPage() {
                           current.map((item) =>
                             item.id === row.id
                               ? { ...item, code: value }
-                              : item
-                          )
+                              : item,
+                          ),
                         )
                       }
                       placeholder="Code série observé"
@@ -959,14 +1095,14 @@ export default function InventoryTaskPage() {
                     />
 
                     <div className="flex h-9 items-center rounded border border-[#3f3a36] bg-[#383330]/50 px-3 text-xs">
-                      {scopeShelf?.shelfName ?? 'Emplacement'}
+                      {scopeShelf?.shelfName ?? "Emplacement"}
                     </div>
 
                     <button
                       type="button"
                       onClick={() =>
                         setSerialRows((current) =>
-                          current.filter((item) => item.id !== row.id)
+                          current.filter((item) => item.id !== row.id),
                         )
                       }
                       className="inline-flex h-9 w-9 items-center justify-center rounded text-rose-300 hover:bg-rose-950/20"
@@ -996,11 +1132,7 @@ export default function InventoryTaskPage() {
           <button
             type="button"
             onClick={() => {
-              if (
-                window.confirm(
-                  'Soumettre définitivement ce comptage ?',
-                )
-              ) {
+              if (window.confirm("Soumettre définitivement ce comptage ?")) {
                 void persist(true);
               }
             }}

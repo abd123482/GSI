@@ -1150,6 +1150,13 @@ async getTask(
 
   let scopeLabel = 'Unité de travail';
   let isSerialized = false;
+  let expectedEquipments: Array<{
+    equipmentId: string;
+    equipmentName: string;
+    hasSerialNumber: boolean;
+    quantity: number;
+  }> = [];
+
   let expectedShelves: Array<{
     shelfId: string;
     shelfName: string;
@@ -5273,7 +5280,7 @@ private summarizeUnitReports(
     inventoryId: string,
   ) {
     const existing =
-      await this.prisma.inventory.findUnique({
+      await this.prisma.inventory.findFirst({
         where: { inventoryId },
       });
 
@@ -5283,21 +5290,38 @@ private summarizeUnitReports(
       );
     }
 
-    if (
-      existing.status !== 'DRAFT'
-    ) {
-      throw new BadRequestException(
-        "Seul un inventaire DRAFT peut être supprimé. Après lancement, l'historique doit être conservé.",
-      );
-    }
-
     return this.prisma.$transaction(async (tx) => {
+      // Find all related work units
+      const units = await tx.inventoryWorkUnit.findMany({ 
+        where: { inventoryId: existing.inventoryId }, 
+        select: { unitId: true } 
+      });
+      const unitIds = units.map(u => u.unitId);
+      
+      if (unitIds.length > 0) {
+        // Clear acceptedAttemptId to avoid circular foreign key constraints
+        await tx.inventoryWorkUnit.updateMany({
+          where: { inventoryId: existing.inventoryId },
+          data: { acceptedAttemptId: null }
+        });
+        
+        // Delete attempts
+        await tx.inventoryCountAttempt.deleteMany({
+          where: { unitId: { in: unitIds } },
+        });
+        
+        // Delete work units
+        await tx.inventoryWorkUnit.deleteMany({
+          where: { inventoryId: existing.inventoryId },
+        });
+      }
+
       await tx.inventory_User.deleteMany({
-        where: { inventoryId },
+        where: { inventoryId: existing.inventoryId },
       });
 
       return tx.inventory.delete({
-        where: { inventoryId },
+        where: { inventoryId: existing.inventoryId },
       });
     });
   }

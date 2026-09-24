@@ -128,9 +128,6 @@ export function CreateMovementModal({
       null,
     );
 
-  const routeLocked =
-    lines.length > 0;
-
   const equipmentQuery =
     useQuery({
       queryKey: [
@@ -286,15 +283,7 @@ export function CreateMovementModal({
         return [];
       }
 
-      if (routeLocked) {
-        return allocations.filter(
-          (allocation) =>
-            allocation.shelfId ===
-            sourceShelfId &&
-            allocation.equipmentQuantity >=
-            quantity,
-        );
-      }
+      
 
       return allocations.filter(
         (allocation) =>
@@ -305,7 +294,7 @@ export function CreateMovementModal({
       allocations,
       movementType,
       quantity,
-      routeLocked,
+      
       selectedEquipment,
       sourceShelfId,
     ]);
@@ -330,13 +319,7 @@ export function CreateMovementModal({
         );
       }
 
-      if (routeLocked) {
-        return serials.filter(
-          (serial) =>
-            serial.shelfId ===
-            sourceShelfId,
-        );
-      }
+      
 
       return serials.filter(
         (serial) =>
@@ -346,7 +329,7 @@ export function CreateMovementModal({
       );
     }, [
       movementType,
-      routeLocked,
+      
       selectedEquipment,
       serials,
       sourceShelfId,
@@ -384,16 +367,9 @@ export function CreateMovementModal({
     ]);
 
   const routeDestinationAllowedForCurrentEquipment =
-    movementType !==
-    'TRANSFER' ||
+    movementType !== 'TRANSFER' ||
     !destinationShelfId ||
-    (
-      destinationShelfId !==
-      sourceShelfId &&
-      !allocatedShelfIds.has(
-        destinationShelfId,
-      )
-    );
+    destinationShelfId !== sourceShelfId;
 
   useEffect(() => {
     if (!isOpen) {
@@ -424,20 +400,20 @@ export function CreateMovementModal({
     );
     setQuantity(1);
 
-    if (!routeLocked) {
+    
       setSourceShelfId('');
       setDestinationShelfId(
         '',
       );
-    }
+    
   }, [
     selectedEquipmentId,
-    routeLocked,
+    
   ]);
 
   useEffect(() => {
     if (
-      routeLocked ||
+      
       movementType ===
       'IN' ||
       !selectedEquipment?.hasSerialNumber
@@ -452,14 +428,14 @@ export function CreateMovementModal({
     );
   }, [
     movementType,
-    routeLocked,
+    
     selectedEquipment,
     selectedSerial,
   ]);
 
   useEffect(() => {
     if (
-      routeLocked ||
+      
       selectedEquipment
         ?.hasSerialNumber ||
       movementType ===
@@ -483,7 +459,7 @@ export function CreateMovementModal({
   }, [
     movementType,
     quantity,
-    routeLocked,
+    
     selectedEquipment,
     sourceCandidates,
     sourceShelfId,
@@ -491,7 +467,7 @@ export function CreateMovementModal({
 
   useEffect(() => {
     if (
-      routeLocked ||
+      
       movementType !==
       'TRANSFER'
     ) {
@@ -514,7 +490,7 @@ export function CreateMovementModal({
     destinationCandidates,
     destinationShelfId,
     movementType,
-    routeLocked,
+    
   ]);
 
   if (!isOpen) {
@@ -574,6 +550,15 @@ export function CreateMovementModal({
 
   function addLine() {
     setError(null);
+    const sourceName =
+      movementType === 'IN'
+        ? 'EXTÉRIEUR'
+        : ((shelfQuery.data ?? []).find((s: any) => s.shelfId === sourceShelfId)?.shelfName ?? 'Inconnu');
+    const destinationName =
+      movementType === 'OUT'
+        ? 'EXTÉRIEUR'
+        : ((shelfQuery.data ?? []).find((s: any) => s.shelfId === destinationShelfId)?.shelfName ?? 'Inconnu');
+
 
     if (!selectedEquipment) {
       setError(
@@ -690,19 +675,7 @@ export function CreateMovementModal({
         return;
       }
     } else {
-      if (
-        lines.some(
-          (line) =>
-            line.equipmentId ===
-            selectedEquipment.equipmentId &&
-            !line.serialNumberId,
-        )
-      ) {
-        setError(
-          'Un article standard ne peut apparaître qu’une seule fois dans le mouvement.',
-        );
-        return;
-      }
+      // Removed the restriction that prevents a standard article from appearing multiple times.
 
       if (
         movementType !==
@@ -741,6 +714,12 @@ export function CreateMovementModal({
       (current) => [
         ...current,
         {
+          
+          
+          sourceName: movementType === 'IN' ? 'EXTÉRIEUR' : sourceName,
+          destinationName: movementType === 'OUT' ? 'EXTÉRIEUR' : destinationName,
+          sourceShelfId: movementType === 'IN' ? null : sourceShelfId,
+          destinationShelfId: movementType === 'OUT' ? null : destinationShelfId,
           clientId:
             clientId(),
           equipmentId:
@@ -813,6 +792,8 @@ export function CreateMovementModal({
       equipmentId: line.equipmentId,
       serialNumberId: line.serialNumberId,
       movementQuantity: line.movementQuantity,
+      sourceShelfId: movementType === 'IN' ? null : line.sourceShelfId,
+      destinationShelfId: movementType === 'OUT' ? null : line.destinationShelfId,
     }));
 
     if (payloadItems.length === 0) {
@@ -872,6 +853,8 @@ export function CreateMovementModal({
           equipmentId: selectedEquipment.equipmentId,
           serialNumberId: selectedSerial?.serialNumberId ?? null,
           movementQuantity: lineQuantity,
+          sourceShelfId: movementType === 'IN' ? null : sourceShelfId,
+          destinationShelfId: movementType === 'OUT' ? null : destinationShelfId,
         }];
       } else {
         setError('Ajoutez au moins une ligne en utilisant le bouton "+ Ajouter la ligne", ou remplissez le formulaire.');
@@ -883,8 +866,8 @@ export function CreateMovementModal({
     try {
       await createMovement.mutateAsync({
         movementType,
-        sourceShelfId: movementType === 'IN' ? null : sourceShelfId,
-        destinationShelfId: movementType === 'OUT' ? null : destinationShelfId,
+        
+        
         items: payloadItems,
       });
 
@@ -992,7 +975,7 @@ export function CreateMovementModal({
 
               </div>
 
-              {routeLocked && (
+              {false && (
                 <span className="rounded border border-sky-400/20 bg-sky-950/20 px-2 py-1 text-[10px] text-sky-200">
                   Trajet verrouillé
                 </span>
@@ -1183,7 +1166,7 @@ export function CreateMovementModal({
                       }
                       disabled={
                         busy ||
-                        routeLocked ||
+                        
                         !selectedEquipment ||
                         allocationsQuery.isLoading
                       }
@@ -1227,7 +1210,7 @@ export function CreateMovementModal({
                     Destination ACTIVE
                   </span>
 
-                  {routeLocked ? (
+                  {false ? (
                     <div
                       className={`flex h-10 items-center rounded border px-3 text-xs ${routeDestinationAllowedForCurrentEquipment
                         ? 'border-[#3f3a36] bg-[#1f1b18]'
@@ -1290,13 +1273,13 @@ export function CreateMovementModal({
                   {movementType ===
                     'TRANSFER' &&
                     selectedEquipment &&
-                    !routeLocked && (
+                    !false && (
                       <p className="text-[10px] text-white/40">
                         Les emplacements déjà alloués à cet article, ainsi que la source actuelle, sont exclus des destinations.
                       </p>
                     )}
 
-                  {routeLocked &&
+                  {false &&
                     movementType ===
                     'TRANSFER' &&
                     !routeDestinationAllowedForCurrentEquipment && (
@@ -1363,7 +1346,7 @@ export function CreateMovementModal({
                       key={
                         line.clientId
                       }
-                      className="grid grid-cols-[36px_minmax(0,1fr)_minmax(0,1fr)_80px_36px] items-center gap-3 px-4 py-3 text-xs"
+                      className="grid grid-cols-[36px_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.5fr)_80px_36px] items-center gap-3 px-4 py-3 text-xs"
                     >
                       <span className="font-mono text-[10px] text-white/40">
                         {String(
@@ -1401,6 +1384,16 @@ export function CreateMovementModal({
                             Quantitatif
                           </span>
                         )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-[9px] text-white/50">
+                          {movementType === 'IN'
+                            ? `Extérieur → ${line.destinationName || 'destination'}`
+                            : movementType === 'OUT'
+                            ? `${line.sourceName || 'source'} → Extérieur`
+                            : `${line.sourceName || 'source'} → ${line.destinationName || 'destination'}`}
+                        </p>
                       </div>
 
                       <span className="text-right font-mono font-semibold">

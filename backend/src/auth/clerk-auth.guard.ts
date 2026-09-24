@@ -39,7 +39,7 @@ export class ClerkAuthGuard implements CanActivate {
     let claims: { sub?: string };
     try {
       claims = await verifyToken(token, {
-        jwtKey: process.env.CLERK_JWT_KEY!,
+        secretKey: process.env.CLERK_SECRET_KEY!,
       });
     } catch (err: any) {
       this.logger.debug(`Clerk token verification failed: ${err?.message || err}`);
@@ -70,10 +70,7 @@ export class ClerkAuthGuard implements CanActivate {
       .map((p: any) => p.permissionName)
       .filter(Boolean);
 
-    const isAdmin =
-      dbUser.role?.roleName?.trim().toUpperCase() === 'ADMIN' ||
-      permissions.includes('user.manage') ||
-      permissions.includes('role.manage');
+    const isAdmin = dbUser.role?.roleName?.toUpperCase() === 'ADMIN';
 
     // User Status Enforcement:
     // ACTIVE -> allowed

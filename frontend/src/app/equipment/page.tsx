@@ -12,6 +12,7 @@ import {
   Cpu,
   Loader2,
   PackagePlus,
+  ShieldAlert,
 } from 'lucide-react';
 
 import {
@@ -58,6 +59,8 @@ export default function EquipmentPage() {
     canCreateEquipment,
     canUpdateEquipment,
     canDeleteEquipment,
+    canReadEquipment,
+    isLoading: permissionsLoading,
   } = usePermissions();
 
   const [
@@ -129,7 +132,7 @@ export default function EquipmentPage() {
   const serialUpdate =
     useUpdateSerialNumber();
 
-  if (!isLoaded) {
+  if (!isLoaded || permissionsLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#2b2622] text-[#f7f5f0]">
         <div className="flex items-center gap-2 text-xs text-[#aea69c]">
@@ -158,6 +161,18 @@ export default function EquipmentPage() {
               Se connecter
             </button>
           </SignInButton>
+        </div>
+      </main>
+    );
+  }
+
+  if (!canReadEquipment) {
+    return (
+      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
+        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#2f2a26] p-7 text-center">
+          <ShieldAlert className="mx-auto h-6 w-6 text-amber-400" />
+          <h1 className="mt-3 text-sm font-semibold">Accès non autorisé</h1>
+          <p className="mt-2 text-xs text-[#aea69c]">La permission equipment.read est requise.</p>
         </div>
       </main>
     );

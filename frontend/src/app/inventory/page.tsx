@@ -15,6 +15,7 @@ import {
   PlayCircle,
   Plus,
   RefreshCw,
+  ShieldAlert,
   Trash2,
 } from 'lucide-react';
 
@@ -119,13 +120,13 @@ export default function InventoryPage() {
     );
   }
 
-  if (
-    !permissions.canReadInventory
-  ) {
+  if (!permissions.canReadInventory) {
     return (
       <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
-        <div className="rounded border border-amber-400/25 bg-[#2f2a26] p-6 text-sm">
-          Permission inventory.read requise.
+        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#2f2a26] p-7 text-center">
+          <ShieldAlert className="mx-auto h-6 w-6 text-amber-400" />
+          <h1 className="mt-3 text-sm font-semibold">Accès non autorisé</h1>
+          <p className="mt-2 text-xs text-[#aea69c]">La permission inventory.read est requise.</p>
         </div>
       </main>
     );
@@ -332,9 +333,7 @@ export default function InventoryPage() {
                               <Eye className="h-3.5 w-3.5" />
                             </Link>
 
-                            {inventory.status ===
-                              'DRAFT' &&
-                              permissions.canDeleteInventory && (
+                            {permissions.canDeleteInventory && (
                                 <button
                                   type="button"
                                   onClick={() => {

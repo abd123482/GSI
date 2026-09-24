@@ -253,10 +253,7 @@ export class EquipmentMovementService {
 
         const shelfIds = [
           ...new Set(
-            [
-              movement.sourceShelfId,
-              movement.destinationShelfId,
-            ].filter(
+            movement.items.flatMap(item => [item.sourceShelfId, item.destinationShelfId]).filter(
               (
                 value,
               ): value is string =>
@@ -435,8 +432,6 @@ export class EquipmentMovementService {
 
         this.validateItems(
           movement.movementType,
-          movement.sourceShelfId ??
-            null,
           movement.items,
           equipmentById,
           serialById,
@@ -463,11 +458,9 @@ export class EquipmentMovementService {
                 totalQuantity,
 
               sourceShelfId:
-                movement.sourceShelfId ??
                 null,
 
               destinationShelfId:
-                movement.destinationShelfId ??
                 null,
 
               createdByUserId:
@@ -498,13 +491,8 @@ export class EquipmentMovementService {
         await this.applyStockChanges(
           tx,
           movement.movementType,
-          movement.sourceShelfId ??
-            null,
-          movement.destinationShelfId ??
-            null,
           movement.items,
-          equipmentById,
-          totalQuantity,
+          equipmentById
         );
 
         await tx.mouvementEquipment.createMany(
@@ -545,11 +533,11 @@ export class EquipmentMovementService {
                     movement.movementType,
 
                   sourceShelfId:
-                    movement.sourceShelfId ??
+                    item.sourceShelfId ??
                     null,
 
                   destinationShelfId:
-                    movement.destinationShelfId ??
+                    item.destinationShelfId ??
                     null,
                 };
               },
@@ -581,7 +569,8 @@ export class EquipmentMovementService {
         movement.items.map((item) => item.equipmentId),
       ),
     ];
-    await this.notificationsService.checkAndSendLowStockAlerts(equipmentIds);
+    // Disabled per user request: IF I CREATE A MOVEMENT DON'T SEND NOTIFICATION OF INVENTORY
+    // await this.notificationsService.checkAndSendLowStockAlerts(equipmentIds);
 
     return result;
   }
@@ -966,8 +955,6 @@ export class EquipmentMovementService {
 
   private validateItems(
     movementType: MovementType,
-    sourceShelfId:
-      string | null,
     items:
       CreateEquipmentMovementItemDTO[],
     equipmentById:
@@ -981,8 +968,7 @@ export class EquipmentMovementService {
         SerialRecord
       >,
   ) {
-    const standardEquipmentSeen =
-      new Set<string>();
+    // Removed standardEquipmentSeen variable
 
     for (
       const item of items
@@ -1046,7 +1032,7 @@ export class EquipmentMovementService {
           }
         } else if (
           serial.shelfId !==
-          sourceShelfId
+          (item.sourceShelfId ?? null)
         ) {
           throw new BadRequestException(
             `Serial number '${item.serialNumberId}' is not on the movement source shelf`,
@@ -1061,19 +1047,7 @@ export class EquipmentMovementService {
           );
         }
 
-        if (
-          standardEquipmentSeen.has(
-            item.equipmentId,
-          )
-        ) {
-          throw new BadRequestException(
-            `Standard equipment '${equipment.equipmentName}' can appear only once in a movement`,
-          );
-        }
-
-        standardEquipmentSeen.add(
-          item.equipmentId,
-        );
+        // Removed the check that prevented the same standard equipment from appearing multiple times.
       }
     }
   }
@@ -1081,454 +1055,203 @@ export class EquipmentMovementService {
   private async applyStockChanges(
     tx: Prisma.TransactionClient,
     movementType: MovementType,
-    sourceShelfId:
-      string | null,
-    destinationShelfId:
-      string | null,
-    items:
-      CreateEquipmentMovementItemDTO[],
-    equipmentById:
-      Map<
-        string,
-        EquipmentRecord
-      >,
-    totalQuantity: number,
+    items: CreateEquipmentMovementItemDTO[],
+    equipmentById: Map<string, EquipmentRecord>
   ) {
-    const allocationTotals =
-      new Map<
-        string,
-        number
-      >();
+    const decrements = new Map<string, number>(); // "${equipmentId}|${shelfId}" -> quantity
+    const increments = new Map<string, number>(); // "${equipmentId}|${shelfId}" -> quantity
+    const shelfDecrements = new Map<string, number>(); // "${shelfId}" -> total quantity
+    const shelfIncrements = new Map<string, number>(); // "${shelfId}" -> total quantity
+    const globalTotals = new Map<string, number>(); // "${equipmentId}" -> total quantity
 
-    /**
-     * Physical Equipment.equipmentQuantity is movement-owned for BOTH standard
-     * and serialized equipment.
-     */
-    const globalTotals =
-      new Map<
-        string,
-        number
-      >();
+    const serializedItems: CreateEquipmentMovementItemDTO[] = [];
 
-    const serializedItems:
-      CreateEquipmentMovementItemDTO[] =
-      [];
+    for (const item of items) {
+      const equipment = equipmentById.get(item.equipmentId)!;
 
-    for (
-      const item of items
-    ) {
-      allocationTotals.set(
-        item.equipmentId,
-        (allocationTotals.get(
-          item.equipmentId,
-        ) ?? 0) +
-          item.movementQuantity,
-      );
+      if (equipment.hasSerialNumber) {
+        serializedItems.push(item);
+      }
 
       globalTotals.set(
         item.equipmentId,
-        (globalTotals.get(
-          item.equipmentId,
-        ) ?? 0) +
-          item.movementQuantity,
+        (globalTotals.get(item.equipmentId) ?? 0) + item.movementQuantity
       );
 
-      const equipment =
-        equipmentById.get(
-          item.equipmentId,
-        )!;
+      if (item.sourceShelfId) {
+        const decrementKey = `${item.equipmentId}|${item.sourceShelfId}`;
+        decrements.set(
+          decrementKey,
+          (decrements.get(decrementKey) ?? 0) + item.movementQuantity
+        );
 
-      if (
-        equipment.hasSerialNumber
-      ) {
-        serializedItems.push(
-          item,
+        shelfDecrements.set(
+          item.sourceShelfId,
+          (shelfDecrements.get(item.sourceShelfId) ?? 0) + item.movementQuantity
+        );
+      }
+
+      if (item.destinationShelfId) {
+        const incrementKey = `${item.equipmentId}|${item.destinationShelfId}`;
+        increments.set(
+          incrementKey,
+          (increments.get(incrementKey) ?? 0) + item.movementQuantity
+        );
+
+        shelfIncrements.set(
+          item.destinationShelfId,
+          (shelfIncrements.get(item.destinationShelfId) ?? 0) + item.movementQuantity
         );
       }
     }
 
-    if (sourceShelfId) {
-      for (
-        const [
+    // Process source shelf decrements
+    for (const [key, quantity] of decrements) {
+      const [equipmentId, shelfId] = key.split('|');
+      const updated = await tx.equipmentShelfs.updateMany({
+        where: {
           equipmentId,
-          quantity,
-        ] of allocationTotals
-      ) {
-        const updated =
-          await tx.equipmentShelfs.updateMany(
-            {
-              where: {
-                equipmentId,
-                shelfId:
-                  sourceShelfId,
+          shelfId,
+          equipmentQuantity: { gte: quantity },
+        },
+        data: {
+          equipmentQuantity: { decrement: quantity },
+        },
+      });
 
-                equipmentQuantity:
-                  {
-                    gte:
-                      quantity,
-                  },
-              },
-
-              data: {
-                equipmentQuantity:
-                  {
-                    decrement:
-                      quantity,
-                  },
-              },
-            },
-          );
-
-        if (
-          updated.count !== 1
-        ) {
-          throw new BadRequestException(
-            `Insufficient quantity for equipment '${equipmentId}' on source shelf`,
-          );
-        }
-      }
-
-      const sourceShelfUpdated =
-        await tx.shelf.updateMany({
-          where: {
-            shelfId:
-              sourceShelfId,
-
-            shelfQuantity: {
-              gte:
-                totalQuantity,
-            },
-          },
-
-          data: {
-            shelfQuantity: {
-              decrement:
-                totalQuantity,
-            },
-          },
-        });
-
-      if (
-        sourceShelfUpdated.count !==
-        1
-      ) {
+      if (updated.count !== 1) {
         throw new BadRequestException(
-          'Source shelf quantity is insufficient or inconsistent',
+          `Insufficient quantity for equipment '${equipmentId}' on source shelf '${shelfId}'`
         );
       }
     }
 
-    if (
-      destinationShelfId
-    ) {
-      const destinationAllocations =
-        await tx.equipmentShelfs.findMany(
-          {
-            where: {
-              shelfId:
-                destinationShelfId,
+    for (const [shelfId, totalQuantity] of shelfDecrements) {
+      const sourceShelfUpdated = await tx.shelf.updateMany({
+        where: {
+          shelfId,
+          shelfQuantity: { gte: totalQuantity },
+        },
+        data: {
+          shelfQuantity: { decrement: totalQuantity },
+        },
+      });
 
-              equipmentId: {
-                in: [
-                  ...allocationTotals.keys(),
-                ],
-              },
-            },
-
-            select: {
-              equipmentShelfId:
-                true,
-              equipmentId: true,
-              equipmentQuantity:
-                true,
-            },
-          },
+      if (sourceShelfUpdated.count !== 1) {
+        throw new BadRequestException(
+          `Source shelf '${shelfId}' quantity is insufficient or inconsistent`
         );
+      }
+    }
 
-      const allocationByEquipment =
-        new Map(
-          destinationAllocations.map(
-            (item) => [
-              item.equipmentId,
-              item,
-            ],
-          ),
-        );
+    // Process destination shelf increments
+    for (const [key, quantity] of increments) {
+      const [equipmentId, shelfId] = key.split('|');
 
-      for (
-        const [
-          equipmentId,
-          quantity,
-        ] of allocationTotals
-      ) {
-        const allocation =
-          allocationByEquipment.get(
+      const allocation = await tx.equipmentShelfs.findFirst({
+        where: { equipmentId, shelfId },
+      });
+
+      if (!allocation) {
+        await tx.equipmentShelfs.create({
+          data: {
             equipmentId,
-          );
-
-        if (!allocation) {
-          await tx.equipmentShelfs.create(
-            {
-              data: {
-                equipmentId,
-                shelfId:
-                  destinationShelfId,
-                equipmentQuantity:
-                  quantity,
-              },
-            },
-          );
-
-          continue;
-        }
-
-        if (
-          allocation.equipmentQuantity >
-          SQL_INT_MAX -
-            quantity
-        ) {
-          throw new BadRequestException(
-            `Destination allocation exceeds SQL Server INT capacity for equipment '${equipmentId}'`,
-          );
-        }
-
-        const updated =
-          await tx.equipmentShelfs.updateMany(
-            {
-              where: {
-                equipmentShelfId:
-                  allocation.equipmentShelfId,
-
-                equipmentQuantity:
-                  {
-                    lte:
-                      SQL_INT_MAX -
-                      quantity,
-                  },
-              },
-
-              data: {
-                equipmentQuantity:
-                  {
-                    increment:
-                      quantity,
-                  },
-              },
-            },
-          );
-
-        if (
-          updated.count !== 1
-        ) {
-          throw new BadRequestException(
-            `Destination allocation changed or exceeded SQL Server INT capacity for equipment '${equipmentId}'`,
-          );
-        }
-      }
-
-      const destinationShelf =
-        await tx.shelf.findUnique({
-          where: {
-            shelfId:
-              destinationShelfId,
-          },
-
-          select: {
-            shelfQuantity:
-              true,
+            shelfId,
+            equipmentQuantity: quantity,
           },
         });
+      } else {
+        if (allocation.equipmentQuantity > SQL_INT_MAX - quantity) {
+          throw new BadRequestException(
+            `Destination allocation exceeds SQL Server INT capacity for equipment '${equipmentId}'`
+          );
+        }
 
-      if (
-        !destinationShelf
-      ) {
-        throw new NotFoundException(
-          `Destination shelf '${destinationShelfId}' not found`,
-        );
-      }
-
-      if (
-        destinationShelf.shelfQuantity >
-        SQL_INT_MAX -
-          totalQuantity
-      ) {
-        throw new BadRequestException(
-          'Destination shelf quantity exceeds SQL Server INT capacity',
-        );
-      }
-
-      const destinationUpdated =
-        await tx.shelf.updateMany({
+        await tx.equipmentShelfs.updateMany({
           where: {
-            shelfId:
-              destinationShelfId,
-
-            shelfQuantity: {
-              lte:
-                SQL_INT_MAX -
-                totalQuantity,
-            },
+            equipmentShelfId: allocation.equipmentShelfId,
+            equipmentQuantity: { lte: SQL_INT_MAX - quantity },
           },
-
           data: {
-            shelfQuantity: {
-              increment:
-                totalQuantity,
-            },
+            equipmentQuantity: { increment: quantity },
           },
         });
+      }
+    }
 
-      if (
-        destinationUpdated.count !==
-        1
-      ) {
+    for (const [shelfId, totalQuantity] of shelfIncrements) {
+      const shelf = await tx.shelf.findUnique({
+        where: { shelfId },
+      });
+
+      if (shelf && shelf.shelfQuantity > SQL_INT_MAX - totalQuantity) {
         throw new BadRequestException(
-          'Destination shelf quantity changed or exceeds SQL Server INT capacity',
+          `Destination shelf '${shelfId}' capacity exceeded`
         );
       }
+
+      await tx.shelf.updateMany({
+        where: {
+          shelfId,
+          shelfQuantity: { lte: SQL_INT_MAX - totalQuantity },
+        },
+        data: {
+          shelfQuantity: { increment: totalQuantity },
+        },
+      });
     }
 
-    /**
-     * Global physical equipment totals.
-     *
-     * IN       => +quantity
-     * OUT      => -quantity
-     * TRANSFER => unchanged
-     */
-    if (
-      movementType ===
-      'IN'
-    ) {
-      for (
-        const [
-          equipmentId,
-          quantity,
-        ] of globalTotals
-      ) {
-        const updated =
-          await tx.equipment.updateMany(
-            {
-              where: {
-                equipmentId,
-                equipmentStatus:
-                  'ACTIVE',
+    // Update global equipment quantities based on movement type
+    for (const [equipmentId, quantity] of globalTotals) {
+      const equipment = equipmentById.get(equipmentId)!;
 
-                equipmentQuantity:
-                  {
-                    lte:
-                      SQL_INT_MAX -
-                      quantity,
-                  },
-              },
-
-              data: {
-                equipmentQuantity:
-                  {
-                    increment:
-                      quantity,
-                  },
-              },
-            },
-          );
-
-        if (
-          updated.count !== 1
-        ) {
+      if (movementType === 'IN') {
+        if (equipment.equipmentQuantity > SQL_INT_MAX - quantity) {
           throw new BadRequestException(
-            `Equipment quantity changed, equipment became inactive, or SQL Server INT capacity was exceeded for '${equipmentId}'`,
+            `Equipment '${equipmentId}' total quantity exceeds capacity`
           );
         }
-      }
-    }
 
-    if (
-      movementType ===
-      'OUT'
-    ) {
-      for (
-        const [
-          equipmentId,
-          quantity,
-        ] of globalTotals
-      ) {
-        const updated =
-          await tx.equipment.updateMany(
-            {
-              where: {
-                equipmentId,
-                equipmentStatus:
-                  'ACTIVE',
-
-                equipmentQuantity:
-                  {
-                    gte:
-                      quantity,
-                  },
-              },
-
-              data: {
-                equipmentQuantity:
-                  {
-                    decrement:
-                      quantity,
-                  },
-              },
-            },
-          );
-
-        if (
-          updated.count !== 1
-        ) {
-          throw new BadRequestException(
-            `Global equipment quantity is insufficient or equipment is no longer ACTIVE for '${equipmentId}'`,
-          );
-        }
-      }
-    }
-
-    /**
-     * Serialized location changes are guarded one serial at a time so the
-     * update predicate verifies serial identity, ownership and source location.
-     */
-    for (
-      const item of serializedItems
-    ) {
-      const expectedShelfId =
-        movementType === 'IN'
-          ? null
-          : sourceShelfId;
-
-      const nextShelfId =
-        movementType === 'OUT'
-          ? null
-          : destinationShelfId;
-
-      const updated =
-        await tx.serialNumber.updateMany(
-          {
-            where: {
-              serialNumberId:
-                item.serialNumberId!,
-
-              equipmentId:
-                item.equipmentId,
-
-              shelfId:
-                expectedShelfId,
-            },
-
-            data: {
-              shelfId:
-                nextShelfId,
-            },
+        await tx.equipment.update({
+          where: { equipmentId },
+          data: {
+            equipmentQuantity: { increment: quantity },
           },
-        );
+        });
+      } else if (movementType === 'OUT') {
+        if (equipment.equipmentQuantity < quantity) {
+          throw new BadRequestException(
+            `Equipment '${equipmentId}' total quantity insufficient for OUT movement`
+          );
+        }
 
-      if (
-        updated.count !== 1
-      ) {
+        await tx.equipment.update({
+          where: { equipmentId },
+          data: {
+            equipmentQuantity: { decrement: quantity },
+          },
+        });
+      }
+    }
+
+    for (const item of serializedItems) {
+      const expectedShelfId = movementType === 'IN' ? null : item.sourceShelfId;
+      const nextShelfId = movementType === 'OUT' ? null : item.destinationShelfId;
+
+      const updated = await tx.serialNumber.updateMany({
+        where: {
+          serialNumberId: item.serialNumberId!,
+          equipmentId: item.equipmentId,
+          shelfId: expectedShelfId,
+        },
+        data: {
+          shelfId: nextShelfId,
+        },
+      });
+
+      if (updated.count !== 1) {
         throw new BadRequestException(
-          `Serial number '${item.serialNumberId}' location or ownership changed; refresh and retry`,
+          `Serial number '${item.serialNumberId}' location or ownership changed; refresh and retry`
         );
       }
     }

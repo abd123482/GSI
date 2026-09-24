@@ -14,6 +14,9 @@ import {
   useApi,
 } from '@/hooks/use-api';
 import {
+  useAuthQueryContext,
+} from '@/hooks/use-auth-query-context';
+import {
   usePermissions,
 } from '@/hooks/use-permissions';
 import {
@@ -33,6 +36,7 @@ export function useSerialNumbers(
   enabled = true,
 ) {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   const {
     permissions,
@@ -57,8 +61,7 @@ export function useSerialNumbers(
   return useQuery({
     queryKey: [
       'serial-numbers',
-      normalizedQuery,
-    ],
+      normalizedQuery, userId],
 
     queryFn: () =>
       SerialNumberService.getSerialNumbers(
@@ -78,6 +81,7 @@ export function useSerialNumbers(
 
 export function useCreateSerialNumber() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
   const queryClient =
     useQueryClient();
 
@@ -100,13 +104,11 @@ export function useCreateSerialNumber() {
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: [
-              'serial-numbers',
-            ],
+              'serial-numbers', userId],
           }),
           queryClient.invalidateQueries({
             queryKey: [
-              'equipments',
-            ],
+              'equipments', userId],
           }),
         ]);
 
@@ -138,6 +140,7 @@ export function useCreateSerialNumber() {
 
 export function useCreateBatchSerialNumbers() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
   const queryClient =
     useQueryClient();
 
@@ -160,13 +163,11 @@ export function useCreateBatchSerialNumbers() {
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: [
-              'serial-numbers',
-            ],
+              'serial-numbers', userId],
           }),
           queryClient.invalidateQueries({
             queryKey: [
-              'equipments',
-            ],
+              'equipments', userId],
           }),
         ]);
 
@@ -183,6 +184,7 @@ export function useCreateBatchSerialNumbers() {
 
 export function useUpdateSerialNumber() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
   const queryClient =
     useQueryClient();
 
@@ -210,18 +212,15 @@ export function useUpdateSerialNumber() {
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: [
-              'serial-numbers',
-            ],
+              'serial-numbers', userId],
           }),
           queryClient.invalidateQueries({
             queryKey: [
-              'equipments',
-            ],
+              'equipments', userId],
           }),
           queryClient.invalidateQueries({
             queryKey: [
-              'shelf-contents',
-            ],
+              'shelf-contents', userId],
           }),
         ]);
 
@@ -253,6 +252,7 @@ export function useUpdateSerialNumber() {
 
 export function useDeleteSerialNumber() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
   const queryClient =
     useQueryClient();
 
@@ -274,18 +274,15 @@ export function useDeleteSerialNumber() {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: [
-            'serial-numbers',
-          ],
+            'serial-numbers', userId],
         }),
         queryClient.invalidateQueries({
           queryKey: [
-            'equipments',
-          ],
+            'equipments', userId],
         }),
         queryClient.invalidateQueries({
           queryKey: [
-            'shelf-contents',
-          ],
+            'shelf-contents', userId],
         }),
       ]);
 

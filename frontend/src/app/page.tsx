@@ -2,14 +2,13 @@
 
 import React from 'react';
 import { useAuth } from '@clerk/nextjs';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ShieldAlert } from 'lucide-react';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useDashboard } from '@/hooks/use-dashboard';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { DashboardKpiGrid } from '@/components/dashboard/DashboardKpiGrid';
 import { DashboardCharts } from '@/components/dashboard/DashboardCharts';
 import { DashboardTables } from '@/components/dashboard/DashboardTables';
-import { DashboardRestrictedView } from '@/components/dashboard/DashboardRestrictedView';
 import { DashboardGuestView } from '@/components/dashboard/DashboardGuestView';
 
 export default function HomePage() {
@@ -60,15 +59,12 @@ export default function HomePage() {
   // 3. Authenticated but lacks dashboard.read Permission
   if (!canReadDashboard) {
     return (
-      <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-[#f7f5f0] flex flex-col">
-        <DashboardRestrictedView
-          userName={authUser?.userName}
-          roleName={roleName}
-          canReadEquipment={canReadEquipment}
-          canReadShelves={canReadShelf}
-          canReadStock={canReadStock}
-          canReadInventory={canReadInventory}
-        />
+      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
+        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#2f2a26] p-7 text-center">
+          <ShieldAlert className="mx-auto h-6 w-6 text-amber-400" />
+          <h1 className="mt-3 text-sm font-semibold">Accès non autorisé</h1>
+          <p className="mt-2 text-xs text-[#aea69c]">La permission dashboard.read est requise.</p>
+        </div>
       </main>
     );
   }

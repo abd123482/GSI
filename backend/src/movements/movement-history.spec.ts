@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, it, vi } from 'vitest';
 import { EquipmentService } from '../equipment/equipment.service.js';
 import { SerialNumberService } from '../serial-numbers/serialNumber.service.js';

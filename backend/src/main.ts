@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
+import { AllExceptionsFilter } from './all-exceptions.filter.js';
 import { json, urlencoded } from 'express';
 
 function validateEnvironment() {
@@ -33,6 +34,7 @@ async function bootstrap() {
   });
 
   // Enable generous payload limits (50mb) for bulk counting and serial number audits
+  app.useGlobalFilters(new AllExceptionsFilter());
   app.use(
     json({
       limit: '50mb',
@@ -68,3 +70,6 @@ bootstrap().catch((err) => {
   new Logger('Bootstrap').error('Failed to start application', err);
   process.exit(1);
 });
+// Trigger restart
+// Trigger restart 2
+// Trigger restart 3

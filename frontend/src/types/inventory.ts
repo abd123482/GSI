@@ -140,6 +140,26 @@ export interface ExpectedShelf {
   quantity?: number;
 }
 
+export interface ExpectedStandardItem {
+  equipmentId: string;
+  equipmentName: string;
+  equipmentStatus: string;
+  shelfId: string;
+  shelfName: string;
+  expectedQuantity: number;
+}
+
+export interface ExpectedSerializedItem {
+  equipmentId: string;
+  equipmentName: string;
+  equipmentStatus: string;
+  serialNumberId: string;
+  serialNumberCode: string;
+  serialNumberStatusAtLaunch: string;
+  expectedShelfId: string | null;
+  expectedShelfName: string | null;
+}
+
 export interface InventoryTask {
   attemptId: string;
   unitId: string;
@@ -149,11 +169,16 @@ export interface InventoryTask {
   status: AttemptStatus;
   submittedAt?: string | null;
   draftData?: string | null;
-  scopeLabel?: string;
-  isSerialized?: boolean;
-  expectedShelves?: ExpectedShelf[];
   unit: InventoryWorkUnit & {
     inventory: Inventory;
+  };
+  scopeLabel: string;
+  isSerialized: boolean;
+  expectedShelves?: { shelfId: string; shelfName: string; quantity: number }[];
+  expectedEquipments?: { equipmentId: string; equipmentName: string; hasSerialNumber: boolean; quantity: number }[];
+  expected: {
+    standardItems: ExpectedStandardItem[];
+    serializedItems: ExpectedSerializedItem[];
   };
 }
 

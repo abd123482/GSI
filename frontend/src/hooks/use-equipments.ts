@@ -17,6 +17,7 @@ import {
 import {
   useApi,
 } from './use-api';
+import { useAuthQueryContext } from './use-auth-query-context';
 import {
   usePermissions,
 } from './use-permissions';
@@ -41,6 +42,7 @@ export function useEquipments(
   options?: UseEquipmentsOptions,
 ) {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
   const queryClient =
     useQueryClient();
 
@@ -96,8 +98,7 @@ export function useEquipments(
           searchTerm,
           equipmentStatus,
           hasSerialNumber,
-        },
-      ],
+        }, userId],
 
       queryFn: () => {
         const filtered =
@@ -157,13 +158,11 @@ export function useEquipments(
           await Promise.all([
             queryClient.invalidateQueries({
               queryKey: [
-                'equipments',
-              ],
+                'equipments', userId],
             }),
             queryClient.invalidateQueries({
               queryKey: [
-                'serial-numbers',
-              ],
+                'serial-numbers', userId],
             }),
           ]);
 
@@ -199,19 +198,16 @@ export function useEquipments(
           await Promise.all([
             queryClient.invalidateQueries({
               queryKey: [
-                'equipments',
-              ],
+                'equipments', userId],
             }),
             queryClient.invalidateQueries({
               queryKey: [
                 'equipment',
-                equipment.equipmentId,
-              ],
+                equipment.equipmentId, userId],
             }),
             queryClient.invalidateQueries({
               queryKey: [
-                'serial-numbers',
-              ],
+                'serial-numbers', userId],
             }),
           ]);
 
@@ -235,8 +231,7 @@ export function useEquipments(
       onSuccess: async () => {
         await queryClient.invalidateQueries({
           queryKey: [
-            'equipments',
-          ],
+            'equipments', userId],
         });
 
         toast.success(
@@ -353,10 +348,11 @@ export function useEquipments(
 
 export function useEquipmentAllocations(equipmentId: string, enabled = true) {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
   const { permissions } = usePermissions();
 
   return useQuery({
-    queryKey: ['equipment', equipmentId, 'allocations'],
+    queryKey: ['equipment', equipmentId, 'allocations', userId],
     queryFn: () => EquipmentService.getEquipmentShelves(api, equipmentId, permissions),
     enabled: enabled && Boolean(equipmentId),
     staleTime: 30_000,

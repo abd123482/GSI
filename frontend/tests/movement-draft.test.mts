@@ -50,17 +50,13 @@ test('builds one V3 IN document with multiple lines and one shared destination',
 
   const payload = buildMovementPayload({
     movementType: 'IN',
-    destinationShelfId:
-      '44444444-4444-4444-8444-444444444444',
+    
     drafts: [standard, serialized],
   });
 
   assert.equal(payload.movementType, 'IN');
-  assert.equal(payload.sourceShelfId, null);
-  assert.equal(
-    payload.destinationShelfId,
-    '44444444-4444-4444-8444-444444444444',
-  );
+  
+  
   assert.deepEqual(payload.items, [
     {
       equipmentId: standard.equipment.equipmentId,
@@ -87,10 +83,8 @@ test('TRANSFER validates the source allocation for standard equipment', () => {
 
   const payload = buildMovementPayload({
     movementType: 'TRANSFER',
-    sourceShelfId:
-      '22222222-2222-4222-8222-222222222222',
-    destinationShelfId:
-      '55555555-5555-4555-8555-555555555555',
+    
+    
     drafts: [draft],
   });
 
@@ -107,8 +101,7 @@ test('rejects insufficient standard stock at the shared source', () => {
     () =>
       buildMovementPayload({
         movementType: 'OUT',
-        sourceShelfId:
-          '22222222-2222-4222-8222-222222222222',
+        
         drafts: [draft],
       }),
     /stock insuffisant/i,
@@ -124,10 +117,8 @@ test('rejects an invalid route for IN', () => {
     () =>
       buildMovementPayload({
         movementType: 'IN',
-        sourceShelfId:
-          '22222222-2222-4222-8222-222222222222',
-        destinationShelfId:
-          '55555555-5555-4555-8555-555555555555',
+        
+        
         drafts: [draft],
       }),
     /ne doit pas avoir d’emplacement source/i,
@@ -148,8 +139,7 @@ test('rejects more than 100 child lines', () => {
     () =>
       buildMovementPayload({
         movementType: 'IN',
-        destinationShelfId:
-          '55555555-5555-4555-8555-555555555555',
+        
         drafts: [draft],
       }),
     /100 lignes/i,

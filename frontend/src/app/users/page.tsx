@@ -81,6 +81,18 @@ export default function UsersAndRolesPage() {
     );
   }
 
+  if (!canManageUsers && !canManageRoles) {
+    return (
+      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
+        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#2f2a26] p-7 text-center">
+          <ShieldAlert className="mx-auto h-6 w-6 text-amber-400" />
+          <h1 className="mt-3 text-sm font-semibold">Accès non autorisé</h1>
+          <p className="mt-2 text-xs text-[#aea69c]">Les permissions de gestion des utilisateurs ou rôles sont requises.</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] py-8 text-[#f7f5f0]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">

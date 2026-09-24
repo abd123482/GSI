@@ -25,14 +25,18 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const user = request.authUser;
 
-    if (!user || !user.roleName) {
-      throw new ForbiddenException('Access denied: User has no assigned role');
+    if (!user) {
+      throw new ForbiddenException('Access denied: User is not authenticated');
     }
 
     // Universal Admin Superuser Bypass:
     // Any user with role 'ADMIN' or with isAdmin flag has access to all role-restricted routes
-    if (user.roleName.trim().toUpperCase() === 'ADMIN' || user.isAdmin === true) {
+    if (user.isAdmin === true || user.roleName?.trim().toUpperCase() === 'ADMIN') {
       return true;
+    }
+
+    if (!user.roleName) {
+      throw new ForbiddenException('Access denied: User has no assigned role');
     }
 
     const hasRole = requiredRoles.includes(user.roleName);

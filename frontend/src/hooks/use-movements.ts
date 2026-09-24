@@ -15,6 +15,10 @@ import {
 } from '@/hooks/use-api';
 
 import {
+  useAuthQueryContext,
+} from '@/hooks/use-auth-query-context';
+
+import {
   usePermissions,
 } from '@/hooks/use-permissions';
 
@@ -36,6 +40,7 @@ export function useMovements(
   enabled = true,
 ) {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   const {
     permissions,
@@ -65,8 +70,7 @@ export function useMovements(
   return useQuery({
     queryKey: [
       'movements',
-      normalized,
-    ],
+      normalized, userId],
 
     queryFn: () =>
       MovementService.getMovements(
@@ -89,6 +93,7 @@ export function useMovement(
   enabled = true,
 ) {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   const {
     permissions,
@@ -98,8 +103,7 @@ export function useMovement(
     queryKey: [
       'movements',
       'detail',
-      movementId,
-    ],
+      movementId, userId],
 
     queryFn: () =>
       MovementService.getMovementById(
@@ -120,6 +124,7 @@ export function useMovement(
 
 export function useCreateMovement() {
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   const queryClient =
     useQueryClient();
@@ -142,33 +147,27 @@ export function useCreateMovement() {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: [
-            'movements',
-          ],
+            'movements', userId],
         }),
         queryClient.invalidateQueries({
           queryKey: [
-            'equipments',
-          ],
+            'equipments', userId],
         }),
         queryClient.invalidateQueries({
           queryKey: [
-            'serial-numbers',
-          ],
+            'serial-numbers', userId],
         }),
         queryClient.invalidateQueries({
           queryKey: [
-            'shelves',
-          ],
+            'shelves', userId],
         }),
         queryClient.invalidateQueries({
           queryKey: [
-            'shelf-contents',
-          ],
+            'shelf-contents', userId],
         }),
         queryClient.invalidateQueries({
           queryKey: [
-            'dashboard',
-          ],
+            'dashboard', userId],
         }),
       ]);
 

@@ -13,6 +13,7 @@ import {
 import {
   useApi,
 } from './use-api';
+import { useAuthQueryContext } from './use-auth-query-context';
 import {
   REQUIRED_CREATE_PERMISSION,
   REQUIRED_DELETE_PERMISSION,
@@ -75,12 +76,12 @@ const EMPTY_PERMISSIONS: string[] =
 
 export function usePermissions() {
   const {
-    userId,
     isSignedIn,
     isLoaded,
   } = useAuth();
 
   const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
 
   const {
     data: authUser,
@@ -90,6 +91,7 @@ export function usePermissions() {
   } = useQuery<AuthMeResponse>({
     queryKey: ['auth', 'me', userId],
 
+    enabled: authReady && Boolean(isSignedIn),
     queryFn: async () => {
       const response =
         await api.get<AuthMeResponse>(
@@ -98,12 +100,6 @@ export function usePermissions() {
 
       return response.data;
     },
-
-    enabled:
-      Boolean(isSignedIn) &&
-      isLoaded &&
-      Boolean(userId),
-
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });

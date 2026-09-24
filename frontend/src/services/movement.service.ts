@@ -117,49 +117,7 @@ function validateMovement(
     );
   }
 
-  if (
-    input.movementType ===
-    'IN'
-  ) {
-    if (
-      input.sourceShelfId ||
-      !input.destinationShelfId
-    ) {
-      throw new Error(
-        'Une entrée nécessite uniquement un emplacement destination.',
-      );
-    }
-  }
 
-  if (
-    input.movementType ===
-    'OUT'
-  ) {
-    if (
-      !input.sourceShelfId ||
-      input.destinationShelfId
-    ) {
-      throw new Error(
-        'Une sortie nécessite uniquement un emplacement source.',
-      );
-    }
-  }
-
-  if (
-    input.movementType ===
-    'TRANSFER'
-  ) {
-    if (
-      !input.sourceShelfId ||
-      !input.destinationShelfId ||
-      input.sourceShelfId ===
-        input.destinationShelfId
-    ) {
-      throw new Error(
-        'Un transfert nécessite deux emplacements différents.',
-      );
-    }
-  }
 
   for (
     const item of
@@ -221,11 +179,11 @@ export class MovementService {
               input.movementType,
 
             sourceShelfId:
-              input.sourceShelfId ??
+              input.items[0]?.sourceShelfId ??
               null,
 
             destinationShelfId:
-              input.destinationShelfId ??
+              input.items[0]?.destinationShelfId ??
               null,
 
             items:

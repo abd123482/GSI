@@ -24,7 +24,7 @@ export function GSILogo({ className }: { className?: string }) {
           C 244 516 179 544 117 558
           Z
         "
-        fill="#777777"
+        fill="#e5ff00ff"
       />
 
       {/* Custom G shape traced from reference */}
@@ -55,7 +55,7 @@ export function GSILogo({ className }: { className?: string }) {
           C 491 87 489 83 485 81
           Z
         "
-        fill="currentColor"
+        fill="#ffffffff"
       />
 
       {/* SI */}
@@ -66,7 +66,7 @@ export function GSILogo({ className }: { className?: string }) {
         fontWeight="900"
         fontStyle="italic"
         fontSize="480"
-        fill="currentColor"
+        fill="#ffffffff"
         letterSpacing="-10"
       >
         SI

@@ -33,6 +33,22 @@ export const movementItemSchema =
         SQL_INT_MAX,
         'Movement quantity exceeds SQL Server INT capacity',
       ),
+
+    sourceShelfId: z
+      .string()
+      .uuid(
+        'Source shelf ID must be a valid UUID',
+      )
+      .nullable()
+      .optional(),
+
+    destinationShelfId: z
+      .string()
+      .uuid(
+        'Destination shelf ID must be a valid UUID',
+      )
+      .nullable()
+      .optional(),
   });
 
 export const createEquipmentMovementSchema =
@@ -41,21 +57,7 @@ export const createEquipmentMovementSchema =
       movementType:
         movementTypeSchema,
 
-      sourceShelfId: z
-        .string()
-        .uuid(
-          'Source shelf ID must be a valid UUID',
-        )
-        .nullable()
-        .optional(),
 
-      destinationShelfId: z
-        .string()
-        .uuid(
-          'Destination shelf ID must be a valid UUID',
-        )
-        .nullable()
-        .optional(),
 
       items: z
         .array(
@@ -70,98 +72,7 @@ export const createEquipmentMovementSchema =
           'A movement can contain at most 100 article lines',
         ),
     })
-    .superRefine(
-      (data, ctx) => {
-        const source =
-          data.sourceShelfId ??
-          null;
-
-        const destination =
-          data.destinationShelfId ??
-          null;
-
-        if (
-          data.movementType ===
-          'IN'
-        ) {
-          if (
-            source !== null ||
-            destination === null
-          ) {
-            ctx.addIssue({
-              code: 'custom',
-              path: [
-                'movementType',
-              ],
-              message:
-                'IN requires no source shelf and one destination shelf',
-            });
-          }
-        }
-
-        if (
-          data.movementType ===
-          'OUT'
-        ) {
-          if (
-            source === null ||
-            destination !== null
-          ) {
-            ctx.addIssue({
-              code: 'custom',
-              path: [
-                'movementType',
-              ],
-              message:
-                'OUT requires one source shelf and no destination shelf',
-            });
-          }
-        }
-
-        if (
-          data.movementType ===
-          'TRANSFER'
-        ) {
-          if (
-            source === null ||
-            destination === null ||
-            source.toLowerCase() ===
-              destination.toLowerCase()
-          ) {
-            ctx.addIssue({
-              code: 'custom',
-              path: [
-                'movementType',
-              ],
-              message:
-                'TRANSFER requires two different shelves',
-            });
-          }
-        }
-
-        const total =
-          data.items.reduce(
-            (
-              sum,
-              item,
-            ) =>
-              sum +
-              item.movementQuantity,
-            0,
-          );
-
-        if (
-          total > SQL_INT_MAX
-        ) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['items'],
-            message:
-              'Total movement quantity exceeds SQL Server INT capacity',
-          });
-        }
-      },
-    );
+    ;
 
 export type MovementType =
   z.infer<

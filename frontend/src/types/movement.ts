@@ -105,12 +105,12 @@ export interface CreateMovementItemInput {
   equipmentId: string;
   serialNumberId?: string | null;
   movementQuantity: number;
+  sourceShelfId?: string | null;
+  destinationShelfId?: string | null;
 }
 
 export interface CreateMovementInput {
   movementType: MovementType;
-  sourceShelfId?: string | null;
-  destinationShelfId?: string | null;
   items: CreateMovementItemInput[];
 }
 
@@ -142,6 +142,10 @@ export interface MovementDraftLine {
   serialNumberId: string | null;
   serialNumberCode: string | null;
   movementQuantity: number;
+  sourceShelfId?: string | null;
+  destinationShelfId?: string | null;
+  sourceName?: string;
+  destinationName?: string;
 }
 
 export interface MovementLedgerEntry {
