@@ -7,9 +7,10 @@ export const createStockSchema = z.object({
     .min(5, 'Stock name must be at least 5 characters')
     .max(50, 'Stock name must not exceed 50 characters'),
 
-  stockStatus: z
-    .enum(['ACTIVE', 'INACTIVE'])
-    .optional(),
+stockStatus: z
+  .enum(['ACTIVE', 'INACTIVE'])
+  .transform((status) => status === 'ACTIVE')
+  .optional(),
 });
 
 export type CreateStockDTO =
