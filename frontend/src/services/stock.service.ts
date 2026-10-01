@@ -8,7 +8,6 @@ import type {
   SearchStockQuery,
   Stock,
   StockPaginationQuery,
-  StockStatus,
   UpdateStockInput,
 } from '@/types/stock';
 
@@ -85,7 +84,7 @@ export class StockService {
         {
           params: {
             stockName: query.stockName || undefined,
-            stockStatus: query.stockStatus || undefined,
+            status: query.status !== undefined ? query.status : undefined,
             page,
             limit,
           },
@@ -101,7 +100,7 @@ export class StockService {
     client: AxiosInstance,
     params: StockPaginationQuery = { page: 1, limit: 100 },
   ): Promise<PaginatedStocksResponse> {
-    return this.searchStocks(client, { stockStatus: 'ACTIVE' }, params);
+    return this.searchStocks(client, { status: true }, params);
   }
 
   static async getStockById(client: AxiosInstance, id: string): Promise<Stock> {
@@ -119,9 +118,9 @@ export class StockService {
   ): Promise<Stock> {
     const validated = createStockSchema.parse({
       ...input,
-      stockStatus:
-        input.stockStatus ??
-        'ACTIVE',
+      status:
+        input.status ??
+        true,
     });
     try {
       const response = await client.post<Stock>('/stocks', validated);
@@ -145,19 +144,15 @@ export class StockService {
     }
   }
 
-  static async getAllStockStatuses(client: AxiosInstance): Promise<StockStatus[]> {
+  static async getAllStockStatuses(client: AxiosInstance): Promise<boolean[]> {
     try {
-      const response = await client.get<StockStatus[]>('/stocks/statuses');
+      const response = await client.get<boolean[]>('/stocks/statuses');
       return response.data.filter(
         (status) =>
-          status.stockStatusName === 'ACTIVE' ||
-          status.stockStatusName === 'INACTIVE',
+          status === true || status === false,
       );
     } catch {
-      return [
-        { stockStatusId: 'active', stockStatusName: 'ACTIVE' },
-        { stockStatusId: 'inactive', stockStatusName: 'INACTIVE' },
-      ];
+      return [];
     }
   }
 }

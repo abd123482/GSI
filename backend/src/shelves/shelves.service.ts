@@ -21,23 +21,13 @@ import {
 const SHELF_SELECT = {
   shelfId: true,
   shelfName: true,
-  shelfQuantity: true,
   stockId: true,
-  shelfStatus: {
-    select: {
-      shelfStatusName: true,
-    },
-  },
-
+  status: true,
   stock: {
     select: {
       stockId: true,
       stockName: true,
-      stockStatus: {
-        select: {
-          stockStatusName: true,
-        },
-      },
+      status: true
     },
   },
 } satisfies Prisma.ShelfSelect;
@@ -87,11 +77,7 @@ export class ShelfService {
         select: {
           stockId: true,
           stockName: true,
-          stockStatus: {
-            select: {
-              stockStatusName: true,
-            },
-          },
+          status: true,
         },
       });
 
@@ -101,10 +87,7 @@ export class ShelfService {
       );
     }
 
-    if (
-      stock.stockStatus.stockStatusName !==
-      'ACTIVE'
-    ) {
+    if (!stock.status) {
       throw new BadRequestException(
         `Stock '${stock.stockName ?? stockId}' is INACTIVE and cannot receive shelves`,
       );
@@ -146,20 +129,12 @@ export class ShelfService {
       ),
     ]);
 
-    const shelfStatusObj = await this.prisma.shelfStatus.findUnique({
-      where: { shelfStatusName: data.shelfStatus ?? 'ACTIVE' },
-    });
-
-    if (!shelfStatusObj) {
-      throw new BadRequestException('Invalid shelf status');
-    }
 
     return this.prisma.shelf.create({
       data: {
         shelfName: data.shelfName,
-        shelfQuantity: 0,
         stockId: data.stockId,
-        shelfStatusId: shelfStatusObj.shelfStatusId,
+        status: data.status ?? true,
       },
       select: SHELF_SELECT,
     });
@@ -223,7 +198,7 @@ export class ShelfService {
       );
 
     const where:
-      Prisma.ShelfWhereInput = {};
+      any = {};
 
     if (filters.shelfName) {
       where.shelfName = {
@@ -237,10 +212,8 @@ export class ShelfService {
         filters.stockId;
     }
 
-    if (filters.shelfStatus) {
-      where.shelfStatus = {
-        shelfStatusName: filters.shelfStatus,
-      };
+    if (filters.status !== undefined) {
+      where.status = filters.status;
     }
 
     const skip =
@@ -357,7 +330,6 @@ export class ShelfService {
           shelfId: true,
           shelfName: true,
           stockId: true,
-          shelfQuantity: true,
         },
       });
 
@@ -367,8 +339,13 @@ export class ShelfService {
       );
     }
 
-    if (data.shelfStatus === 'INACTIVE' && current.shelfQuantity > 0) {
-      throw new BadRequestException('Cannot set shelf to INACTIVE if it contains items');
+    if (data.status === false) {
+      const serialOnShelf = await this.prisma.serialNumber.findFirst({
+        where: { shelfId },
+      });
+      if (serialOnShelf) {
+        throw new BadRequestException('Cannot set shelf to INACTIVE if it contains serialized items');
+      }
     }
 
     const validations:
@@ -403,17 +380,6 @@ export class ShelfService {
       validations,
     );
 
-    let shelfStatusId: string | undefined;
-    if (data.shelfStatus !== undefined) {
-      const statusObj = await this.prisma.shelfStatus.findUnique({
-        where: { shelfStatusName: data.shelfStatus },
-      });
-      if (!statusObj) {
-        throw new BadRequestException('Invalid shelf status');
-      }
-      shelfStatusId = statusObj.shelfStatusId;
-    }
-
     return this.prisma.shelf.update({
       where: {
         shelfId,
@@ -429,8 +395,8 @@ export class ShelfService {
           stockId:
             data.stockId,
         }),
-        ...(shelfStatusId !== undefined && {
-          shelfStatusId,
+        ...(data.status !== undefined && {
+          status: data.status,
         }),
       },
       select: SHELF_SELECT,
@@ -457,7 +423,6 @@ export class ShelfService {
         select: {
           shelfId: true,
           shelfName: true,
-          shelfQuantity: true,
         },
       });
 
@@ -468,22 +433,10 @@ export class ShelfService {
     }
 
     const [
-      positiveAllocation,
       serialOnShelf,
       movementLine,
       legacyMovementHeader,
     ] = await Promise.all([
-      this.prisma.equipmentShelfs.findFirst({
-        where: {
-          shelfId,
-          equipmentQuantity: {
-            gt: 0,
-          },
-        },
-        select: {
-          equipmentShelfId: true,
-        },
-      }),
 
       this.prisma.serialNumber.findFirst({
         where: {
@@ -532,15 +485,6 @@ export class ShelfService {
       }),
     ]);
 
-    if (
-      shelf.shelfQuantity > 0 ||
-      positiveAllocation
-    ) {
-      throw new BadRequestException(
-        'This shelf still contains equipment stock',
-      );
-    }
-
     if (serialOnShelf) {
       throw new BadRequestException(
         'This shelf still contains serialized equipment',
@@ -558,12 +502,6 @@ export class ShelfService {
 
     return this.prisma.$transaction(
       async (tx) => {
-        await tx.equipmentShelfs.deleteMany({
-          where: {
-            shelfId,
-          },
-        });
-
         return tx.shelf.delete({
           where: {
             shelfId,
@@ -574,100 +512,7 @@ export class ShelfService {
     );
   }
 
-  async getShelfEquipment(
-    id: string,
-    pagination: PaginationDTO,
-  ) {
-    const shelfId =
-      id?.trim();
 
-    if (!shelfId) {
-      throw new BadRequestException(
-        'Shelf ID is required',
-      );
-    }
-
-    const { page, limit } =
-      paginationSchema.parse(
-        pagination ?? {},
-      );
-
-    await this.assertShelfExists(
-      shelfId,
-    );
-
-    const skip =
-      (page - 1) * limit;
-
-    const where:
-      Prisma.EquipmentShelfsWhereInput =
-      {
-        shelfId,
-        equipmentQuantity: {
-          gt: 0,
-        },
-      };
-
-    const [
-      allocations,
-      totalAllocations,
-    ] = await Promise.all([
-      this.prisma.equipmentShelfs.findMany({
-        where,
-        skip,
-        take: limit,
-        select: {
-          equipmentShelfId:
-            true,
-          equipmentId: true,
-          shelfId: true,
-          equipmentQuantity:
-            true,
-          equipment: {
-            select: {
-              equipmentId: true,
-              equipmentName:
-                true,
-              hasSerialNumber:
-                true,
-              equipmentQuantity:
-                true,
-              minequipmentQuantity:
-                true,
-              equipmentStatus:
-                true,
-            },
-          },
-        },
-        orderBy: [
-          {
-            equipmentQuantity:
-              'desc',
-          },
-          {
-            equipmentShelfId:
-              'asc',
-          },
-        ],
-      }),
-
-      this.prisma.equipmentShelfs.count({
-        where,
-      }),
-    ]);
-
-    return {
-      allocations,
-      totalAllocations,
-      totalPages:
-        Math.ceil(
-          totalAllocations /
-            limit,
-        ) || 1,
-      currentPage: page,
-      limit,
-    };
-  }
 
   async getShelfSerialNumbers(
     id: string,

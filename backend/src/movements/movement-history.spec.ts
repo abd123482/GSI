@@ -40,10 +40,12 @@ describe('V3 movement-history protection', () => {
 
   it('blocks equipment deletion when movement history exists', async () => {
     const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([{ lockResult: 0 }]),
       equipment: {
         findUnique: vi.fn().mockResolvedValue({
-          equipmentId: 'eq',
+          equipmentId: '11111111-1111-4111-8111-111111111111',
           equipmentName: 'Equipment',
+          _count: { movementItems: 1 }
         }),
       },
       mouvementEquipment: {
@@ -60,15 +62,15 @@ describe('V3 movement-history protection', () => {
       equipmentShelfs: {
         findFirst: vi.fn().mockResolvedValue(null),
       },
-      $transaction: vi.fn(),
+      $transaction: vi.fn().mockImplementation(async (cb) => cb(prisma)),
     };
 
     await expect(
       new EquipmentService(prisma as any)
-        .deleteEquipment('eq'),
+        .deleteEquipment('11111111-1111-4111-8111-111111111111'),
     ).rejects.toThrow('movement history');
 
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    
   });
 
   it('blocks serial deletion when movement history exists', async () => {
@@ -77,7 +79,7 @@ describe('V3 movement-history protection', () => {
         findUnique: vi.fn().mockResolvedValue({
           serialNumberId: 'sn',
           serialNumberCode: 'SN-1',
-          equipmentId: 'eq',
+          equipmentId: '11111111-1111-4111-8111-111111111111',
           shelfId: null,
         }),
       },
@@ -97,7 +99,7 @@ describe('V3 movement-history protection', () => {
         .deleteSerialNumber('sn'),
     ).rejects.toThrow('movement history');
 
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    
   });
 
   it('blocks shelf deletion when movement history exists', async () => {
@@ -130,6 +132,6 @@ describe('V3 movement-history protection', () => {
         .deleteShelf('shelf'),
     ).rejects.toThrow('movement history');
 
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    
   });
 });

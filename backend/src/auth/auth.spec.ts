@@ -349,7 +349,7 @@ describe('Complete 25-Point Authentication, Authorization & Webhook Test Suite',
   // 14-16: User Onboarding, Idempotency & Race Safety
   // =========================================================================
   describe('User Onboarding & Concurrency (Tests 14-16)', () => {
-    it('14. should create one PENDING local user on first authenticated request', async () => {
+    it('14. should create one ACTIVE local user on first authenticated request', async () => {
       mockPrisma.user.findFirst.mockResolvedValueOnce(null);
 
       const mockGetUser = vi.fn().mockResolvedValue({
@@ -366,17 +366,17 @@ describe('Complete 25-Point Authentication, Authorization & Webhook Test Suite',
         clerkUserId: 'user_clerk_new',
         userName: 'New Member',
         userEmail: 'new@somipharm.com',
-        userStatus: 'PENDING',
+        userStatus: 'ACTIVE',
         roleId: null,
       });
 
       const user = await authService.getOrCreateLocalUser('user_clerk_new');
-      expect(user.userStatus).toBe('PENDING');
+      expect(user.userStatus).toBe('ACTIVE');
       expect(mockPrisma.user.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             clerkUserId: 'user_clerk_new',
-            userStatus: 'PENDING',
+            userStatus: 'ACTIVE',
           }),
         }),
       );
@@ -413,7 +413,7 @@ describe('Complete 25-Point Authentication, Authorization & Webhook Test Suite',
       mockPrisma.user.findFirst.mockResolvedValueOnce({
         userId: 'uuid-concurrent-winner',
         clerkUserId: 'user_concurrent',
-        userStatus: 'PENDING',
+        userStatus: 'ACTIVE',
       });
 
       const user = await authService.getOrCreateLocalUser('user_concurrent');
@@ -605,7 +605,7 @@ describe('Complete 25-Point Authentication, Authorization & Webhook Test Suite',
     it('23. should update user status when user has user.manage permission', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
         userId: 'uuid-target-user',
-        userStatus: 'PENDING',
+        userStatus: 'ACTIVE',
       });
       mockPrisma.user.update.mockResolvedValue({
         userId: 'uuid-target-user',

@@ -38,7 +38,7 @@ export interface MovementFilter {
   sourceShelfId?: string;
   destinationShelfId?: string;
   mouvementQuantity?: number;
-  mouvementStatus?: string;
+  mouvementStatus?: boolean;
 }
 
 // One logical line per child, or the original header when it has no children.
@@ -93,16 +93,14 @@ export function movementHeaderWhere(
 ): Prisma.MouvementWhereInput {
   const { mouvementId, ...lineFilter } = filter;
   const { mouvementStatus, ...details } = lineFilter;
-  const mixed = mouvementStatus === 'MIXED';
-  const itemFilter = mixed ? details : lineFilter;
   return {
     ...(mouvementId ? { mouvementId } : {}),
-    ...(mixed ? { mouvementStatus } : {}),
-    ...(Object.keys(itemFilter).length
+    ...(mouvementStatus !== undefined ? { mouvementStatus } : {}),
+    ...(Object.keys(details).length
       ? {
           OR: [
-            { items: { some: itemFilter } },
-            { items: { none: {} }, ...itemFilter },
+            { items: { some: details } },
+            { items: { none: {} }, ...details },
           ],
         }
       : {}),

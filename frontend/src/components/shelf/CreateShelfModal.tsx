@@ -34,7 +34,7 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
     formState: { errors, isSubmitting },
   } = useForm<CreateShelfFormValues>({
     resolver: zodResolver(createShelfSchema),
-    defaultValues: { shelfName: '', stockId: '', shelfStatus: 'ACTIVE' },
+    defaultValues: { shelfName: '', stockId: '', status: true },
   });
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
   }, [api, isOpen]);
 
   useEffect(() => {
-    if (!isOpen) reset({ shelfName: '', stockId: '', shelfStatus: 'ACTIVE' });
+    if (!isOpen) reset({ shelfName: '', stockId: '', status: true });
   }, [isOpen, reset]);
 
   if (!isOpen) return null;
@@ -82,9 +82,9 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
       await createShelf({
         shelfName: values.shelfName.trim(),
         stockId: values.stockId,
-        shelfStatus: values.shelfStatus,
+        status: values.status,
       });
-      reset({ shelfName: '', stockId: '', shelfStatus: 'ACTIVE' });
+      reset({ shelfName: '', stockId: '', status: true });
       onSuccess?.();
       onClose();
     } catch (cause: unknown) {
@@ -128,14 +128,16 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
           <label className="block space-y-1.5">
             <span className="text-xs font-semibold">Statut de l'emplacement</span>
             <select
-              {...register('shelfStatus')}
+              {...register('status', {
+                setValueAs: (v) => v === 'true',
+              })}
               disabled={busy}
               className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50"
             >
-              <option value="ACTIVE">Actif (ACTIVE)</option>
-              <option value="INACTIVE">Inactif (INACTIVE)</option>
+              <option value="true">Actif (ACTIVE)</option>
+              <option value="false">Inactif (INACTIVE)</option>
             </select>
-            {errors.shelfStatus && <p className="text-[11px] text-rose-300">{errors.shelfStatus.message}</p>}
+            {errors.status && <p className="text-[11px] text-rose-300">{errors.status.message}</p>}
           </label>
 
           <label className="block space-y-1.5">

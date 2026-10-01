@@ -273,12 +273,7 @@ export function useEquipments(
     setSearchTerm:
       handleSearch,
 
-    setEquipmentStatus: (
-      value:
-        | 'ACTIVE'
-        | 'INACTIVE'
-        | undefined,
-    ) => {
+    setEquipmentStatus: (value: boolean | undefined) => {
       setEquipmentStatus(
         value,
       );

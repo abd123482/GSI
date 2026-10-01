@@ -32,7 +32,7 @@ export interface DashboardStatsResponse {
     otherCount?: number;
     recentMovements: Array<{
       mouvementId: string;
-      mouvementStatus: string;
+      mouvementStatus: string | boolean;
       mouvementQuantity: number;
       equipmentName: string;
       sourceShelfName: string | null;
@@ -40,7 +40,7 @@ export interface DashboardStatsResponse {
       serialNumberCode: string | null;
       items?: Array<{
         mouvementEquipmentId: string;
-        mouvementStatus: string;
+        mouvementStatus: string | boolean;
         mouvementQuantity: number;
         equipmentName: string;
         sourceShelfName: string | null;
@@ -184,9 +184,9 @@ export class DashboardService {
     let mixedCount = 0;
     let otherCount = 0;
     for (const group of movementsByType) {
-      const status = group.mouvementStatus?.toUpperCase() || '';
+      const status = group.mouvementStatus ? 'OUT' : 'IN';
       const count = group._count.mouvementId || 0;
-      if (status === 'IN' || status === 'ENTRY') inCount += count;
+      if (status === 'IN') inCount += count;
       else if (status === 'OUT' || status === 'EXIT') outCount += count;
       else if (status === 'TRANSFER') transferCount += count;
       else if (status === 'MIXED') mixedCount += count;

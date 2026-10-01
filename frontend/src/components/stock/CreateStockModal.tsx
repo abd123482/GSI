@@ -30,7 +30,7 @@ export function CreateStockModal({ isOpen, onClose, onSuccess }: CreateStockModa
     formState: { errors, isSubmitting },
   } = useForm<CreateStockFormValues>({
     resolver: zodResolver(createStockSchema),
-    defaultValues: { stockName: '', stockStatus: 'ACTIVE' },
+    defaultValues: { stockName: '', stockStatus: true },
   });
 
   if (!isOpen) return null;
@@ -47,9 +47,9 @@ export function CreateStockModal({ isOpen, onClose, onSuccess }: CreateStockModa
       setSaving(true);
       await StockService.createStock(api, {
         stockName: values.stockName.trim(),
-        stockStatus: values.stockStatus ?? 'ACTIVE',
+        status: values.stockStatus,
       });
-      reset({ stockName: '', stockStatus: 'ACTIVE' });
+      reset({ stockName: '', stockStatus: true });
       onSuccess?.();
       onClose();
     } catch (cause: unknown) {
@@ -74,7 +74,7 @@ export function CreateStockModal({ isOpen, onClose, onSuccess }: CreateStockModa
 
           <label className="block space-y-1.5"><span className="text-xs font-semibold">Nom du stock *</span><input {...register('stockName')} className="h-10 w-full rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50" placeholder="Ex: Stock Principal" />{errors.stockName && <p className="text-[11px] text-rose-300">{errors.stockName.message}</p>}</label>
 
-          <label className="block space-y-1.5"><span className="text-xs font-semibold">Statut</span><select {...register('stockStatus')} className="h-10 w-full rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></label>
+          <label className="block space-y-1.5"><span className="text-xs font-semibold">Statut</span><select {...register('stockStatus')} className="h-10 w-full rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"><option value="true">ACTIVE</option><option value="false">INACTIVE</option></select></label>
 
           <footer className="flex justify-end gap-2 border-t border-[#3f3a36] pt-4">
             <button type="button" onClick={onClose} disabled={busy} className="rounded border border-[#3f3a36] px-4 py-2 text-xs">Annuler</button>

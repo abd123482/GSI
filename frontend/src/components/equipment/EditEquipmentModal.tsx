@@ -52,9 +52,7 @@ interface EditEquipmentModalProps {
 interface BasicForm {
   equipmentName: string;
   minEquipmentQuantity: number;
-  equipmentStatus:
-  | 'ACTIVE'
-  | 'INACTIVE';
+  equipmentStatus: boolean;
   convertToSerialized: boolean;
 }
 
@@ -102,7 +100,7 @@ export function EditEquipmentModal({
       minEquipmentQuantity:
         0,
       equipmentStatus:
-        'ACTIVE',
+        true,
       convertToSerialized:
         false,
     },
@@ -151,7 +149,7 @@ export function EditEquipmentModal({
         equipment.minequipmentQuantity,
       equipmentStatus:
         equipment.equipmentStatus ??
-        'ACTIVE',
+        true,
       convertToSerialized:
         false,
     });
@@ -334,7 +332,7 @@ export function EditEquipmentModal({
     }
 
     if (
-      values.equipmentStatus !==
+      (values.equipmentStatus) !==
       currentEquipment.equipmentStatus
     ) {
       payload.equipmentStatus =
@@ -448,10 +446,10 @@ export function EditEquipmentModal({
                 )}
                 className="h-10 w-full rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"
               >
-                <option value="ACTIVE">
+                <option value="true">
                   ACTIVE
                 </option>
-                <option value="INACTIVE">
+                <option value="false">
                   INACTIVE
                 </option>
               </select>

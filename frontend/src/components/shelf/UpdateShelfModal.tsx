@@ -44,13 +44,13 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
     defaultValues: {
       shelfName: shelf?.shelfName ?? '',
       stockId: shelf?.stockId ?? '',
-      shelfStatus: shelf?.shelfStatus?.shelfStatusName ?? 'ACTIVE',
+      status: shelf?.status !== false,
     },
   });
 
   useEffect(() => {
     if (!shelf) return;
-    reset({ shelfName: shelf.shelfName ?? '', stockId: shelf.stockId, shelfStatus: shelf.shelfStatus?.shelfStatusName ?? 'ACTIVE' });
+    reset({ shelfName: shelf.shelfName ?? '', stockId: shelf.stockId, status: shelf.status !== false ? true : false });
   }, [shelf, reset]);
 
   useEffect(() => {
@@ -77,11 +77,7 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
     const current: Stock = {
       stockId: shelf.stockId,
       stockName: shelf.stock?.stockName ?? 'Stock actuel',
-      stockStatusId: null,
-      stockStatus: {
-        stockStatusId: 'current-inactive',
-        stockStatusName: 'INACTIVE',
-      },
+      status: false,
     };
     return [current, ...activeStocks];
   }, [activeStocks, shelf]);
@@ -97,13 +93,13 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
       return;
     }
 
-    const data: { shelfName?: string; stockId?: string; shelfStatus?: 'ACTIVE' | 'INACTIVE' } = {};
+    const data: { shelfName?: string; stockId?: string; status?: boolean } = {};
     const nextName = values.shelfName?.trim();
     if (nextName && nextName !== (currentShelf.shelfName ?? '')) data.shelfName = nextName;
     if (values.stockId && values.stockId !== currentShelf.stockId) data.stockId = values.stockId;
-    if (values.shelfStatus && values.shelfStatus !== (currentShelf.shelfStatus?.shelfStatusName ?? 'ACTIVE')) data.shelfStatus = values.shelfStatus;
+    if (values.status && values.status !== (currentShelf.status !== false ? true : false)) data.status = values.status;
 
-    if (data.shelfName === undefined && data.stockId === undefined && data.shelfStatus === undefined) {
+    if (data.shelfName === undefined && data.stockId === undefined && data.status === undefined) {
       onClose();
       return;
     }
@@ -136,11 +132,11 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
 
           <label className="block space-y-1.5">
             <span className="text-xs font-semibold">Statut de l'emplacement</span>
-            <select {...register('shelfStatus')} disabled={busy} className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50">
-              <option value="ACTIVE">Actif (ACTIVE)</option>
-              <option value="INACTIVE" disabled={currentShelf.shelfQuantity > 0}>Inactif (INACTIVE)</option>
+            <select {...register('status', { setValueAs: (v) => v === 'true' })} disabled={busy} className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50">
+              <option value="true">Actif (ACTIVE)</option>
+              <option value="false" disabled={currentShelf.shelfQuantity > 0}>Inactif (INACTIVE)</option>
             </select>
-            {errors.shelfStatus && <p className="text-[11px] text-rose-300">{errors.shelfStatus.message}</p>}
+            {errors.status && <p className="text-[11px] text-rose-300">{errors.status.message}</p>}
             {currentShelf.shelfQuantity > 0 && (
               <p className="text-[10px] text-amber-400">Impossible de désactiver un emplacement contenant des articles.</p>
             )}
@@ -150,7 +146,7 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
             <span className="flex items-center gap-1.5 text-xs font-semibold"><Warehouse className="h-3.5 w-3.5" />Stock</span>
             <select {...register('stockId')} disabled={busy || loadingStocks} className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs">
               {stockOptions.map((stock) => {
-                const inactive = stock.stockStatus?.stockStatusName === 'INACTIVE';
+                const inactive = stock.status === false;
                 return (
                   <option key={stock.stockId} value={stock.stockId} disabled={inactive && stock.stockId !== currentShelf.stockId}>
                     {stock.stockName ?? 'Stock sans nom'}{inactive ? ' — INACTIVE (actuel)' : ''}

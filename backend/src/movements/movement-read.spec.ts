@@ -53,7 +53,7 @@ describe('movement V3 read API', () => {
         findMany: vi.fn().mockResolvedValue([
           {
             mouvementId: movementId,
-            mouvementStatus: 'OUT',
+            mouvementStatus: true,
             items: [],
           },
         ]),
@@ -74,7 +74,7 @@ describe('movement V3 read API', () => {
     expect(prisma.mouvement.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          mouvementStatus: 'OUT',
+          mouvementStatus: true,
           sourceShelfId,
           items: {
             some: {
@@ -93,7 +93,7 @@ describe('movement V3 read API', () => {
 
     expect(prisma.mouvement.count).toHaveBeenCalledWith({
       where: {
-        mouvementStatus: 'OUT',
+        mouvementStatus: true,
         sourceShelfId,
         items: {
           some: {
@@ -115,7 +115,7 @@ describe('movement V3 read API', () => {
   it('getMovementById returns one complete movement document', async () => {
     const movement = {
       mouvementId: movementId,
-      mouvementStatus: 'IN',
+      mouvementStatus: false,
       items: [
         {
           equipmentId,

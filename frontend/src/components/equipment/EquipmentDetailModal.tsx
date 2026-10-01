@@ -347,7 +347,7 @@ export function EquipmentDetailModal({
             <Stat
               label="Statut"
               value={
-                equipment.equipmentStatus
+                equipment.equipmentStatus ? 'Actif' : 'Inactif'
               }
             />
           </div>

@@ -36,10 +36,7 @@ function activeShelf(
         '55555555-5555-4555-8555-555555555555',
       stockName:
         'Stock',
-      stockStatus: {
-        stockStatusName:
-          'ACTIVE',
-      },
+      status: true,
     },
   };
 }
@@ -66,7 +63,8 @@ describe(
               ),
             ]),
 
-          updateMany: vi
+          update: vi.fn().mockResolvedValue({}),
+      updateMany: vi
             .fn()
             .mockResolvedValue({
               count: 1,
@@ -86,12 +84,12 @@ describe(
                   false,
                 equipmentQuantity:
                   10,
-                equipmentStatus:
-                  'ACTIVE',
+                equipmentStatus: true,
               },
             ]),
 
-          updateMany: vi
+          update: vi.fn().mockResolvedValue({}),
+      updateMany: vi
             .fn()
             .mockResolvedValue({
               count: 1,
@@ -106,7 +104,8 @@ describe(
         },
 
         equipmentShelfs: {
-          updateMany: vi
+          update: vi.fn().mockResolvedValue({}),
+      updateMany: vi
             .fn()
             .mockResolvedValue({
               count: 1,
@@ -178,9 +177,9 @@ describe(
       await service.createMovement({
         movementType:
           'OUT',
-        sourceShelfId,
         items: [
           {
+            sourceShelfId,
             equipmentId:
               equipmentA,
             movementQuantity:
@@ -254,7 +253,8 @@ describe(
               ),
             ]),
 
-          updateMany: vi
+          update: vi.fn().mockResolvedValue({}),
+      updateMany: vi
             .fn()
             .mockResolvedValue({
               count: 1,
@@ -274,8 +274,7 @@ describe(
                   false,
                 equipmentQuantity:
                   5,
-                equipmentStatus:
-                  'ACTIVE',
+                equipmentStatus: true,
               },
 
               {
@@ -287,12 +286,12 @@ describe(
                   false,
                 equipmentQuantity:
                   3,
-                equipmentStatus:
-                  'ACTIVE',
+                equipmentStatus: true,
               },
             ]),
 
-          updateMany: vi
+          update: vi.fn().mockResolvedValue({}),
+      updateMany: vi
             .fn()
             .mockResolvedValue({
               count: 1,
@@ -459,7 +458,7 @@ describe(
           ],
         }),
       ).rejects.toThrow(
-        'Insufficient quantity',
+        'total quantity insufficient for OUT movement',
       );
 
       expect(
@@ -518,9 +517,9 @@ describe(
         service.createMovement({
           movementType:
             'OUT',
-          sourceShelfId,
           items: [
             {
+              sourceShelfId,
               equipmentId:
                 equipmentA,
               movementQuantity:

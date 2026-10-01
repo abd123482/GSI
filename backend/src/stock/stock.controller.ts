@@ -40,11 +40,6 @@ export class StockController {
     return this.stockService.searchStocks(searchStockDTO, pagination);
   }
 
-  @RequirePermissions('stock.read')
-  @Get('statuses')
-  async getAllStockStatuses() {
-    return this.stockService.getAllStockStatuses();
-  }
 
   @RequirePermissions('stock.read')
   @Get(':id')

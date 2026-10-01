@@ -568,8 +568,7 @@ export function CreateMovementModal({
     }
 
     if (
-      selectedEquipment.equipmentStatus !==
-      'ACTIVE'
+      selectedEquipment.equipmentStatus === false
     ) {
       setError(
         'Un article INACTIVE ne peut pas être déplacé.',
@@ -798,7 +797,7 @@ export function CreateMovementModal({
 
     if (payloadItems.length === 0) {
       if (selectedEquipment) {
-        if (selectedEquipment.equipmentStatus !== 'ACTIVE') {
+        if (!selectedEquipment.equipmentStatus) {
           setError('Un article INACTIVE ne peut pas être déplacé.');
           return;
         }

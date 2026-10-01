@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
-export const equipmentStatusSchema =
-  z.enum(['ACTIVE', 'INACTIVE']);
+export const equipmentStatusSchema = z.boolean().optional().default(true);
 
 export const createEquipmentSchema = z.object({
   equipmentName: z
@@ -26,10 +25,7 @@ export const createEquipmentSchema = z.object({
     .optional()
     .default(0),
 
-  equipmentStatus:
-    equipmentStatusSchema
-      .optional()
-      .default('ACTIVE'),
+  equipmentStatus: equipmentStatusSchema
 });
 
 export type CreateEquipmentDTO =

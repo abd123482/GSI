@@ -99,7 +99,7 @@ export function CreateEquipmentModal({
         minEquipmentQuantity:
           0,
         equipmentStatus:
-          'ACTIVE',
+          true,
         serialNumbers: [],
       },
     });
@@ -287,10 +287,10 @@ export function CreateEquipmentModal({
                 )}
                 className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"
               >
-                <option value="ACTIVE">
+                <option value="true">
                   ACTIVE
                 </option>
-                <option value="INACTIVE">
+                <option value="false">
                   INACTIVE
                 </option>
               </select>

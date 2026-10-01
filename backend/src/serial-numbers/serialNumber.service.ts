@@ -129,9 +129,7 @@ export class SerialNumberService {
       data: {
         serialNumberCode:
           data.serialNumberCode,
-        serialNumberStatus:
-          data.serialNumberStatus ??
-          'AVAILABLE',
+        serialNumberStatus: data.serialNumberStatus ? data.serialNumberStatus === 'AVAILABLE' : true ? data.serialNumberStatus === 'AVAILABLE' : true,
         equipmentId:
           data.equipmentId,
         shelfId: null,
@@ -196,9 +194,7 @@ export class SerialNumberService {
         data: normalizedCodes.map(
           (serialNumberCode) => ({
             serialNumberCode,
-            serialNumberStatus:
-              data.serialNumberStatus ??
-              'AVAILABLE',
+            serialNumberStatus: data.serialNumberStatus ? data.serialNumberStatus === 'AVAILABLE' : true ? data.serialNumberStatus === 'AVAILABLE' : true,
             equipmentId:
               data.equipmentId,
             shelfId: null,
@@ -246,8 +242,7 @@ export class SerialNumberService {
     if (
       filters.serialNumberStatus
     ) {
-      where.serialNumberStatus =
-        filters.serialNumberStatus;
+      where.serialNumberStatus = filters.serialNumberStatus === 'AVAILABLE';
     }
 
     if (filters.equipmentId) {
@@ -403,8 +398,7 @@ export class SerialNumberService {
         serialNumberId,
       },
       data: {
-        serialNumberStatus:
-          data.serialNumberStatus,
+        serialNumberStatus: data.serialNumberStatus !== undefined ? data.serialNumberStatus : true,
       },
       select: SERIAL_SELECT,
     });
@@ -422,8 +416,7 @@ export class SerialNumberService {
     return this.updateSerialNumber(
       id,
       {
-        serialNumberStatus:
-          data.serialNumberStatus,
+        serialNumberStatus: data.serialNumberStatus ? data.serialNumberStatus === 'AVAILABLE' : true,
       },
     );
   }

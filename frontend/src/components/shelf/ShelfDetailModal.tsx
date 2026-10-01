@@ -83,7 +83,7 @@ export function ShelfDetailModal({ shelf, isOpen, onClose, onRefresh, isLoading 
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <InfoBox label="Quantité actuelle" value={`${shelf.shelfQuantity} u.`} icon={<Hash className="h-3.5 w-3.5" />} />
             <InfoBox label="Stock" value={shelf.stock?.stockName ?? 'Stock'} icon={<Warehouse className="h-3.5 w-3.5" />} />
-            <InfoBox label="Statut stock" value={shelf.stock?.stockStatus?.stockStatusName ?? 'ACTIVE'} icon={<Layers className="h-3.5 w-3.5" />} />
+            <InfoBox label="Statut stock" value={shelf.stock?.status !== false ? 'ACTIVE' : 'INACTIVE'} icon={<Layers className="h-3.5 w-3.5" />} />
           </div>
 
           <section className="overflow-hidden rounded-lg border border-[#3f3a36]">

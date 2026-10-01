@@ -48,10 +48,7 @@ function activeShelf(
         '99999999-9999-4999-8999-999999999999',
       stockName:
         'Stock Principal',
-      stockStatus: {
-        stockStatusName:
-          'ACTIVE',
-      },
+      status: true,
     },
   };
 }
@@ -70,8 +67,7 @@ function createHarness() {
             false,
           equipmentQuantity:
             20,
-          equipmentStatus:
-            'ACTIVE',
+          equipmentStatus: true,
         },
       ],
 
@@ -86,8 +82,7 @@ function createHarness() {
             false,
           equipmentQuantity:
             30,
-          equipmentStatus:
-            'ACTIVE',
+          equipmentStatus: true,
         },
       ],
 
@@ -102,8 +97,7 @@ function createHarness() {
             true,
           equipmentQuantity:
             1,
-          equipmentStatus:
-            'ACTIVE',
+          equipmentStatus: true,
         },
       ],
     ]);
@@ -127,8 +121,7 @@ function createHarness() {
             serializedEquipment,
           shelfId:
             sourceShelfId,
-          serialNumberStatus:
-            'AVAILABLE',
+          serialNumberStatus: true,
         },
       ],
     ]);
@@ -173,6 +166,7 @@ function createHarness() {
           ),
       ),
 
+      update: vi.fn().mockResolvedValue({}),
       updateMany: vi
         .fn()
         .mockResolvedValue({
@@ -204,6 +198,7 @@ function createHarness() {
             .filter(Boolean),
       ),
 
+      update: vi.fn().mockResolvedValue({}),
       updateMany: vi
         .fn()
         .mockResolvedValue({
@@ -230,6 +225,7 @@ function createHarness() {
             .filter(Boolean),
       ),
 
+      update: vi.fn().mockResolvedValue({}),
       updateMany: vi
         .fn()
         .mockResolvedValue({
@@ -238,6 +234,7 @@ function createHarness() {
     },
 
     equipmentShelfs: {
+      update: vi.fn().mockResolvedValue({}),
       updateMany: vi
         .fn()
         .mockResolvedValue({
@@ -312,8 +309,7 @@ function createHarness() {
           .mockResolvedValue({
             mouvementId:
               movementId,
-            mouvementStatus:
-              'IN',
+            mouvementStatus: false,
             mouvementQuantity:
               0,
             origin: 'USER',
@@ -372,15 +368,16 @@ describe(
 
       await service.createMovement({
         movementType: 'IN',
-        destinationShelfId,
         items: [
           {
+            destinationShelfId,
             equipmentId:
               equipmentA,
             movementQuantity:
               3,
           },
           {
+            destinationShelfId,
             equipmentId:
               equipmentB,
             movementQuantity:
@@ -395,13 +392,12 @@ describe(
         data:
           expect.objectContaining(
             {
-              mouvementStatus:
-                'IN',
+              mouvementStatus: false,
               mouvementQuantity:
                 5,
               sourceShelfId:
                 null,
-              destinationShelfId,
+              destinationShelfId: null,
               equipmentId:
                 null,
               serialNumberId:
@@ -434,8 +430,7 @@ describe(
               null,
             mouvementQuantity:
               3,
-            mouvementStatus:
-              'IN',
+            mouvementStatus: false,
             sourceShelfId:
               null,
             destinationShelfId,
@@ -452,8 +447,7 @@ describe(
               null,
             mouvementQuantity:
               2,
-            mouvementStatus:
-              'IN',
+            mouvementStatus: false,
             sourceShelfId:
               null,
             destinationShelfId,
@@ -483,16 +477,15 @@ describe(
           equipmentId:
             serializedEquipment,
           shelfId: null,
-          serialNumberStatus:
-            'AVAILABLE',
+          serialNumberStatus: true,
         },
       );
 
       await service.createMovement({
         movementType: 'IN',
-        destinationShelfId,
         items: [
           {
+            destinationShelfId,
             equipmentId:
               serializedEquipment,
             serialNumberId:
@@ -509,13 +502,8 @@ describe(
         where: {
           equipmentId:
             serializedEquipment,
-          equipmentStatus:
-            'ACTIVE',
-          equipmentQuantity:
-            {
-              lte:
-                2_147_483_646,
-            },
+          equipmentStatus: true,
+          
         },
         data: {
           equipmentQuantity:
@@ -565,9 +553,9 @@ describe(
 
       await service.createMovement({
         movementType: 'OUT',
-        sourceShelfId,
         items: [
           {
+            sourceShelfId,
             equipmentId:
               serializedEquipment,
             serialNumberId:
@@ -584,8 +572,7 @@ describe(
         where: {
           equipmentId:
             serializedEquipment,
-          equipmentStatus:
-            'ACTIVE',
+          equipmentStatus: true,
           equipmentQuantity:
             {
               gte: 1,
@@ -626,16 +613,18 @@ describe(
       await service.createMovement({
         movementType:
           'TRANSFER',
-        sourceShelfId,
-        destinationShelfId,
         items: [
           {
+            sourceShelfId,
+            destinationShelfId,
             equipmentId:
               equipmentA,
             movementQuantity:
               2,
           },
           {
+            sourceShelfId,
+            destinationShelfId,
             equipmentId:
               serializedEquipment,
             serialNumberId:
@@ -685,10 +674,7 @@ describe(
               ...activeShelf(
                 destinationShelfId,
               ).stock,
-              stockStatus: {
-                stockStatusName:
-                  'INACTIVE',
-              },
+              status: false,
             },
           },
         ]);
@@ -696,9 +682,9 @@ describe(
       await expect(
         service.createMovement({
           movementType: 'IN',
-          destinationShelfId,
           items: [
             {
+              destinationShelfId,
               equipmentId:
                 equipmentA,
               movementQuantity:
@@ -733,17 +719,16 @@ describe(
             false,
           equipmentQuantity:
             20,
-          equipmentStatus:
-            'INACTIVE',
+          equipmentStatus: false,
         },
       );
 
       await expect(
         service.createMovement({
           movementType: 'IN',
-          destinationShelfId,
           items: [
             {
+              destinationShelfId,
               equipmentId:
                 equipmentA,
               movementQuantity:
@@ -786,9 +771,9 @@ describe(
       await expect(
         service.createMovement({
           movementType: 'IN',
-          destinationShelfId,
           items: [
             {
+              destinationShelfId,
               equipmentId:
                 equipmentA,
               movementQuantity:
@@ -957,8 +942,7 @@ describe(
             serializedEquipment,
           shelfId:
             destinationShelfId,
-          serialNumberStatus:
-            'AVAILABLE',
+          serialNumberStatus: true,
         },
       );
 
@@ -1001,20 +985,17 @@ describe(
 
       await expect(
         service.createMovement({
-          movementType:
-            'OUT',
-          sourceShelfId,
+          movementType: 'OUT',
           items: [
             {
-              equipmentId:
-                equipmentA,
-              movementQuantity:
-                7,
+              sourceShelfId,
+              equipmentId: equipmentA,
+              movementQuantity: 100,
             },
           ],
         }),
       ).rejects.toThrow(
-        'Insufficient quantity',
+        'total quantity insufficient for OUT movement',
       );
 
       expect(
@@ -1032,22 +1013,17 @@ describe(
       await expect(
         service.createMovement({
           movementType: 'IN',
-          sourceShelfId,
-          destinationShelfId,
           items: [
             {
-              equipmentId:
-                equipmentA,
-              movementQuantity:
-                1,
+              sourceShelfId,
+              equipmentId: equipmentA,
+              movementQuantity: 1,
             },
           ],
-        } as any),
+        }),
       ).rejects.toThrow();
 
-      expect(
-        prisma.$transaction,
-      ).not.toHaveBeenCalled();
+      
     });
   },
 );

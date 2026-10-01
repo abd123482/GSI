@@ -303,7 +303,7 @@ export class MovementService {
             page,
             limit,
             equipmentStatus:
-              'ACTIVE',
+              true,
           },
         );
 
@@ -347,8 +347,8 @@ export class MovementService {
       shelves.push(
         ...result.shelves.filter(
           (shelf) =>
-            shelf.stock?.stockStatus?.stockStatusName === 'ACTIVE' &&
-            shelf.shelfStatus?.shelfStatusName !== 'INACTIVE',
+            shelf.stock?.status !== false &&
+            shelf.status !== false,
         ),
       );
 

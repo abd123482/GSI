@@ -607,12 +607,12 @@ export default function CreateInventoryPage() {
                             </p>
                             <span
                               className={`rounded border px-1.5 py-0.5 text-[8px] font-semibold ${
-                                shelf.shelfStatus?.shelfStatusName === 'ACTIVE'
+                                shelf.status !== false
                                   ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
                                   : 'border-amber-500/20 bg-amber-500/10 text-amber-400'
                               }`}
                             >
-                              {shelf.shelfStatus?.shelfStatusName ?? 'ACTIVE'}
+                              {shelf.status !== false ? 'ACTIVE' : 'INACTIVE'}
                             </span>
                           </div>
 
@@ -622,9 +622,9 @@ export default function CreateInventoryPage() {
                               'Stock'}
                             {' • '}
                             {shelf.stock
-                              ?.stockStatus
-                              ?.stockStatusName ??
-                              'ACTIVE'}
+                              ?.status !== false
+                                ? 'ACTIVE'
+                                : 'INACTIVE'}
                           </p>
                         </div>
 

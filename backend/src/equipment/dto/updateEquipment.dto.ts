@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
-const equipmentStatusSchema =
-  z.enum(['ACTIVE', 'INACTIVE']);
+const equipmentStatusSchema = z.boolean();
 
 export const equipmentConversionSerialSchema =
   z.object({

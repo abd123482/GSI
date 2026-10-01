@@ -1,29 +1,21 @@
 import type { Shelf } from './shelf';
 
-export type StockStatusName = 'ACTIVE' | 'INACTIVE';
-
-export interface StockStatus {
-  stockStatusId: string;
-  stockStatusName: StockStatusName;
-}
-
 export interface Stock {
   stockId: string;
   stockName: string | null;
-  stockStatusId?: string | null;
-  stockStatus?: StockStatus | null;
+  status?: boolean;
   shelves?: Shelf[];
   _count?: { shelves: number };
 }
 
 export interface CreateStockInput {
   stockName: string;
-  stockStatus?: StockStatusName;
+  status?: boolean;
 }
 
 export interface UpdateStockInput {
   stockName?: string;
-  stockStatus?: StockStatusName;
+  status?: boolean;
 }
 
 export interface StockPaginationQuery {
@@ -33,7 +25,7 @@ export interface StockPaginationQuery {
 
 export interface SearchStockQuery {
   stockName?: string;
-  stockStatus?: StockStatusName;
+  status?: boolean;
 }
 
 export interface PaginatedStocksResponse {

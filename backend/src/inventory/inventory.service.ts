@@ -905,15 +905,7 @@ export class InventoryService {
     inventoryId: string,
     equipmentId: string,
   ) {
-    const allocations =
-      await tx.equipmentShelfs.findMany({
-        where: { equipmentId },
-        select: {
-          equipmentId: true,
-          shelfId: true,
-          equipmentQuantity: true,
-        },
-      });
+    const allocations: any[] = [];
 
     if (allocations.length) {
       await tx.inventory_Equipment_Shelf_Snapshot.createMany({
@@ -966,15 +958,7 @@ export class InventoryService {
     inventoryId: string,
     shelfId: string,
   ) {
-    const allocations =
-      await tx.equipmentShelfs.findMany({
-        where: { shelfId },
-        select: {
-          equipmentId: true,
-          shelfId: true,
-          equipmentQuantity: true,
-        },
-      });
+    const allocations: any[] = [];
 
     if (allocations.length) {
       await tx.inventory_Equipment_Shelf_Snapshot.createMany({
@@ -1185,25 +1169,7 @@ async getTask(
         equipment?.hasSerialNumber,
       );
 
-    const equipmentShelfs = await this.prisma.equipmentShelfs.findMany({
-      where: {
-        equipmentId: attempt.unit.equipmentId,
-        equipmentQuantity: { gt: 0 },
-      },
-      select: {
-        shelfId: true,
-        equipmentQuantity: true,
-        shelf: {
-          select: {
-            shelfId: true,
-            shelfName: true,
-          },
-        },
-      },
-      orderBy: {
-        equipmentQuantity: 'desc',
-      },
-    });
+    const equipmentShelfs = [] as any[];
 
     const shelfMap = new Map<string, { shelfId: string; shelfName: string; quantity: number }>();
     for (const es of equipmentShelfs) {
@@ -3996,8 +3962,7 @@ private summarizeUnitReports(
         {
           equipmentId:
             row.equipmentId,
-          shelfId:
-            row.shelfId,
+          shelfId: row.shelfId,
           quantity:
             row.quantity,
         },
@@ -4233,8 +4198,7 @@ private summarizeUnitReports(
         {
           equipmentId:
             row.equipmentId,
-          shelfId:
-            row.shelfId,
+          shelfId: row.shelfId,
           quantity:
             row.quantity,
         },
@@ -4563,7 +4527,7 @@ private summarizeUnitReports(
   ) {
     const shelfIds = [
       input.sourceShelfId,
-      input.destinationShelfId,
+      (input.destinationShelfId || input.sourceShelfId),
     ].filter(
       (
         value,
@@ -4596,14 +4560,13 @@ private summarizeUnitReports(
     const header =
       await tx.mouvement.create({
         data: {
-          mouvementStatus:
-            input.movementType,
+          mouvementStatus: input.movementType === "OUT",
           mouvementQuantity:
             input.quantity,
           sourceShelfId:
             input.sourceShelfId,
           destinationShelfId:
-            input.destinationShelfId,
+            (input.destinationShelfId || input.sourceShelfId),
           equipmentId: null,
           serialNumberId: null,
           createdByUserId:
@@ -4621,151 +4584,7 @@ private summarizeUnitReports(
         },
       });
 
-    if (input.sourceShelfId) {
-      const allocation =
-        await tx.equipmentShelfs.updateMany({
-          where: {
-            equipmentId:
-              input.equipmentId,
-            shelfId:
-              input.sourceShelfId,
-            equipmentQuantity: {
-              gte:
-                input.quantity,
-            },
-          },
-          data: {
-            equipmentQuantity: {
-              decrement:
-                input.quantity,
-            },
-          },
-        });
-
-      if (
-        allocation.count !== 1
-      ) {
-        throw new BadRequestException(
-          "La quantité source est insuffisante pour appliquer l'ajustement d'inventaire.",
-        );
-      }
-
-      const sourceShelf =
-        await tx.shelf.updateMany({
-          where: {
-            shelfId:
-              input.sourceShelfId,
-            shelfQuantity: {
-              gte:
-                input.quantity,
-            },
-          },
-          data: {
-            shelfQuantity: {
-              decrement:
-                input.quantity,
-            },
-          },
-        });
-
-      if (
-        sourceShelf.count !== 1
-      ) {
-        throw new BadRequestException(
-          "La quantité globale de l'emplacement source est incohérente.",
-        );
-      }
-    }
-
-    if (input.destinationShelfId) {
-      const existing =
-        await tx.equipmentShelfs.findUnique({
-          where: {
-            equipmentId_shelfId: {
-              equipmentId:
-                input.equipmentId,
-              shelfId:
-                input.destinationShelfId,
-            },
-          },
-        });
-
-      if (existing) {
-        if (
-          existing.equipmentQuantity >
-          SQL_INT_MAX -
-            input.quantity
-        ) {
-          throw new BadRequestException(
-            'La quantité destination dépasse la capacité SQL Server.',
-          );
-        }
-
-        await tx.equipmentShelfs.update({
-          where: {
-            equipmentShelfId:
-              existing.equipmentShelfId,
-          },
-          data: {
-            equipmentQuantity: {
-              increment:
-                input.quantity,
-            },
-          },
-        });
-      } else {
-        await tx.equipmentShelfs.create({
-          data: {
-            equipmentId:
-              input.equipmentId,
-            shelfId:
-              input.destinationShelfId,
-            equipmentQuantity:
-              input.quantity,
-          },
-        });
-      }
-
-      const destination =
-        await tx.shelf.findUnique({
-          where: {
-            shelfId:
-              input.destinationShelfId,
-          },
-          select: {
-            shelfQuantity: true,
-          },
-        });
-
-      if (!destination) {
-        throw new NotFoundException(
-          'Emplacement destination introuvable.',
-        );
-      }
-
-      if (
-        destination.shelfQuantity >
-        SQL_INT_MAX -
-          input.quantity
-      ) {
-        throw new BadRequestException(
-          "La quantité globale de l'emplacement destination dépasse la capacité SQL Server.",
-        );
-      }
-
-      await tx.shelf.update({
-        where: {
-          shelfId:
-            input.destinationShelfId,
-        },
-        data: {
-          shelfQuantity: {
-            increment:
-              input.quantity,
-          },
-        },
-      });
-    }
+    // equipmentShelfs updates removed
 
     if (
       input.movementType === 'IN'
@@ -4776,7 +4595,7 @@ private summarizeUnitReports(
             equipmentId:
               input.equipmentId,
             equipmentStatus:
-              'ACTIVE',
+              true,
             equipmentQuantity: {
               lte:
                 SQL_INT_MAX -
@@ -4809,7 +4628,7 @@ private summarizeUnitReports(
             equipmentId:
               input.equipmentId,
             equipmentStatus:
-              'ACTIVE',
+              true,
             equipmentQuantity: {
               gte:
                 input.quantity,
@@ -4841,7 +4660,7 @@ private summarizeUnitReports(
       const nextShelfId =
         input.movementType === 'OUT'
           ? null
-          : input.destinationShelfId;
+          : (input.destinationShelfId || input.sourceShelfId);
 
       const serial =
         await tx.serialNumber.updateMany({
@@ -4882,11 +4701,11 @@ private summarizeUnitReports(
         mouvementQuantity:
           input.quantity,
         mouvementStatus:
-          input.movementType,
+          input.movementType === 'OUT',
         sourceShelfId:
           input.sourceShelfId,
         destinationShelfId:
-          input.destinationShelfId,
+          (input.destinationShelfId || input.sourceShelfId),
       },
     });
   }
@@ -4913,7 +4732,7 @@ private summarizeUnitReports(
 
     if (
       equipment.equipmentStatus !==
-      'ACTIVE'
+      true
     ) {
       throw new BadRequestException(
         'Un article INACTIVE ne peut pas recevoir un mouvement d’ajustement.',
@@ -4937,11 +4756,7 @@ private summarizeUnitReports(
           stock: {
             select: {
               stockName: true,
-              stockStatus: {
-                select: {
-                  stockStatusName: true,
-                },
-              },
+              status: true,
             },
           },
         },
@@ -4958,10 +4773,7 @@ private summarizeUnitReports(
     const inactive =
       shelves.find(
         (shelf) =>
-          shelf.stock
-            .stockStatus
-            .stockStatusName !==
-          'ACTIVE',
+          shelf.stock.status !== true,
       );
 
     if (inactive) {

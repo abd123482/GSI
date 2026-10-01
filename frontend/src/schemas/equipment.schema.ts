@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const equipmentStatusSchema =
-  z.enum(['ACTIVE', 'INACTIVE']);
+  z.boolean();
 
 const serialCodeSchema = z
   .string()

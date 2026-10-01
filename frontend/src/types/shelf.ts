@@ -5,28 +5,24 @@ export interface Shelf {
   shelfName: string | null;
   shelfQuantity: number;
   stockId: string;
-  shelfStatus?: {
-    shelfStatusName: 'ACTIVE' | 'INACTIVE';
-  } | null;
+  status?: boolean;
   stock?: {
     stockId: string;
     stockName: string | null;
-    stockStatus?: {
-      stockStatusName: 'ACTIVE' | 'INACTIVE';
-    } | null;
+    status?: boolean;
   } | null;
 }
 
 export interface CreateShelfInput {
   shelfName: string;
   stockId: string;
-  shelfStatus?: 'ACTIVE' | 'INACTIVE';
+  status?: boolean;
 }
 
 export interface UpdateShelfInput {
   shelfName?: string;
   stockId?: string;
-  shelfStatus?: 'ACTIVE' | 'INACTIVE';
+  status?: boolean;
 }
 
 export interface ShelfPaginationQuery {

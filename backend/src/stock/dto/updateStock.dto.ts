@@ -8,8 +8,7 @@ export const updateStockSchema = z.object({
     .max(50, 'Stock name must not exceed 50 characters')
     .optional(),
 
-  stockStatus: z
-    .enum(['ACTIVE', 'INACTIVE'])
+  stockStatus: z.boolean()
     .optional(),
 });
 

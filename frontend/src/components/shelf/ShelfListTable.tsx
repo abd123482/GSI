@@ -94,8 +94,8 @@ export function ShelfListTable({
             className="h-9 rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs text-[#f7f5f0]"
           >
             <option value="ALL">Tous les statuts</option>
-            <option value="ACTIVE">Actif</option>
-            <option value="INACTIVE">Inactif</option>
+            <option value="true">Actif</option>
+            <option value="false">Inactif</option>
           </select>
 
           <select
@@ -148,7 +148,7 @@ export function ShelfListTable({
                 {shelves.map((shelf, index) => {
                   const globalIndex = (currentPage - 1) * limit + index + 1;
                   const stockName = shelf.stock?.stockName ?? 'Stock inconnu';
-                  const shelfStatus = shelf.shelfStatus?.shelfStatusName ?? 'ACTIVE';
+                  const shelfStatus = shelf.status !== false ? 'ACTIVE' : 'INACTIVE';
 
                   return (
                     <tr key={shelf.shelfId} className="group transition hover:bg-[#332e29]">

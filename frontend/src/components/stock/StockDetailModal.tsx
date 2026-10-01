@@ -31,7 +31,7 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
   });
 
   if (!isOpen || !stockId) return null;
-  const status = stock?.stockStatus?.stockStatusName ?? 'ACTIVE';
+  const status = stock?.status ?? true ? 'ACTIVE' : 'INACTIVE';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">

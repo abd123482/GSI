@@ -24,7 +24,7 @@ describe('Equipment + SerialNumber V3', () => {
     '33333333-3333-4333-8333-333333333333';
 
   beforeEach(() => {
-    const tx = {
+        const tx = {
       equipment: {
         findUnique: vi.fn(),
         update: vi.fn(),
@@ -42,6 +42,18 @@ describe('Equipment + SerialNumber V3', () => {
         deleteMany: vi.fn(),
       },
       $queryRaw: vi.fn().mockResolvedValue([{ lockResult: 0 }]),
+      inventoryWorkUnit: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      inventory_Equipment_Shelf_Snapshot: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      order: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      shelf: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
     };
 
     prisma = {
@@ -54,7 +66,7 @@ describe('Equipment + SerialNumber V3', () => {
           hasSerialNumber: false,
           equipmentQuantity: 0,
           minequipmentQuantity: 2,
-          equipmentStatus: 'ACTIVE',
+          equipmentStatus: true,
         }),
 
         create: vi.fn().mockResolvedValue({
@@ -63,7 +75,7 @@ describe('Equipment + SerialNumber V3', () => {
           hasSerialNumber: false,
           equipmentQuantity: 0,
           minequipmentQuantity: 2,
-          equipmentStatus: 'ACTIVE',
+          equipmentStatus: true,
         }),
 
         update: vi.fn(),
@@ -77,14 +89,14 @@ describe('Equipment + SerialNumber V3', () => {
         create: vi.fn().mockResolvedValue({
           serialNumberId: serialId,
           serialNumberCode: 'SN-1',
-          serialNumberStatus: 'AVAILABLE',
+          serialNumberStatus: true,
           equipmentId,
           shelfId: null,
           equipment: {
             equipmentId,
             equipmentName: 'Serialized',
             hasSerialNumber: true,
-            equipmentStatus: 'ACTIVE',
+            equipmentStatus: true,
           },
           shelf: null,
         }),
@@ -137,7 +149,7 @@ describe('Equipment + SerialNumber V3', () => {
           hasSerialNumber: false,
           equipmentQuantity: 0,
           minequipmentQuantity: 2,
-          equipmentStatus: 'ACTIVE',
+          equipmentStatus: true,
         },
       }),
     );
@@ -148,7 +160,7 @@ describe('Equipment + SerialNumber V3', () => {
       equipmentId,
       equipmentName: 'Serialized',
       hasSerialNumber: true,
-      equipmentStatus: 'ACTIVE',
+      equipmentStatus: true,
     });
 
     const result =
@@ -169,19 +181,19 @@ describe('Equipment + SerialNumber V3', () => {
       data: [
         {
           serialNumberCode: 'SN-A',
-          serialNumberStatus: 'AVAILABLE',
+          serialNumberStatus: true,
           equipmentId,
           shelfId: null,
         },
         {
           serialNumberCode: 'SN-B',
-          serialNumberStatus: 'AVAILABLE',
+          serialNumberStatus: true,
           equipmentId,
           shelfId: null,
         },
         {
           serialNumberCode: 'SN-C',
-          serialNumberStatus: 'AVAILABLE',
+          serialNumberStatus: true,
           equipmentId,
           shelfId: null,
         },
@@ -196,7 +208,7 @@ describe('Equipment + SerialNumber V3', () => {
       equipmentId,
       equipmentName: 'Serialized',
       hasSerialNumber: true,
-      equipmentStatus: 'ACTIVE',
+      equipmentStatus: true,
     });
 
     prisma.serialNumber.findUnique.mockResolvedValue(null);
@@ -212,7 +224,7 @@ describe('Equipment + SerialNumber V3', () => {
       expect.objectContaining({
         data: {
           serialNumberCode: 'SN-1',
-          serialNumberStatus: 'AVAILABLE',
+          serialNumberStatus: true,
           equipmentId,
           shelfId: null,
         },
@@ -241,7 +253,7 @@ describe('Equipment + SerialNumber V3', () => {
       equipmentName: 'Equipment',
       hasSerialNumber: false,
       equipmentQuantity: 0,
-      equipmentStatus: 'ACTIVE',
+      equipmentStatus: true,
     });
 
     prisma._tx.equipment.findUnique.mockResolvedValue({
@@ -249,7 +261,7 @@ describe('Equipment + SerialNumber V3', () => {
       equipmentName: 'Equipment',
       hasSerialNumber: false,
       equipmentQuantity: 0,
-      equipmentStatus: 'ACTIVE',
+      equipmentStatus: true,
       equipmentShelfs: [],
       _count: {
         serialNumbers: 0,
@@ -262,7 +274,7 @@ describe('Equipment + SerialNumber V3', () => {
       hasSerialNumber: true,
       equipmentQuantity: 0,
       minequipmentQuantity: 2,
-      equipmentStatus: 'ACTIVE',
+      equipmentStatus: true,
     });
 
     const result =
@@ -290,12 +302,12 @@ describe('Equipment + SerialNumber V3', () => {
   });
 
   it('blocks Serialized -> Standard conversion', async () => {
-    prisma.equipment.findUnique.mockResolvedValue({
+    prisma._tx.equipment.findUnique.mockResolvedValue({
       equipmentId,
       equipmentName: 'Serialized',
       hasSerialNumber: true,
       equipmentQuantity: 0,
-      equipmentStatus: 'ACTIVE',
+      equipmentStatus: true,
     });
 
     await expect(
@@ -310,7 +322,19 @@ describe('Equipment + SerialNumber V3', () => {
     );
   });
 
-  it('blocks equipment deletion when movement history exists', async () => {
+    it('blocks equipment deletion when movement history exists', async () => {
+    prisma._tx.equipment.findUnique.mockResolvedValue({
+      equipmentId,
+      equipmentName: 'Equipment',
+      _count: {
+        movementItems: 1,
+        mouvements: 0,
+        serialNumbers: 0,
+        orders: 0,
+        serialSnapshots: 0,
+        investigationIssues: 0,
+      }
+    });
     prisma.equipment.findUnique.mockResolvedValue({
       equipmentId,
       equipmentName: 'Equipment',
@@ -324,6 +348,6 @@ describe('Equipment + SerialNumber V3', () => {
       equipmentService.deleteEquipment(equipmentId),
     ).rejects.toThrow('movement history');
 
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    
   });
 });

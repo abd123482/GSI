@@ -20,12 +20,12 @@ import {
 import { StockService } from '@/services/stock.service';
 import { useApi } from '@/hooks/use-api';
 import { usePermissions } from '@/hooks/use-permissions';
-import type { Stock, StockStatusName } from '@/types/stock';
+import type { Stock } from '@/types/stock';
 import { CreateStockModal } from '@/components/stock/CreateStockModal';
 import { StockDetailModal } from '@/components/stock/StockDetailModal';
 import { UpdateStockModal } from '@/components/stock/UpdateStockModal';
 
-type StatusFilter = 'ALL' | StockStatusName;
+type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 
 export default function StocksPage() {
   const { isSignedIn, isLoaded } = useAuth();
@@ -47,7 +47,7 @@ export default function StocksPage() {
           api,
           {
             stockName: searchTerm.trim() || undefined,
-            stockStatus: statusFilter === 'ALL' ? undefined : statusFilter,
+            status: statusFilter === 'ALL' ? undefined : statusFilter === 'ACTIVE',
           },
           { page: currentPage, limit },
         );
@@ -123,7 +123,7 @@ export default function StocksPage() {
                 ) : stocks.length === 0 ? (
                   <tr><td colSpan={4} className="px-4 py-14 text-center text-[#aea69c]">Aucun stock disponible.</td></tr>
                 ) : stocks.map((stock) => {
-                  const status = stock.stockStatus?.stockStatusName ?? 'ACTIVE';
+                  const status = stock.status ?? true ? 'ACTIVE' : 'INACTIVE';
                   const shelves = stock._count?.shelves ?? stock.shelves?.length ?? 0;
                   return (
                     <tr key={stock.stockId} className="hover:bg-[#2f2a26]">

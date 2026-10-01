@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const stockStatusSchema = z.enum(['ACTIVE', 'INACTIVE']);
+export const stockStatusSchema = z.boolean();
 
 export const createStockSchema = z.object({
   stockName: z

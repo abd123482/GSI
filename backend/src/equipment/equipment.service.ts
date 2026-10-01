@@ -1,1063 +1,452 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
-
-import type { Prisma } from '../generated/prisma/client.js';
+import { ZodError } from 'zod';
+import { setTimeout as delay } from 'node:timers/promises';
+import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-
 import {
-  type CreateEquipmentDTO,
-  createEquipmentSchema,
-  type UpdateEquipmentDTO,
-  updateEquipmentSchema,
-  type SearchEquipmentDTO,
-  searchEquipmentSchema,
-  type PaginationDTO,
-  paginationSchema,
+  type CreateEquipmentDTO, createEquipmentSchema,
+  type UpdateEquipmentDTO, updateEquipmentSchema,
+  type SearchEquipmentDTO, searchEquipmentSchema,
+  type PaginationDTO, paginationSchema,
 } from './dto/index.js';
 
-const EQUIPMENT_LIST_SELECT = {
+import { equipmentUuidSchema } from './dto/equipment-validation.js';
+import {
+  buildEquipmentBalancesQuery, buildShelfMatchesCte,
+  safeDatabaseInteger, summarizeEquipmentStock, type ShelfBalanceRow,
+} from './equipment-stock.js';
+
+const EQUIPMENT_SELECT = {
   equipmentId: true,
   equipmentName: true,
   hasSerialNumber: true,
   equipmentQuantity: true,
   minequipmentQuantity: true,
   equipmentStatus: true,
-
-  equipmentShelfs: {
-    where: {
-      equipmentQuantity: {
-        gt: 0,
-      },
-    },
-    select: {
-      equipmentShelfId: true,
-      equipmentId: true,
-      shelfId: true,
-      equipmentQuantity: true,
-      shelf: {
-        select: {
-          shelfId: true,
-          shelfName: true,
-          stockId: true,
-        },
-      },
-    },
-    orderBy: {
-      equipmentQuantity:
-        'desc' as const,
-    },
-  },
-
-  _count: {
-    select: {
-      serialNumbers: true,
-      equipmentShelfs: true,
-    },
-  },
 } satisfies Prisma.EquipmentSelect;
+
+const EQUIPMENT_LIST_SELECT = {
+  ...EQUIPMENT_SELECT,
+  _count: { select: { serialNumbers: true } },
+} satisfies Prisma.EquipmentSelect;
+
+type EquipmentWithCount = Prisma.EquipmentGetPayload<{
+  select: typeof EQUIPMENT_LIST_SELECT;
+}>;
+type EquipmentUpdate = ReturnType<typeof updateEquipmentSchema.parse>;
+const SERIAL_BATCH_SIZE = 200;
+const NON_LOCKING_INVENTORY_STATUSES = ['DRAFT', 'FINALIZED', 'CANCELLED'];
+const EQUIPMENT_ORDER = [
+  { equipmentName: 'asc' }, { equipmentId: 'asc' },
+] satisfies Prisma.EquipmentOrderByWithRelationInput[];
 
 @Injectable()
 export class EquipmentService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) { }
 
-  private async assertEquipmentNameAvailable(
-    equipmentName: string,
-    excludeEquipmentId?: string,
-  ): Promise<void> {
-    const existing =
-      await this.prisma.equipment.findFirst({
-        where: {
-          equipmentName,
-          ...(excludeEquipmentId
-            ? {
-                equipmentId: {
-                  not:
-                    excludeEquipmentId,
-                },
-              }
-            : {}),
+  async createEquipment(dto: CreateEquipmentDTO) {
+    return this.operation(async () => {
+      const data = createEquipmentSchema.parse(dto);
+      await this.assertEquipmentNameAvailable(this.prisma, data.equipmentName);
+      return this.prisma.equipment.create({
+        data: {
+          equipmentName: data.equipmentName,
+          hasSerialNumber: data.hasSerialNumber,
+          equipmentQuantity: 0,
+          minequipmentQuantity: data.minEquipmentQuantity,
+          equipmentStatus: data.equipmentStatus,
         },
-        select: {
-          equipmentId: true,
-        },
+        select: EQUIPMENT_SELECT,
       });
-
-    if (existing) {
-      throw new BadRequestException(
-        `Equipment '${equipmentName}' already exists`,
-      );
-    }
-  }
-
-  async createEquipment(
-    dto: CreateEquipmentDTO,
-  ) {
-    const data =
-      createEquipmentSchema.parse(dto);
-
-    await this.assertEquipmentNameAvailable(
-      data.equipmentName,
-    );
-
-    return this.prisma.equipment.create({
-      data: {
-        equipmentName:
-          data.equipmentName,
-        hasSerialNumber:
-          data.hasSerialNumber,
-        equipmentQuantity: 0,
-        minequipmentQuantity:
-          data.minEquipmentQuantity ??
-          0,
-        equipmentStatus:
-          data.equipmentStatus ??
-          'ACTIVE',
-      },
-      select: {
-        equipmentId: true,
-        equipmentName: true,
-        hasSerialNumber: true,
-        equipmentQuantity: true,
-        minequipmentQuantity: true,
-        equipmentStatus: true,
-      },
     });
   }
 
-  async getAllEquipments(
-    query: PaginationDTO,
-  ) {
-    const {
-      page,
-      limit,
-    } = paginationSchema.parse(
-      query ?? {},
-    );
-
-    const skip =
-      (page - 1) * limit;
-
-    const [
-      equipments,
-      totalEquipments,
-    ] = await Promise.all([
-      this.prisma.equipment.findMany({
-        skip,
-        take: limit,
-        select:
-          EQUIPMENT_LIST_SELECT,
-        orderBy: [
-          {
-            equipmentName: 'asc',
-          },
-          {
-            equipmentId: 'asc',
-          },
-        ],
-      }),
-
-      this.prisma.equipment.count(),
-    ]);
-
-    return {
-      equipments,
-      totalEquipments,
-      totalPages:
-        Math.ceil(
-          totalEquipments / limit,
-        ) || 1,
-      currentPage: page,
-      limit,
-    };
+  async getAllEquipments(query?: PaginationDTO) {
+    return this.operation(async () => this.listEquipments({}, paginationSchema.parse(query ?? {})));
   }
 
-  async searchEquipments(
-    query: SearchEquipmentDTO,
-    pagination: PaginationDTO,
-  ) {
-    const filters =
-      searchEquipmentSchema.parse(
-        query ?? {},
-      );
-
-    const {
-      page,
-      limit,
-    } = paginationSchema.parse(
-      pagination ?? {},
-    );
-
-    const skip =
-      (page - 1) * limit;
-
-    const where:
-      Prisma.EquipmentWhereInput = {};
-
-    if (filters.equipmentName) {
-      where.equipmentName = {
-        contains:
-          filters.equipmentName,
-      };
-    }
-
-    if (
-      filters.hasSerialNumber !==
-      undefined
-    ) {
-      where.hasSerialNumber =
-        filters.hasSerialNumber;
-    }
-
-    if (filters.equipmentStatus) {
-      where.equipmentStatus =
-        filters.equipmentStatus;
-    }
-
-    if (
-      filters.equipmentQuantity !==
-      undefined
-    ) {
-      where.equipmentQuantity =
-        filters.equipmentQuantity;
-    }
-
-    if (
-      filters.minEquipmentQuantity !==
-      undefined
-    ) {
-      where.minequipmentQuantity =
-        filters.minEquipmentQuantity;
-    }
-
-    if (
-      filters.shelfId ||
-      filters.equipmentShelfId
-    ) {
-      where.equipmentShelfs = {
-        some: {
-          ...(filters.shelfId
-            ? {
-                shelfId:
-                  filters.shelfId,
-              }
-            : {}),
-
-          ...(filters.equipmentShelfId
-            ? {
-                equipmentShelfId:
-                  filters.equipmentShelfId,
-              }
-            : {}),
-        },
-      };
-    }
-
-    const [
-      equipments,
-      totalEquipments,
-    ] = await Promise.all([
-      this.prisma.equipment.findMany({
-        where,
-        skip,
-        take: limit,
-        select:
-          EQUIPMENT_LIST_SELECT,
-        orderBy: [
-          {
-            equipmentName: 'asc',
-          },
-          {
-            equipmentId: 'asc',
-          },
-        ],
-      }),
-
-      this.prisma.equipment.count({
-        where,
-      }),
-    ]);
-
-    return {
-      equipments,
-      totalEquipments,
-      totalPages:
-        Math.ceil(
-          totalEquipments / limit,
-        ) || 1,
-      currentPage: page,
-      limit,
-    };
+  async searchEquipments(query: SearchEquipmentDTO = {}, pagination?: PaginationDTO) {
+    return this.operation(async () => {
+      const filters = searchEquipmentSchema.parse(query ?? {});
+      // The controller passes the query twice; direct callers may pass it once.
+      const page = paginationSchema.parse(pagination ?? query ?? {});
+      return this.listEquipments(filters, page);
+    });
   }
 
-  async getEquipmentById(
-    id: string,
-  ) {
-    const equipmentId =
-      id?.trim();
-
-    if (!equipmentId) {
-      throw new BadRequestException(
-        'Equipment ID is required',
-      );
-    }
-
-    const equipment =
-      await this.prisma.equipment.findUnique({
-        where: {
-          equipmentId,
-        },
-        select:
-          EQUIPMENT_LIST_SELECT,
+  async getEquipmentById(id: string) {
+    return this.operation(async () => {
+      const equipmentId = this.parseEquipmentId(id);
+      return this.transaction(async (tx) => {
+        const equipment = await this.getEquipmentOrThrow(tx, equipmentId);
+        const rows = await this.loadBalances(tx, [equipmentId]);
+        return this.mapEquipment(equipment, rows);
       });
+    });
+  }
 
-    if (!equipment) {
-      throw new NotFoundException(
-        `Equipment with ID '${equipmentId}' not found`,
-      );
-    }
+  async getEquipmentShelves(id: string) {
+    // Exactly the same calculation and consistency diagnostics as list/detail.
+    return this.getEquipmentById(id);
+  }
 
+  async updateEquipment(id: string, dto: UpdateEquipmentDTO) {
+    return this.operation(async () => {
+      const equipmentId = this.parseEquipmentId(id);
+      const data = updateEquipmentSchema.parse(dto);
+      return this.transaction(async (tx) => {
+        // Same namespace and deterministic lock order as the movement service.
+        // Locks MUST precede the reads used to make mutation decisions.
+        await this.acquireLocks(tx, [
+          `SOMIPHARM:EQUIPMENT:${equipmentId}`,
+          ...(data.conversionSerials ?? []).map((item) => `SOMIPHARM:SHELF:${item.shelfId}`),
+        ]);
+        const current = await this.getEquipmentOrThrow(tx, equipmentId);
+        if (current.hasSerialNumber && data.hasSerialNumber === false) {
+          throw new BadRequestException('Serialized equipment cannot be converted back to standard equipment');
+        }
+        const converting = !current.hasSerialNumber && data.hasSerialNumber === true;
+        if (!converting && data.conversionSerials !== undefined) {
+          throw new BadRequestException('conversionSerials are only valid during Standard -> Serialized conversion');
+        }
+        if (data.equipmentName !== undefined && data.equipmentName !== current.equipmentName) {
+          await this.assertEquipmentNameAvailable(tx, data.equipmentName, equipmentId);
+        }
+        if (converting) return this.convertStandardToSerialized(tx, current, data);
+        return tx.equipment.update({
+          where: { equipmentId }, data: this.metadataUpdate(data), select: EQUIPMENT_SELECT,
+        });
+      });
+    });
+  }
+
+  async deleteEquipment(id: string) {
+    return this.operation(async () => {
+      const equipmentId = this.parseEquipmentId(id);
+      return this.transaction(async (tx) => {
+        await this.acquireLocks(tx, [`SOMIPHARM:EQUIPMENT:${equipmentId}`]);
+        const equipment = await tx.equipment.findUnique({
+          where: { equipmentId },
+          select: {
+            ...EQUIPMENT_SELECT,
+            _count: {
+              select: {
+                movementItems: true, mouvements: true, serialNumbers: true,
+                orders: true, serialSnapshots: true, investigationIssues: true,
+              }
+            },
+          },
+        });
+        if (!equipment) throw new NotFoundException(`Equipment with ID '${equipmentId}' not found`);
+        if (equipment._count.movementItems || equipment._count.mouvements) {
+          throw new ConflictException('This equipment has movement history and cannot be physically deleted; mark it INACTIVE instead');
+        }
+        if (equipment.equipmentQuantity !== 0) {
+          throw new ConflictException('Equipment with non-zero stock cannot be physically deleted');
+        }
+        if (equipment._count.serialNumbers) {
+          throw new ConflictException('Equipment has serial identities (including inactive ones); mark it INACTIVE instead');
+        }
+        if (equipment._count.orders || equipment._count.serialSnapshots || equipment._count.investigationIssues) {
+          throw new ConflictException('Equipment is referenced by inventory records and cannot be physically deleted');
+        }
+        // These schema fields are logical references, not Equipment relations.
+        // Do not rely solely on FK errors or remove historical child records.
+        const workUnit = await tx.inventoryWorkUnit.findFirst({
+          where: { equipmentId }, select: { unitId: true },
+        });
+        const snapshot = await tx.inventory_Equipment_Shelf_Snapshot.findFirst({
+          where: { equipmentId }, select: { snapshotId: true },
+        });
+        const observation = await tx.order.findFirst({
+          where: { observedEquipmentId: equipmentId }, select: { orderId: true },
+        });
+        // Scope IDs live in JSON text, so normalize casing even under a
+        // case-sensitive SQL Server collation. A text match fails conservatively.
+        const scopes = await tx.$queryRaw<Array<{ inventoryId: string }>>`
+          SELECT TOP (1) [inventoryId] FROM [dbo].[Inventory]
+          WHERE CHARINDEX(${equipmentId}, LOWER([equipmentScopeIds])) > 0
+        `;
+        if (workUnit || snapshot || observation || scopes.length > 0) {
+          throw new ConflictException('Equipment is referenced by inventory history or scope and cannot be physically deleted');
+        }
+        return tx.equipment.delete({ where: { equipmentId }, select: EQUIPMENT_SELECT });
+      });
+    });
+  }
+
+  async getSerialNumbersByEquipmentId(id: string, pagination?: PaginationDTO) {
+    return this.operation(async () => {
+      const equipmentId = this.parseEquipmentId(id);
+      const { page, limit } = paginationSchema.parse(pagination ?? {});
+      return this.transaction(async (tx) => {
+        const equipment = await this.getEquipmentOrThrow(tx, equipmentId);
+        if (!equipment.hasSerialNumber && equipment._count.serialNumbers > 0) {
+          throw new ConflictException('Standard equipment unexpectedly has serial identities; reconcile the data first');
+        }
+        const totalSerialNumbers = equipment._count.serialNumbers;
+        const serialNumbers = !equipment.hasSerialNumber ? [] : await tx.serialNumber.findMany({
+          where: { equipmentId }, skip: (page - 1) * limit, take: limit,
+          select: {
+            serialNumberId: true, serialNumberCode: true, serialNumberStatus: true,
+            equipmentId: true, shelfId: true,
+            shelf: { select: { shelfId: true, shelfName: true, stockId: true } },
+          },
+          orderBy: [{ serialNumberCode: 'asc' }, { serialNumberId: 'asc' }],
+        });
+        return {
+          serialNumbers, totalSerialNumbers,
+          totalPages: Math.max(1, Math.ceil(totalSerialNumbers / limit)), currentPage: page, limit
+        };
+      });
+    });
+  }
+
+  private async listEquipments(
+    filters: SearchEquipmentDTO,
+    { page, limit }: ReturnType<typeof paginationSchema.parse>,
+  ) {
+    return this.transaction(async (tx) => {
+      const skip = (page - 1) * limit;
+      const shelfId = filters.shelfId ?? filters.equipmentShelfId;
+      let equipments: EquipmentWithCount[];
+      let totalEquipments: number;
+      if (shelfId) {
+        const cte = buildShelfMatchesCte(shelfId, filters);
+        const countRows = await tx.$queryRaw<Array<{ total: bigint | number }>>(
+          Prisma.sql`${cte} SELECT COUNT_BIG(*) AS total FROM Matches`,
+        );
+        totalEquipments = safeDatabaseInteger(countRows[0]?.total ?? 0, 'Equipment count');
+        const ids = await tx.$queryRaw<Array<{ equipmentId: string }>>(
+          Prisma.sql`${cte} SELECT [equipmentId] FROM Matches
+            ORDER BY [equipmentName] ASC, [equipmentId] ASC
+            OFFSET ${skip} ROWS FETCH NEXT ${limit} ROWS ONLY`,
+        );
+        equipments = ids.length === 0 ? [] : await tx.equipment.findMany({
+          where: { equipmentId: { in: ids.map((row) => row.equipmentId) } },
+          select: EQUIPMENT_LIST_SELECT, orderBy: EQUIPMENT_ORDER,
+        });
+      } else {
+        const where: Prisma.EquipmentWhereInput = {};
+        if (filters.equipmentName) where.equipmentName = { contains: filters.equipmentName };
+        if (filters.hasSerialNumber !== undefined) where.hasSerialNumber = filters.hasSerialNumber;
+        if (filters.equipmentStatus !== undefined) where.equipmentStatus = filters.equipmentStatus;
+        if (filters.equipmentQuantity !== undefined) where.equipmentQuantity = filters.equipmentQuantity;
+        if (filters.minEquipmentQuantity !== undefined) where.minequipmentQuantity = filters.minEquipmentQuantity;
+        totalEquipments = await tx.equipment.count({ where });
+        equipments = await tx.equipment.findMany({
+          where, skip, take: limit, select: EQUIPMENT_LIST_SELECT, orderBy: EQUIPMENT_ORDER,
+        });
+      }
+      const balances = await this.loadBalances(tx, equipments.map((item) => item.equipmentId));
+      return {
+        equipments: equipments.map((item) => this.mapEquipment(item, balances)),
+        totalEquipments, totalPages: Math.max(1, Math.ceil(totalEquipments / limit)),
+        currentPage: page, limit,
+      };
+    });
+  }
+
+  private mapEquipment(equipment: EquipmentWithCount, rows: ShelfBalanceRow[]) {
+    const stock = summarizeEquipmentStock(equipment, rows);
+    return {
+      ...equipment, ...stock,
+      _count: { ...equipment._count, equipmentShelfs: stock.shelvesCount }
+    };
+  }
+
+  private async loadBalances(tx: Prisma.TransactionClient, equipmentIds: string[]): Promise<ShelfBalanceRow[]> {
+    if (equipmentIds.length === 0) return [];
+    return tx.$queryRaw<ShelfBalanceRow[]>(buildEquipmentBalancesQuery(equipmentIds));
+  }
+
+  private async getEquipmentOrThrow(tx: Prisma.TransactionClient, equipmentId: string) {
+    const equipment = await tx.equipment.findUnique({
+      where: { equipmentId }, select: EQUIPMENT_LIST_SELECT,
+    });
+    if (!equipment) throw new NotFoundException(`Equipment with ID '${equipmentId}' not found`);
     return equipment;
   }
 
-  async updateEquipment(
-    id: string,
-    dto: UpdateEquipmentDTO,
-  ) {
-    const equipmentId =
-      id?.trim();
-
-    if (!equipmentId) {
-      throw new BadRequestException(
-        'Equipment ID is required',
-      );
-    }
-
-    const data =
-      updateEquipmentSchema.parse(dto);
-
-    const current =
-      await this.prisma.equipment.findUnique({
-        where: {
-          equipmentId,
-        },
-        select: {
-          equipmentId: true,
-          equipmentName: true,
-          hasSerialNumber: true,
-          equipmentQuantity: true,
-          equipmentStatus: true,
-        },
-      });
-
-    if (!current) {
-      throw new NotFoundException(
-        `Equipment with ID '${equipmentId}' not found`,
-      );
-    }
-
-    if (
-      data.equipmentName !==
-        undefined &&
-      data.equipmentName !==
-        current.equipmentName
-    ) {
-      await this.assertEquipmentNameAvailable(
-        data.equipmentName,
-        equipmentId,
-      );
-    }
-
-    if (
-      current.hasSerialNumber &&
-      data.hasSerialNumber === false
-    ) {
-      throw new BadRequestException(
-        'Serialized equipment cannot be converted back to standard equipment',
-      );
-    }
-
-    const convertingToSerialized =
-      !current.hasSerialNumber &&
-      data.hasSerialNumber === true;
-
-    if (
-      !convertingToSerialized &&
-      data.conversionSerials !==
-        undefined
-    ) {
-      throw new BadRequestException(
-        'conversionSerials are only valid during Standard -> Serialized conversion',
-      );
-    }
-
-    if (convertingToSerialized) {
-      return this.convertStandardToSerialized(
-        equipmentId,
-        data,
-      );
-    }
-
-    return this.prisma.equipment.update({
-      where: {
-        equipmentId,
-      },
-      data: {
-        ...(data.equipmentName !==
-          undefined && {
-          equipmentName:
-            data.equipmentName,
-        }),
-
-        ...(data.minEquipmentQuantity !==
-          undefined && {
-          minequipmentQuantity:
-            data.minEquipmentQuantity,
-        }),
-
-        ...(data.equipmentStatus !==
-          undefined && {
-          equipmentStatus:
-            data.equipmentStatus,
-        }),
-      },
-      select: {
-        equipmentId: true,
-        equipmentName: true,
-        hasSerialNumber: true,
-        equipmentQuantity: true,
-        minequipmentQuantity: true,
-        equipmentStatus: true,
-      },
+  private async assertEquipmentNameAvailable(
+    tx: Prisma.TransactionClient, equipmentName: string, excludeEquipmentId?: string,
+  ): Promise<void> {
+    const existing = await tx.equipment.findFirst({
+      where: { equipmentName, ...(excludeEquipmentId ? { equipmentId: { not: excludeEquipmentId } } : {}) },
+      select: { equipmentId: true },
     });
+    if (existing) throw new ConflictException(`Equipment '${equipmentName}' already exists`);
+    // The unique DB constraint is still authoritative for concurrent requests.
+  }
+
+  private metadataUpdate(data: EquipmentUpdate): Prisma.EquipmentUpdateInput {
+    return {
+      ...(data.equipmentName !== undefined && { equipmentName: data.equipmentName }),
+      ...(data.minEquipmentQuantity !== undefined && { minequipmentQuantity: data.minEquipmentQuantity }),
+      ...(data.equipmentStatus !== undefined && { equipmentStatus: data.equipmentStatus }),
+    };
   }
 
   private async convertStandardToSerialized(
-    equipmentId: string,
-    data: ReturnType<
-      typeof updateEquipmentSchema.parse
-    >,
+    tx: Prisma.TransactionClient, current: EquipmentWithCount, data: EquipmentUpdate,
   ) {
-    return this.prisma.$transaction(
-      async (tx) => {
-        const current =
-          await tx.equipment.findUnique({
-            where: {
-              equipmentId,
-            },
-            select: {
-              equipmentId: true,
-              equipmentName: true,
-              hasSerialNumber: true,
-              equipmentQuantity: true,
-              equipmentStatus: true,
-              equipmentShelfs: {
-                where: {
-                  equipmentQuantity: {
-                    gt: 0,
-                  },
-                },
-                select: {
-                  shelfId: true,
-                  equipmentQuantity:
-                    true,
-                },
-              },
-              _count: {
-                select: {
-                  serialNumbers: true,
-                },
-              },
-            },
-          });
+    if (current._count.serialNumbers !== 0) {
+      throw new ConflictException('Standard equipment already has serial records and cannot be converted safely');
+    }
+    const rows = await this.loadBalances(tx, [current.equipmentId]);
+    const stock = summarizeEquipmentStock(current, rows);
+    // Also check zero-stock equipment: positive/negative balances must not be hidden.
+    if (!stock.stockIsConsistent) {
+      throw new ConflictException('Equipment physical quantity and movement-derived shelf balances are inconsistent; conversion is blocked');
+    }
+    const serials = data.conversionSerials ?? [];
+    if (serials.length !== current.equipmentQuantity) {
+      throw new BadRequestException(`Conversion requires exactly ${current.equipmentQuantity} serial codes mapped to the current shelves`);
+    }
+    const codes = serials.map((item) => item.serialNumberCode);
+    if (new Set(codes).size !== codes.length) {
+      throw new BadRequestException('Duplicate serial number codes exist in the conversion request');
+    }
+    const expected = new Map(stock.equipmentShelfs.map((item) => [item.shelfId, item.equipmentQuantity]));
+    const provided = new Map<string, number>();
+    for (const item of serials) {
+      if (!expected.has(item.shelfId)) {
+        throw new BadRequestException(`Shelf '${item.shelfId}' does not contain this equipment`);
+      }
+      provided.set(item.shelfId, (provided.get(item.shelfId) ?? 0) + 1);
+    }
+    for (const [shelfId, quantity] of expected) {
+      if (provided.get(shelfId) !== quantity) {
+        throw new BadRequestException(`Serial mapping count does not match physical quantity on shelf '${shelfId}'`);
+      }
+    }
 
-        if (!current) {
-          throw new NotFoundException(
-            `Equipment with ID '${equipmentId}' not found`,
-          );
-        }
+    const shelfIds = [...expected.keys()];
+    // Match the stock-freeze policy already used by EquipmentMovementService.
+    for (let offset = 0; offset < Math.max(1, shelfIds.length); offset += SERIAL_BATCH_SIZE) {
+      const ids = shelfIds.slice(offset, offset + SERIAL_BATCH_SIZE);
+      const inventoryConflict = await tx.inventoryWorkUnit.findFirst({
+        where: {
+          OR: [{ equipmentId: current.equipmentId },
+          ...(ids.length ? [{ shelfId: { in: ids } }] : [])],
+          inventory: { status: { notIn: NON_LOCKING_INVENTORY_STATUSES } },
+        },
+        select: { unitId: true },
+      });
+      if (inventoryConflict) {
+        throw new ConflictException('Conversion is blocked while this equipment or its shelves are controlled by an active inventory');
+      }
+    }
 
-        const resource = `SOMIPHARM:EQUIPMENT:${equipmentId.toLowerCase()}`;
-        const lockQuery = await tx.$queryRaw<Array<{ lockResult: number }>>`
-          DECLARE @lockResult int;
-          EXEC @lockResult = sys.sp_getapplock
-            @Resource = ${resource},
-            @LockMode = 'Exclusive',
-            @LockOwner = 'Transaction',
-            @LockTimeout = 10000;
-          SELECT @lockResult AS lockResult;
-        `;
-        const lockResult = Number(lockQuery[0]?.lockResult);
-        if (!Number.isFinite(lockResult) || lockResult < 0) {
-          throw new BadRequestException('Equipment is currently busy. Please try again.');
-        }
+    // Chunk queries and writes to avoid a single large SQL Server parameter list.
+    for (let offset = 0; offset < shelfIds.length; offset += SERIAL_BATCH_SIZE) {
+      const ids = shelfIds.slice(offset, offset + SERIAL_BATCH_SIZE);
+      const shelves = await tx.shelf.findMany({
+        where: { shelfId: { in: ids } },
+        select: { shelfId: true, status: true, stock: { select: { status: true } } },
+      });
+      if (shelves.length !== ids.length || shelves.some((shelf) => !shelf.status || !shelf.stock.status)) {
+        throw new ConflictException('Conversion requires existing active shelves in active stocks');
+      }
+    }
+    for (let offset = 0; offset < codes.length; offset += SERIAL_BATCH_SIZE) {
+      const existing = await tx.serialNumber.findMany({
+        where: { serialNumberCode: { in: codes.slice(offset, offset + SERIAL_BATCH_SIZE) } },
+        select: { serialNumberCode: true },
+      });
+      if (existing.length > 0) {
+        throw new ConflictException('One or more conversion serial number codes already exist');
+      }
+    }
 
-        if (
-          current.hasSerialNumber
-        ) {
-          throw new BadRequestException(
-            'Equipment is already serialized',
-          );
-        }
-
-        if (
-          current._count.serialNumbers >
-          0
-        ) {
-          throw new BadRequestException(
-            'Standard equipment already has serial records and cannot be converted safely',
-          );
-        }
-
-        const conversionSerials =
-          data.conversionSerials ?? [];
-
-        if (
-          current.equipmentQuantity ===
-          0
-        ) {
-          if (
-            conversionSerials.length >
-            0
-          ) {
-            throw new BadRequestException(
-              'Equipment has no physical stock; conversion serial mappings are not required',
-            );
-          }
-
-          return tx.equipment.update({
-            where: {
-              equipmentId,
-            },
-            data: {
-              hasSerialNumber: true,
-
-              ...(data.equipmentName !==
-                undefined && {
-                equipmentName:
-                  data.equipmentName,
-              }),
-
-              ...(data.minEquipmentQuantity !==
-                undefined && {
-                minequipmentQuantity:
-                  data.minEquipmentQuantity,
-              }),
-
-              ...(data.equipmentStatus !==
-                undefined && {
-                equipmentStatus:
-                  data.equipmentStatus,
-              }),
-            },
-            select: {
-              equipmentId: true,
-              equipmentName: true,
-              hasSerialNumber: true,
-              equipmentQuantity: true,
-              minequipmentQuantity: true,
-              equipmentStatus: true,
-            },
-          });
-        }
-
-        const allocatedTotal =
-          current.equipmentShelfs.reduce(
-            (
-              sum,
-              allocation,
-            ) =>
-              sum +
-              allocation.equipmentQuantity,
-            0,
-          );
-
-        if (
-          allocatedTotal !==
-          current.equipmentQuantity
-        ) {
-          throw new BadRequestException(
-            'Equipment physical quantity and shelf allocations are inconsistent; conversion is blocked',
-          );
-        }
-
-        if (
-          conversionSerials.length !==
-          current.equipmentQuantity
-        ) {
-          throw new BadRequestException(
-            `Conversion requires exactly ${current.equipmentQuantity} serial codes mapped to the current shelves`,
-          );
-        }
-
-        const normalized =
-          conversionSerials.map(
-            (item) => ({
-              serialNumberCode:
-                item.serialNumberCode.trim(),
-              shelfId:
-                item.shelfId,
-            }),
-          );
-
-        const codes =
-          normalized.map(
-            (item) =>
-              item.serialNumberCode,
-          );
-
-        if (
-          new Set(codes).size !==
-          codes.length
-        ) {
-          throw new BadRequestException(
-            'Duplicate serial number codes exist in the conversion request',
-          );
-        }
-
-        const allocationByShelf =
-          new Map(
-            current.equipmentShelfs.map(
-              (allocation) => [
-                allocation.shelfId,
-                allocation.equipmentQuantity,
-              ],
-            ),
-          );
-
-        const conversionCountByShelf =
-          new Map<string, number>();
-
-        for (
-          const item of normalized
-        ) {
-          if (
-            !allocationByShelf.has(
-              item.shelfId,
-            )
-          ) {
-            throw new BadRequestException(
-              `Shelf '${item.shelfId}' does not contain this equipment`,
-            );
-          }
-
-          conversionCountByShelf.set(
-            item.shelfId,
-            (conversionCountByShelf.get(
-              item.shelfId,
-            ) ?? 0) + 1,
-          );
-        }
-
-        for (
-          const [
-            shelfId,
-            quantity,
-          ] of allocationByShelf
-        ) {
-          if (
-            (conversionCountByShelf.get(
-              shelfId,
-            ) ?? 0) !== quantity
-          ) {
-            throw new BadRequestException(
-              `Serial mapping count does not match physical quantity on shelf '${shelfId}'`,
-            );
-          }
-        }
-
-        const existingCodes =
-          await tx.serialNumber.findMany({
-            where: {
-              serialNumberCode: {
-                in: codes,
-              },
-            },
-            select: {
-              serialNumberCode: true,
-            },
-          });
-
-        if (
-          existingCodes.length > 0
-        ) {
-          throw new BadRequestException(
-            `Serial number(s) already exist: ${existingCodes
-              .map(
-                (item) =>
-                  item.serialNumberCode,
-              )
-              .join(', ')}`,
-          );
-        }
-
-        await tx.serialNumber.createMany({
-          data: normalized.map(
-            (item) => ({
-              serialNumberCode:
-                item.serialNumberCode,
-              serialNumberStatus:
-                'AVAILABLE',
-              equipmentId,
-              shelfId:
-                item.shelfId,
-            }),
-          ),
-        });
-
-        return tx.equipment.update({
-          where: {
-            equipmentId,
-          },
-          data: {
-            hasSerialNumber: true,
-
-            ...(data.equipmentName !==
-              undefined && {
-              equipmentName:
-                data.equipmentName,
-            }),
-
-            ...(data.minEquipmentQuantity !==
-              undefined && {
-              minequipmentQuantity:
-                data.minEquipmentQuantity,
-            }),
-
-            ...(data.equipmentStatus !==
-              undefined && {
-              equipmentStatus:
-                data.equipmentStatus,
-            }),
-          },
-          select: {
-            equipmentId: true,
-            equipmentName: true,
-            hasSerialNumber: true,
-            equipmentQuantity: true,
-            minequipmentQuantity: true,
-            equipmentStatus: true,
-          },
-        });
-      },
-      {
-        isolationLevel:
-          'Serializable',
-        timeout: 30_000,
-      },
-    );
+    // IMPORTANT: the SerialNumber guard requires hasSerialNumber=true at INSERT.
+    // Both this update and every insert are in the SAME transaction. Any failure
+    // rolls back the flag, metadata and all prior batches. No new IN movement:
+    // these units are already in stock, and quantity must not be incremented.
+    const updated = await tx.equipment.update({
+      where: { equipmentId: current.equipmentId },
+      data: { ...this.metadataUpdate(data), hasSerialNumber: true }, select: EQUIPMENT_SELECT,
+    });
+    for (let offset = 0; offset < serials.length; offset += SERIAL_BATCH_SIZE) {
+      const batch = serials.slice(offset, offset + SERIAL_BATCH_SIZE);
+      const result = await tx.serialNumber.createMany({
+        data: batch.map((item) => ({
+          equipmentId: current.equipmentId, serialNumberCode: item.serialNumberCode,
+          shelfId: item.shelfId, serialNumberStatus: true,
+        })),
+      });
+      if (result.count !== batch.length) throw new ConflictException('Serial conversion was incomplete; the transaction has been cancelled');
+    }
+    return updated;
   }
 
-  async deleteEquipment(
-    id: string,
-  ) {
-    const equipmentId =
-      id?.trim();
-
-    if (!equipmentId) {
-      throw new BadRequestException(
-        'Equipment ID is required',
-      );
-    }
-
-    const equipment =
-      await this.prisma.equipment.findUnique({
-        where: {
-          equipmentId,
-        },
-        select: {
-          equipmentId: true,
-          equipmentName: true,
-        },
-      });
-
-    if (!equipment) {
-      throw new NotFoundException(
-        `Equipment with ID '${equipmentId}' not found`,
-      );
-    }
-
-    const [
-      movementLine,
-      legacyMovementHeader,
-      serialNumber,
-      positiveAllocation,
-    ] = await Promise.all([
-      this.prisma.mouvementEquipment.findFirst({
-        where: {
-          equipmentId,
-        },
-        select: {
-          mouvementEquipmentId:
-            true,
-        },
-      }),
-
-      this.prisma.mouvement.findFirst({
-        where: {
-          equipmentId,
-        },
-        select: {
-          mouvementId: true,
-        },
-      }),
-
-      this.prisma.serialNumber.findFirst({
-        where: {
-          equipmentId,
-        },
-        select: {
-          serialNumberId: true,
-        },
-      }),
-
-      this.prisma.equipmentShelfs.findFirst({
-        where: {
-          equipmentId,
-          equipmentQuantity: {
-            gt: 0,
-          },
-        },
-        select: {
-          equipmentShelfId: true,
-        },
-      }),
-    ]);
-
-    if (
-      movementLine ||
-      legacyMovementHeader
-    ) {
-      throw new BadRequestException(
-        'This equipment has movement history and cannot be physically deleted',
-      );
-    }
-
-    if (serialNumber) {
-      throw new BadRequestException(
-        'Delete or retire the equipment serial numbers before deleting the equipment',
-      );
-    }
-
-    if (positiveAllocation) {
-      throw new BadRequestException(
-        'This equipment still has stock allocated to a shelf',
-      );
-    }
-
-    return this.prisma.$transaction(
-      async (tx) => {
-        await tx.equipmentShelfs.deleteMany({
-          where: {
-            equipmentId,
-          },
-        });
-
-        return tx.equipment.delete({
-          where: {
-            equipmentId,
-          },
-          select: {
-            equipmentId: true,
-            equipmentName: true,
-            hasSerialNumber: true,
-            equipmentQuantity: true,
-            minequipmentQuantity: true,
-            equipmentStatus: true,
-          },
-        });
-      },
-    );
+  private parseEquipmentId(id: string): string {
+    if (typeof id !== 'string' || id.trim() === '') throw new BadRequestException('Equipment ID is required');
+    const parsed = equipmentUuidSchema.safeParse(id);
+    if (!parsed.success) throw new BadRequestException('Equipment ID must be a valid UUID');
+    return parsed.data;
   }
 
-  async getEquipmentShelves(
-    equipmentId: string,
-  ) {
-    const id =
-      equipmentId?.trim();
-
-    if (!id) {
-      throw new BadRequestException(
-        'Equipment ID is required',
-      );
+  private async acquireLocks(tx: Prisma.TransactionClient, resources: string[]): Promise<void> {
+    for (const resource of [...new Set(resources)].sort()) {
+      const rows = await tx.$queryRaw<Array<{ lockResult: number }>>`
+        DECLARE @lockResult int;
+        EXEC @lockResult = sys.sp_getapplock
+          @Resource = ${resource}, @LockMode = 'Exclusive',
+          @LockOwner = 'Transaction', @LockTimeout = 10000;
+        SELECT @lockResult AS lockResult;
+      `;
+      // SQL Server documents only 0 (immediate) and 1 (after waiting) as success.
+      if (rows[0]?.lockResult !== 0 && rows[0]?.lockResult !== 1) {
+        throw new ConflictException('Equipment or shelf is busy; refresh and retry');
+      }
     }
-
-    const equipment =
-      await this.prisma.equipment.findUnique({
-        where: {
-          equipmentId: id,
-        },
-        select: {
-          equipmentId: true,
-          equipmentName: true,
-          hasSerialNumber: true,
-          equipmentQuantity: true,
-          equipmentStatus: true,
-
-          equipmentShelfs: {
-            where: {
-              equipmentQuantity: {
-                gt: 0,
-              },
-            },
-            select: {
-              equipmentShelfId: true,
-              shelfId: true,
-              equipmentQuantity: true,
-              shelf: {
-                select: {
-                  shelfId: true,
-                  shelfName: true,
-                  stockId: true,
-                },
-              },
-            },
-            orderBy: {
-              equipmentQuantity:
-                'desc',
-            },
-          },
-        },
-      });
-
-    if (!equipment) {
-      throw new NotFoundException(
-        `Equipment with ID '${id}' not found`,
-      );
-    }
-
-    const totalAllocated =
-      equipment.equipmentShelfs.reduce(
-        (
-          sum,
-          allocation,
-        ) =>
-          sum +
-          allocation.equipmentQuantity,
-        0,
-      );
-
-    return {
-      ...equipment,
-      totalAllocated,
-      unallocatedQuantity:
-        Math.max(
-          0,
-          equipment.equipmentQuantity -
-            totalAllocated,
-        ),
-      shelvesCount:
-        equipment.equipmentShelfs
-          .length,
-    };
   }
 
-  async getSerialNumbersByEquipmentId(
-    equipmentId: string,
-    pagination: PaginationDTO,
-  ) {
-    const id =
-      equipmentId?.trim();
-
-    if (!id) {
-      throw new BadRequestException(
-        'Equipment ID is required',
-      );
+  private async transaction<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.prisma.$transaction(work, {
+          isolationLevel: 'Serializable', maxWait: 5_000, timeout: 30_000,
+        });
+      } catch (error) {
+        // Retry only a documented rolled-back write conflict, not unknown or
+        // ambiguous connection failures. Do not perform external side effects here.
+        if (this.prismaErrorCode(error) !== 'P2034' || attempt >= 2) throw error;
+        await delay(25 * 2 ** attempt);
+      }
     }
+  }
 
-    const {
-      page,
-      limit,
-    } = paginationSchema.parse(
-      pagination ?? {},
-    );
+  private prismaErrorCode(error: unknown): string | undefined {
+    if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
+    return typeof error.code === 'string' ? error.code : undefined;
+  }
 
-    const equipment =
-      await this.prisma.equipment.findUnique({
-        where: {
-          equipmentId: id,
-        },
-        select: {
-          equipmentId: true,
-          hasSerialNumber: true,
-        },
-      });
-
-    if (!equipment) {
-      throw new NotFoundException(
-        `Equipment with ID '${id}' not found`,
-      );
+  private async operation<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const detail = error.issues.map((issue) => `${issue.path.join('.') || 'request'}: ${issue.message}`).join('; ');
+        throw new BadRequestException(`Invalid equipment request: ${detail}`);
+      }
+      switch (this.prismaErrorCode(error)) {
+        case 'P2002': throw new ConflictException('Equipment name or serial number code already exists (database uniqueness rules apply)');
+        case 'P2003': throw new ConflictException('A referenced record is missing, changed, or prevents deletion; refresh and retry, or mark equipment INACTIVE');
+        case 'P2025': throw new NotFoundException('Equipment or a related record no longer exists');
+        case 'P2034': throw new ConflictException('Concurrent stock changes prevented this operation; refresh and retry');
+        case 'P2028': throw new ServiceUnavailableException('Database transaction could not complete; refresh the record before retrying');
+        case 'P2000':
+        case 'P2020': throw new BadRequestException('A value exceeds the database field limits');
+        default: throw error;
+      }
     }
-
-    if (
-      !equipment.hasSerialNumber
-    ) {
-      return {
-        serialNumbers: [],
-        totalSerialNumbers: 0,
-        totalPages: 1,
-        currentPage: page,
-        limit,
-      };
-    }
-
-    const skip =
-      (page - 1) * limit;
-
-    const [
-      serialNumbers,
-      totalSerialNumbers,
-    ] = await Promise.all([
-      this.prisma.serialNumber.findMany({
-        where: {
-          equipmentId: id,
-        },
-        skip,
-        take: limit,
-        select: {
-          serialNumberId: true,
-          serialNumberCode: true,
-          serialNumberStatus: true,
-          equipmentId: true,
-          shelfId: true,
-          shelf: {
-            select: {
-              shelfId: true,
-              shelfName: true,
-              stockId: true,
-            },
-          },
-        },
-        orderBy: [
-          {
-            serialNumberCode: 'asc',
-          },
-          {
-            serialNumberId: 'asc',
-          },
-        ],
-      }),
-
-      this.prisma.serialNumber.count({
-        where: {
-          equipmentId: id,
-        },
-      }),
-    ]);
-
-    return {
-      serialNumbers,
-      totalSerialNumbers,
-      totalPages:
-        Math.ceil(
-          totalSerialNumbers / limit,
-        ) || 1,
-      currentPage: page,
-      limit,
-    };
   }
 }

@@ -28,7 +28,9 @@ describe('StockService', () => {
 
   beforeEach(() => {
     prisma = {
-      stock: {
+      $transaction: vi.fn().mockImplementation(async (cb) => cb(prisma)),
+      shelf: { updateMany: vi.fn() },
+    stock: {
         findFirst: vi.fn(),
         findUnique: vi.fn(),
         findMany: vi.fn(),
@@ -53,7 +55,7 @@ describe('StockService', () => {
 
     prisma.stockStatus.findUnique
       .mockResolvedValue({
-        stockStatusId: activeStatusId,
+        status: undefined,
         stockStatusName: 'ACTIVE',
       });
 
@@ -61,9 +63,9 @@ describe('StockService', () => {
       .mockResolvedValue({
         stockId,
         stockName: 'Stock Principal',
-        stockStatusId: activeStatusId,
+        status: undefined,
         stockStatus: {
-          stockStatusId: activeStatusId,
+          status: undefined,
           stockStatusName: 'ACTIVE',
         },
         _count: {
@@ -75,17 +77,7 @@ describe('StockService', () => {
       stockName: 'Stock Principal',
     });
 
-    expect(
-      prisma.stockStatus.findUnique,
-    ).toHaveBeenCalledWith({
-      where: {
-        stockStatusName: 'ACTIVE',
-      },
-      select: {
-        stockStatusId: true,
-        stockStatusName: true,
-      },
-    });
+
 
     expect(
       prisma.stock.create,
@@ -93,7 +85,7 @@ describe('StockService', () => {
       expect.objectContaining({
         data: {
           stockName: 'Stock Principal',
-          stockStatusId: activeStatusId,
+          status: undefined,
         },
       }),
     );
@@ -119,7 +111,7 @@ describe('StockService', () => {
       .mockResolvedValue({
         stockId,
         stockName: 'Stock Principal',
-        stockStatusId: activeStatusId,
+        status: undefined,
         stockStatus: {
           stockStatusName: 'ACTIVE',
         },
@@ -130,7 +122,7 @@ describe('StockService', () => {
 
     prisma.stockStatus.findUnique
       .mockResolvedValue({
-        stockStatusId: inactiveStatusId,
+        status: false,
         stockStatusName: 'INACTIVE',
       });
 
@@ -138,12 +130,12 @@ describe('StockService', () => {
       .mockResolvedValue({
         stockId,
         stockName: 'Stock Principal',
-        stockStatusId: inactiveStatusId,
+        status: false,
       });
 
     await service.updateStock(
       {
-        stockStatus: 'INACTIVE',
+        stockStatus: false,
       },
       stockId,
     );
@@ -156,8 +148,7 @@ describe('StockService', () => {
           stockId,
         },
         data: {
-          stockStatusId:
-            inactiveStatusId,
+          status: false,
         },
       }),
     );
@@ -172,28 +163,5 @@ describe('StockService', () => {
     ).rejects.toBeInstanceOf(
       NotFoundException,
     );
-  });
-
-  it('returns only ACTIVE and INACTIVE status rows', async () => {
-    prisma.stockStatus.findMany
-      .mockResolvedValue([]);
-
-    await service.getAllStockStatuses();
-
-    expect(
-      prisma.stockStatus.findMany,
-    ).toHaveBeenCalledWith({
-      where: {
-        stockStatusName: {
-          in: [
-            'ACTIVE',
-            'INACTIVE',
-          ],
-        },
-      },
-      orderBy: {
-        stockStatusName: 'asc',
-      },
-    });
   });
 });

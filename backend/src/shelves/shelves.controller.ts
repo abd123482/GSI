@@ -55,22 +55,7 @@ export class ShelfController {
     );
   }
 
-  @RequirePermissions('shelf.read')
-  @Get(':id/equipment')
-  getShelfEquipment(
-    @Param(
-      'id',
-      new ParseUUIDPipe({ version: '4' }),
-    )
-    id: string,
 
-    @Query() pagination: PaginationDTO,
-  ) {
-    return this.shelfService.getShelfEquipment(
-      id,
-      pagination,
-    );
-  }
 
   @RequirePermissions('shelf.read')
   @Get(':id/serial-numbers')

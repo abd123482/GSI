@@ -1,17 +1,17 @@
 import { z } from 'zod';
+import {
+  consistentShelfStatus,
+  normalizeShelfStatus,
+  shelfStatusFields,
+} from './status.dto.js';
 
-export const searchShelfSchema = z.object({
-  shelfName: z
-    .string()
-    .trim()
-    .optional(),
+export const searchShelfSchema = z
+  .object({
+    shelfName: z.string().trim().optional(),
+    stockId: z.string().uuid('Stock ID must be a valid UUID').optional(),
+    ...shelfStatusFields,
+  })
+  .refine(consistentShelfStatus, 'Conflicting shelf status values')
+  .transform(normalizeShelfStatus);
 
-  stockId: z
-    .string()
-    .uuid('Stock ID must be a valid UUID')
-    .optional(),
-    
-  shelfStatus: z.enum(['ACTIVE', 'INACTIVE']).optional(),
-});
-
-export type SearchShelfDTO = z.infer<typeof searchShelfSchema>;
+export type SearchShelfDTO = z.input<typeof searchShelfSchema>;

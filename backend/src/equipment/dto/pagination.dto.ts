@@ -15,4 +15,4 @@ export const paginationSchema = z.object({
         .default(20),
 });
 
-export type PaginationDTO = z.infer<typeof paginationSchema>;
+export type PaginationDTO = z.input<typeof paginationSchema>;

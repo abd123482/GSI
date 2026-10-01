@@ -33,16 +33,24 @@ describe('Shelf delete test', () => {
       });
       console.log('snCount:', snCount);
 
-      // Check equipmentShelfs
-      const eqShelfs = await prisma.equipmentShelfs.findMany({
-        where: { shelfId: firstShelf.shelfId },
+      // Check canonical movement lines referencing the shelf.
+      const movementLines = await prisma.mouvementEquipment.count({
+        where: {
+          OR: [
+            { sourceShelfId: firstShelf.shelfId },
+            { destinationShelfId: firstShelf.shelfId },
+          ],
+        },
       });
-      console.log('eqShelfs:', eqShelfs);
+      console.log('movementLines:', movementLines);
 
       // Check mouvements
       const mvtCount = await prisma.mouvement.count({
         where: {
-          OR: [{ sourceShelfId: firstShelf.shelfId }, { destinationShelfId: firstShelf.shelfId }],
+          OR: [
+            { sourceShelfId: firstShelf.shelfId },
+            { destinationShelfId: firstShelf.shelfId },
+          ],
         },
       });
       console.log('mvtCount:', mvtCount);

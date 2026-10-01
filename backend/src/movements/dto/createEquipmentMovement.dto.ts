@@ -72,7 +72,26 @@ export const createEquipmentMovementSchema =
           'A movement can contain at most 100 article lines',
         ),
     })
-    ;
+    .superRefine((data, ctx) => {
+      if (data.movementType === 'IN') {
+        const hasSource = data.items.some(item => item.sourceShelfId);
+        if (hasSource) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'IN movements cannot have a source shelf',
+          });
+        }
+      } else if (data.movementType === 'OUT') {
+        const hasDest = data.items.some(item => item.destinationShelfId);
+        if (hasDest) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'OUT movements cannot have a destination shelf',
+          });
+        }
+      }
+    });
+;
 
 export type MovementType =
   z.infer<

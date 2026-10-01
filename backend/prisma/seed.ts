@@ -60,19 +60,11 @@ async function ensurePermission(
   }
 }
 
-async function ensureStockStatus(stockStatusName: 'ACTIVE' | 'INACTIVE') {
-  await prisma.stockStatus.upsert({
-    where: { stockStatusName },
-    update: {},
-    create: { stockStatusName },
-  });
-}
+
 
 async function main() {
   console.log('Seeding SOMIPHARM reference/security data idempotently...');
 
-  await ensureStockStatus('ACTIVE');
-  await ensureStockStatus('INACTIVE');
 
   const adminRole = await ensureRole('ADMIN');
   const technicianRole = await ensureRole('TECHNICIAN');

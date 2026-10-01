@@ -181,7 +181,7 @@ export function EditSerialNumberModal({
               <option value="DEFECTIVE">
                 DEFECTIVE
               </option>
-              <option value="INACTIVE">
+              <option value="false">
                 INACTIVE
               </option>
             </select>

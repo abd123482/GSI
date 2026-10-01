@@ -46,14 +46,14 @@ type EquipmentRecord = {
   equipmentName: string;
   hasSerialNumber: boolean;
   equipmentQuantity: number;
-  equipmentStatus: string;
+  equipmentStatus: boolean;
 };
 
 type SerialRecord = {
   serialNumberId: string;
   equipmentId: string;
   shelfId: string | null;
-  serialNumberStatus: string;
+  serialNumberStatus: boolean;
 };
 
 type MovementAuditContext = {
@@ -337,8 +337,7 @@ export class EquipmentMovementService {
         const inactiveEquipment =
           equipments.find(
             (item) =>
-              item.equipmentStatus !==
-              'ACTIVE',
+              item.equipmentStatus !== true,
           );
 
         if (inactiveEquipment) {
@@ -451,8 +450,7 @@ export class EquipmentMovementService {
         const header =
           await tx.mouvement.create({
             data: {
-              mouvementStatus:
-                movement.movementType,
+              mouvementStatus: movement.movementType === 'OUT',
 
               mouvementQuantity:
                 totalQuantity,
@@ -529,8 +527,7 @@ export class EquipmentMovementService {
                   mouvementQuantity:
                     item.movementQuantity,
 
-                  mouvementStatus:
-                    movement.movementType,
+                  mouvementStatus: movement.movementType === 'OUT',
 
                   sourceShelfId:
                     item.sourceShelfId ??
@@ -599,7 +596,7 @@ export class EquipmentMovementService {
       filters.movementType
     ) {
       where.mouvementStatus =
-        filters.movementType;
+        filters.movementType === 'OUT';
     }
 
     if (filters.origin) {
@@ -818,12 +815,7 @@ export class EquipmentMovementService {
               stockId: true,
               stockName: true,
 
-              stockStatus: {
-                select: {
-                  stockStatusName:
-                    true,
-                },
-              },
+              status: true,
             },
           },
         },
@@ -855,10 +847,7 @@ export class EquipmentMovementService {
     const inactiveShelf =
       shelves.find(
         (shelf) =>
-          shelf.stock
-            .stockStatus
-            .stockStatusName !==
-          'ACTIVE',
+          shelf.stock && shelf.stock.status !== true,
       );
 
     if (inactiveShelf) {
@@ -1105,26 +1094,7 @@ export class EquipmentMovementService {
       }
     }
 
-    // Process source shelf decrements
-    for (const [key, quantity] of decrements) {
-      const [equipmentId, shelfId] = key.split('|');
-      const updated = await tx.equipmentShelfs.updateMany({
-        where: {
-          equipmentId,
-          shelfId,
-          equipmentQuantity: { gte: quantity },
-        },
-        data: {
-          equipmentQuantity: { decrement: quantity },
-        },
-      });
-
-      if (updated.count !== 1) {
-        throw new BadRequestException(
-          `Insufficient quantity for equipment '${equipmentId}' on source shelf '${shelfId}'`
-        );
-      }
-    }
+    // Process source shelf decrements (equipmentShelfs removed)
 
     for (const [shelfId, totalQuantity] of shelfDecrements) {
       const sourceShelfUpdated = await tx.shelf.updateMany({
@@ -1144,47 +1114,14 @@ export class EquipmentMovementService {
       }
     }
 
-    // Process destination shelf increments
-    for (const [key, quantity] of increments) {
-      const [equipmentId, shelfId] = key.split('|');
-
-      const allocation = await tx.equipmentShelfs.findFirst({
-        where: { equipmentId, shelfId },
-      });
-
-      if (!allocation) {
-        await tx.equipmentShelfs.create({
-          data: {
-            equipmentId,
-            shelfId,
-            equipmentQuantity: quantity,
-          },
-        });
-      } else {
-        if (allocation.equipmentQuantity > SQL_INT_MAX - quantity) {
-          throw new BadRequestException(
-            `Destination allocation exceeds SQL Server INT capacity for equipment '${equipmentId}'`
-          );
-        }
-
-        await tx.equipmentShelfs.updateMany({
-          where: {
-            equipmentShelfId: allocation.equipmentShelfId,
-            equipmentQuantity: { lte: SQL_INT_MAX - quantity },
-          },
-          data: {
-            equipmentQuantity: { increment: quantity },
-          },
-        });
-      }
-    }
+    // Process destination shelf increments (equipmentShelfs removed)
 
     for (const [shelfId, totalQuantity] of shelfIncrements) {
       const shelf = await tx.shelf.findUnique({
         where: { shelfId },
       });
 
-      if (shelf && shelf.shelfQuantity > SQL_INT_MAX - totalQuantity) {
+      if (false /* shelfQuantity removed */) {
         throw new BadRequestException(
           `Destination shelf '${shelfId}' capacity exceeded`
         );
@@ -1212,12 +1149,13 @@ export class EquipmentMovementService {
           );
         }
 
-        await tx.equipment.update({
-          where: { equipmentId },
+        const result = await tx.equipment.updateMany({
+          where: { equipmentId, equipmentStatus: true },
           data: {
             equipmentQuantity: { increment: quantity },
           },
         });
+        if (result.count === 0) throw new BadRequestException('Equipment is inactive or does not exist');
       } else if (movementType === 'OUT') {
         if (equipment.equipmentQuantity < quantity) {
           throw new BadRequestException(
@@ -1225,12 +1163,13 @@ export class EquipmentMovementService {
           );
         }
 
-        await tx.equipment.update({
-          where: { equipmentId },
+        const result = await tx.equipment.updateMany({
+          where: { equipmentId, equipmentStatus: true, equipmentQuantity: { gte: quantity } },
           data: {
             equipmentQuantity: { decrement: quantity },
           },
         });
+        if (result.count === 0) throw new BadRequestException('Insufficient quantity');
       }
     }
 

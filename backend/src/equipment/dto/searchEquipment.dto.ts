@@ -42,12 +42,7 @@ export const searchEquipmentSchema =
     hasSerialNumber:
       optionalQueryBoolean,
 
-    equipmentStatus: z
-      .enum([
-        'ACTIVE',
-        'INACTIVE',
-      ])
-      .optional(),
+    equipmentStatus: optionalQueryBoolean,
 
     equipmentQuantity: z.coerce
       .number()

@@ -117,16 +117,19 @@ export function EquipmentListTable({
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={
-              equipmentStatus ??
-              'ALL'
+              equipmentStatus === undefined
+                ? 'ALL'
+                : equipmentStatus
+                  ? 'true'
+                  : 'false'
             }
             onChange={(event) =>
               onEquipmentStatusChange(
                 event.target.value ===
                   'ALL'
                   ? undefined
-                  : (event.target
-                    .value as EquipmentStatus),
+                  : event.target
+                    .value === 'true',
               )
             }
             className="h-9 rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"
@@ -134,10 +137,10 @@ export function EquipmentListTable({
             <option value="ALL">
               Tous les statuts
             </option>
-            <option value="ACTIVE">
+            <option value="true">
               ACTIVE
             </option>
-            <option value="INACTIVE">
+            <option value="false">
               INACTIVE
             </option>
           </select>
@@ -296,14 +299,13 @@ export function EquipmentListTable({
 
                     <td className="px-4 py-3">
                       <span
-                        className={`rounded border px-2 py-1 text-[10px] font-semibold ${equipment.equipmentStatus ===
-                            'ACTIVE'
+                        className={`rounded border px-2 py-1 text-[10px] font-semibold ${equipment.equipmentStatus
                             ? 'border-emerald-400/25 bg-emerald-950/25 text-emerald-300'
                             : 'border-amber-400/25 bg-amber-950/25 text-amber-300'
                           }`}
                       >
                         {
-                          equipment.equipmentStatus
+                          equipment.equipmentStatus ? 'ACTIVE' : 'INACTIVE'
                         }
                       </span>
                     </td>

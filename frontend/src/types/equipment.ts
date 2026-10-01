@@ -1,6 +1,4 @@
-export type EquipmentStatus =
-  | 'ACTIVE'
-  | 'INACTIVE';
+export type EquipmentStatus = boolean;
 
 export interface SerialNumber {
   serialNumberId: string;
