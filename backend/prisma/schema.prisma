@@ -75,7 +75,7 @@ model SerialNumber {
 
 model Stock {
   stockId   String  @id @default(dbgenerated("newid()")) @db.UniqueIdentifier
-  stockName String? @db.VarChar(100)
+  stockName String? @unique(map: "UX_Stock_StockName", where: raw("([stockName] IS NOT NULL)")) @db.VarChar(100)
   status    Boolean @default(true)
 
   shelves Shelf[]

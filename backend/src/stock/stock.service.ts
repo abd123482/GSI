@@ -12,7 +12,6 @@ const stockSelect = {
   _count: { select: { shelves: true } },
 } satisfies Prisma.StockSelect;
 
-// Accepts the existing Zod schemas, including schemas with transforms.
 function parse<T>(schema: { parse(input: unknown): T }, input: unknown): T {
   try {
     return schema.parse(input);
@@ -35,25 +34,24 @@ export class StockService {
   constructor(private readonly prisma: PrismaService) { }
 
   async createStock(dto: CreateStockDTO) {
-    const { stockName, stockStatus } = parse(createStockSchema, dto);
+    const { stockName, status } = parse(createStockSchema, dto);
     return this.prisma.stock.create({
-      data: { stockName, status: stockStatus ?? true },
+      data: { stockName, status: status ?? true },
       select: stockSelect,
     }).catch(handlePrismaError);
   }
 
   async updateStock(dto: UpdateStockDTO, stockId: string) {
-    const { stockName, stockStatus } = parse(updateStockSchema, dto);
-    if (stockName === undefined && stockStatus === undefined) {
-      throw new BadRequestException('Provide stockName or stockStatus');
+    const { stockName, status } = parse(updateStockSchema, dto);
+    if (stockName === undefined && status === undefined) {
+      throw new BadRequestException('Provide stockName or status');
     }
     return this.prisma.stock.update({
       where: { stockId },
       data: {
         ...(stockName !== undefined && { stockName }),
-        ...(stockStatus !== undefined && { status: stockStatus }),
-        // Nested writes keep stock and shelf changes atomic.
-        ...(stockStatus === false && {
+        ...(status !== undefined && { status }),
+        ...(status === false && {
           shelves: { updateMany: { where: { status: true }, data: { status: false } } },
         }),
       },
@@ -76,10 +74,10 @@ export class StockService {
   }
 
   searchStocks(dto: SearchStockDTO, pagination: PaginationDTO) {
-    const { stockName, stockStatus } = parse(searchStockSchema, dto ?? {});
-    const where: any = {};
+    const { stockName, status } = parse(searchStockSchema, dto ?? {});
+    const where: Prisma.StockWhereInput = {};
     if (stockName) where.stockName = { contains: stockName };
-    if (stockStatus !== undefined) where.status = stockStatus;
+    if (status !== undefined) where.status = status;
     return this.listStocks(where, pagination);
   }
 
