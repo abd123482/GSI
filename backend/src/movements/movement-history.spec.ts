@@ -76,11 +76,12 @@ describe('V3 movement-history protection', () => {
   it('blocks serial deletion when movement history exists', async () => {
     const prisma = {
       serialNumber: {
-        findUnique: vi.fn().mockResolvedValue({
-          serialNumberId: 'sn',
+        findUniqueOrThrow: vi.fn().mockResolvedValue({
+          serialNumberId: '22222222-2222-4222-8222-222222222222',
           serialNumberCode: 'SN-1',
           equipmentId: '11111111-1111-4111-8111-111111111111',
           shelfId: null,
+          _count: { movementItems: 1, mouvements: 0, orders: 0, investigationIssues: 0 },
         }),
       },
       mouvementEquipment: {
@@ -91,13 +92,14 @@ describe('V3 movement-history protection', () => {
       mouvement: {
         findFirst: vi.fn().mockResolvedValue(null),
       },
-      $transaction: vi.fn(),
+      $queryRaw: vi.fn().mockResolvedValue([{ result: 0 }]),
+      $transaction: vi.fn().mockImplementation(async (cb) => cb(prisma)),
     };
 
     await expect(
       new SerialNumberService(prisma as any)
-        .deleteSerialNumber('sn'),
-    ).rejects.toThrow('movement history');
+        .deleteSerialNumber('22222222-2222-4222-8222-222222222222'),
+    ).rejects.toThrow('history');
 
     
   });
@@ -106,8 +108,22 @@ describe('V3 movement-history protection', () => {
     const prisma = {
       shelf: {
         findUnique: vi.fn().mockResolvedValue({
-          shelfId: 'shelf',
+          shelfId: '33333333-3333-4333-8333-333333333333',
           shelfName: 'Shelf',
+          _count: {
+            movementSources: 1, movementDestinations: 0, sourceMouvements: 0,
+            destinationMouvements: 0, serialNumbers: 0, orders: 0, serialSnapshots: 0,
+            expectedIssues: 0, observedIssues: 0, resolutionIssues: 0
+          }
+        }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({
+          shelfId: '33333333-3333-4333-8333-333333333333',
+          shelfName: 'Shelf',
+          _count: {
+            movementSources: 1, movementDestinations: 0, sourceMouvements: 0,
+            destinationMouvements: 0, serialNumbers: 0, orders: 0, serialSnapshots: 0,
+            expectedIssues: 0, observedIssues: 0, resolutionIssues: 0
+          }
         }),
       },
       equipmentShelfs: {
@@ -124,13 +140,14 @@ describe('V3 movement-history protection', () => {
       mouvement: {
         findFirst: vi.fn().mockResolvedValue(null),
       },
-      $transaction: vi.fn(),
+      $queryRaw: vi.fn().mockResolvedValue([{ result: 0 }]),
+      $transaction: vi.fn().mockImplementation(async (cb) => cb(prisma)),
     };
 
     await expect(
       new ShelfService(prisma as any)
-        .deleteShelf('shelf'),
-    ).rejects.toThrow('movement history');
+        .deleteShelf('33333333-3333-4333-8333-333333333333'),
+    ).rejects.toThrow('history');
 
     
   });

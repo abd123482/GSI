@@ -1,109 +1,37 @@
 import { z } from 'zod';
 
-const SQL_INT_MAX = 2_147_483_647;
+const uuid = z.string().trim().uuid().transform((id) => id.toLowerCase());
+export const movementTypeSchema = z.enum(['IN', 'OUT', 'TRANSFER']);
+export const movementItemSchema = z.object({
+  equipmentId: uuid,
+  movementQuantity: z.number().int().positive().max(2_147_483_647),
+  serialNumberId: uuid.nullish(),
+  serialNumberCode: z.string().trim().min(1).max(200).optional(),
+  sourceShelfId: uuid.nullish(),
+  destinationShelfId: uuid.nullish(),
+}).strict();
 
-export const movementTypeSchema =
-  z.enum(['IN', 'OUT', 'TRANSFER']);
-
-export const movementItemSchema =
-  z.object({
-    equipmentId: z
-      .string()
-      .uuid(
-        'Equipment ID must be a valid UUID',
-      ),
-
-    serialNumberId: z
-      .string()
-      .uuid(
-        'Serial number ID must be a valid UUID',
-      )
-      .nullable()
-      .optional(),
-
-    movementQuantity: z
-      .number()
-      .int(
-        'Movement quantity must be an integer',
-      )
-      .positive(
-        'Movement quantity must be greater than 0',
-      )
-      .max(
-        SQL_INT_MAX,
-        'Movement quantity exceeds SQL Server INT capacity',
-      ),
-
-    sourceShelfId: z
-      .string()
-      .uuid(
-        'Source shelf ID must be a valid UUID',
-      )
-      .nullable()
-      .optional(),
-
-    destinationShelfId: z
-      .string()
-      .uuid(
-        'Destination shelf ID must be a valid UUID',
-      )
-      .nullable()
-      .optional(),
+export const createEquipmentMovementSchema = z.object({
+  movementType: movementTypeSchema,
+  items: z.array(movementItemSchema).min(1).max(100),
+}).strict().superRefine(({ movementType: type, items }, ctx) => {
+  const ids = new Set<string>(), codes = new Set<string>();
+  items.forEach((item, index) => {
+    const fail = (message: string) => ctx.addIssue({ code: 'custom', path: ['items', index], message });
+    const { sourceShelfId: from, destinationShelfId: to, serialNumberId: id, serialNumberCode: code } = item;
+    if (!!from !== (type !== 'IN') || !!to !== (type !== 'OUT') || (from && from === to))
+      fail('IN needs a destination only; OUT a source only; TRANSFER two different shelves');
+    if (code !== undefined && (type !== 'IN' || id)) fail('New serial codes are IN-only; send a code OR an existing ID');
+    if ((id || code !== undefined) && item.movementQuantity !== 1) fail('Each serialized line must have quantity 1');
+    if (id && ids.has(id)) fail('The same serial ID cannot appear twice');
+    if (code !== undefined && codes.has(code)) fail('Duplicate serial code in the request');
+    if (id) ids.add(id);
+    if (code !== undefined) codes.add(code);
   });
+  if (items.reduce((sum, item) => sum + item.movementQuantity, 0) > 2_147_483_647)
+    ctx.addIssue({ code: 'custom', path: ['items'], message: 'Total quantity exceeds SQL INT capacity' });
+});
 
-export const createEquipmentMovementSchema =
-  z
-    .object({
-      movementType:
-        movementTypeSchema,
-
-
-
-      items: z
-        .array(
-          movementItemSchema,
-        )
-        .min(
-          1,
-          'At least one article is required',
-        )
-        .max(
-          100,
-          'A movement can contain at most 100 article lines',
-        ),
-    })
-    .superRefine((data, ctx) => {
-      if (data.movementType === 'IN') {
-        const hasSource = data.items.some(item => item.sourceShelfId);
-        if (hasSource) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'IN movements cannot have a source shelf',
-          });
-        }
-      } else if (data.movementType === 'OUT') {
-        const hasDest = data.items.some(item => item.destinationShelfId);
-        if (hasDest) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'OUT movements cannot have a destination shelf',
-          });
-        }
-      }
-    });
-;
-
-export type MovementType =
-  z.infer<
-    typeof movementTypeSchema
-  >;
-
-export type CreateEquipmentMovementItemDTO =
-  z.infer<
-    typeof movementItemSchema
-  >;
-
-export type CreateEquipmentMovementDTO =
-  z.infer<
-    typeof createEquipmentMovementSchema
-  >;
+export type MovementType = z.infer<typeof movementTypeSchema>;
+export type CreateEquipmentMovementItemDTO = z.input<typeof movementItemSchema>;
+export type CreateEquipmentMovementDTO = z.input<typeof createEquipmentMovementSchema>;

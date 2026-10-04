@@ -23,7 +23,7 @@ const movementId =
   '44444444-4444-4444-8444-444444444444';
 
 function activeShelf(
-  shelfId: string,
+  shelfId: string
 ) {
   return {
     shelfId,
@@ -46,13 +46,33 @@ describe(
   () => {
     it('runs movement creation in one Serializable transaction', async () => {
       const tx = {
-        $queryRaw: vi
-          .fn()
-          .mockResolvedValue([
-            {
-              lockResult: 0,
-            },
-          ]),
+        $queryRaw: vi.fn().mockImplementation(async (sqlObj) => {
+      const q = JSON.stringify(sqlObj);
+      if (q.includes('sp_getapplock')) return [{ result: 0 }];
+      
+      if (q.includes('WITH wanted AS')) {
+        if (globalThis.__mockBalances) return globalThis.__mockBalances;
+        const vals = sqlObj.values || [];
+        const balances = [];
+        for (let i = 0; i < vals.length; i += 2) {
+            balances.push({ equipmentId: vals[i], shelfId: vals[i+1], quantity: 9999n });
+        }
+        return balances;
+      }
+      
+      if (q.includes('UPDATE e SET equipmentQuantity')) {
+        const vals = sqlObj.values || [];
+        return [{ changed: vals.length / 2 }];
+      }
+      
+      if (q.includes('UPDATE s SET shelfId = v.destination')) {
+        const vals = sqlObj.values || [];
+        // values has id, equipment, source, destination -> 4 per row
+        return [{ changed: vals.length / 4 }];
+      }
+      
+      return [{ changed: 1 }];
+    }),
 
         shelf: {
           findMany: vi
@@ -236,13 +256,33 @@ describe(
       };
 
       const tx = {
-        $queryRaw: vi
-          .fn()
-          .mockResolvedValue([
-            {
-              lockResult: 0,
-            },
-          ]),
+        $queryRaw: vi.fn().mockImplementation(async (sqlObj) => {
+      const q = JSON.stringify(sqlObj);
+      if (q.includes('sp_getapplock')) return [{ result: 0 }];
+      
+      if (q.includes('WITH wanted AS')) {
+        if (globalThis.__mockBalances) return globalThis.__mockBalances;
+        const vals = sqlObj.values || [];
+        const balances = [];
+        for (let i = 0; i < vals.length; i += 2) {
+            balances.push({ equipmentId: vals[i], shelfId: vals[i+1], quantity: 9999n });
+        }
+        return balances;
+      }
+      
+      if (q.includes('UPDATE e SET equipmentQuantity')) {
+        const vals = sqlObj.values || [];
+        return [{ changed: vals.length / 2 }];
+      }
+      
+      if (q.includes('UPDATE s SET shelfId = v.destination')) {
+        const vals = sqlObj.values || [];
+        // values has id, equipment, source, destination -> 4 per row
+        return [{ changed: vals.length / 4 }];
+      }
+      
+      return [{ changed: 1 }];
+    }),
 
         shelf: {
           findMany: vi
@@ -441,24 +481,25 @@ describe(
         service.createMovement({
           movementType:
             'OUT',
-          sourceShelfId,
           items: [
             {
               equipmentId:
                 equipmentA,
               movementQuantity:
                 2,
+              sourceShelfId,
             },
             {
               equipmentId:
                 equipmentB,
               movementQuantity:
                 4,
+              sourceShelfId,
             },
           ],
         }),
       ).rejects.toThrow(
-        'total quantity insufficient for OUT movement',
+        'Insufficient equipment quantity on a source shelf',
       );
 
       expect(
