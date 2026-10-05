@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { EquipmentService } from '../equipment/equipment.service.js';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly equipmentService: EquipmentService
+  ) {}
 
   async getMyNotifications(userId: string) {
     const notifications = await this.prisma.notification.findMany({
@@ -79,13 +83,13 @@ export class NotificationsService {
     // Filter unique IDs
     const uniqueIds = Array.from(new Set(equipmentIds));
 
-    const equipments = await this.prisma.equipment.findMany({
-      where: {
-        equipmentId: { in: uniqueIds },
-      },
-    });
+    const equipments = await Promise.all(
+      uniqueIds.map(id => this.equipmentService.getEquipmentById(id).catch(() => null))
+    );
 
-    const lowStockEquipments = equipments.filter(
+    const validEquipments = equipments.filter((eq): eq is NonNullable<typeof eq> => eq !== null);
+
+    const lowStockEquipments = validEquipments.filter(
       (eq) => eq.equipmentQuantity <= eq.minequipmentQuantity
     );
 

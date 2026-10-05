@@ -31,7 +31,6 @@ export function useShelves(options?: UseShelvesOptions) {
   const { userId, authReady } = useAuthQueryContext();
   const queryClient = useQueryClient();
   const {
-    permissions,
     canCreateShelf,
     canUpdateShelf,
     canDeleteShelf,
@@ -43,22 +42,30 @@ export function useShelves(options?: UseShelvesOptions) {
 
   const shelvesQuery = useQuery<PaginatedShelvesResponse>({
     queryKey: ['shelves', { page, limit, search: searchTerm.trim() }, userId],
-    queryFn: () =>
-      searchTerm.trim()
-        ? ShelfService.searchShelves(api, searchTerm.trim(), { page, limit })
-        : ShelfService.getAllShelves(api, { page, limit }),
-    enabled: options?.enabled ?? true,
+    queryFn: () => {
+      const q = searchTerm.trim();
+      const statusPrefix = 'status:';
+      if (q.startsWith(statusPrefix)) {
+        const val = q.slice(statusPrefix.length);
+        const status = val === 'true' ? true : val === 'false' ? false : undefined;
+        return ShelfService.searchShelves(api, { status }, { page, limit });
+      }
+      return q
+        ? ShelfService.searchShelves(api, { shelfName: q }, { page, limit })
+        : ShelfService.getAllShelves(api, { page, limit });
+    },
+    enabled: authReady && Boolean(userId) && (options?.enabled ?? true),
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
 
   const createMutation = useMutation({
     mutationFn: (input: CreateShelfInput) =>
-      ShelfService.createShelf(api, input, permissions),
+      ShelfService.createShelf(api, input),
     onSuccess: async (shelf) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['shelves', userId] }),
-        queryClient.invalidateQueries({ queryKey: ['stocks', userId] }),
+        queryClient.invalidateQueries({ queryKey: ['shelves'] }),
+        queryClient.invalidateQueries({ queryKey: ['stocks'] }),
       ]);
       toast.success('Emplacement créé', {
         description: shelf.shelfName ?? 'Nouvel emplacement',
@@ -68,24 +75,23 @@ export function useShelves(options?: UseShelvesOptions) {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateShelfInput }) =>
-      ShelfService.updateShelf(api, id, data, permissions),
+      ShelfService.updateShelf(api, id, data),
     onSuccess: async (shelf) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['shelves', userId] }),
-        queryClient.invalidateQueries({ queryKey: ['shelf', shelf.shelfId, userId] }),
-        queryClient.invalidateQueries({ queryKey: ['shelf-contents', shelf.shelfId, userId] }),
-        queryClient.invalidateQueries({ queryKey: ['stocks', userId] }),
+        queryClient.invalidateQueries({ queryKey: ['shelves'] }),
+        queryClient.invalidateQueries({ queryKey: ['shelf', shelf.shelfId] }),
+        queryClient.invalidateQueries({ queryKey: ['stocks'] }),
       ]);
       toast.success('Emplacement modifié');
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => ShelfService.deleteShelf(api, id, permissions),
+    mutationFn: (id: string) => ShelfService.deleteShelf(api, id),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['shelves', userId] }),
-        queryClient.invalidateQueries({ queryKey: ['stocks', userId] }),
+        queryClient.invalidateQueries({ queryKey: ['shelves'] }),
+        queryClient.invalidateQueries({ queryKey: ['stocks'] }),
       ]);
       toast.success('Emplacement supprimé');
     },
@@ -130,38 +136,8 @@ export function useShelf(id?: string | null) {
   return useQuery<Shelf>({
     queryKey: ['shelf', id, userId],
     queryFn: () => ShelfService.getShelfById(api, id!),
-    enabled: Boolean(id),
+    enabled: authReady && Boolean(userId) && Boolean(id),
     staleTime: 60_000,
-  });
-}
-
-export function useShelfContents(shelfId?: string | null, enabled = true) {
-  const api = useApi();
-  const { userId, authReady } = useAuthQueryContext();
-  const { permissions } = usePermissions();
-  return useQuery({
-    queryKey: ['shelf-contents', shelfId, userId],
-    queryFn: () => ShelfService.getShelfContents(api, shelfId!, permissions),
-    enabled: enabled && Boolean(shelfId),
-    staleTime: 20_000,
-  });
-}
-
-export function useShelfEquipment(
-  shelfId?: string | null,
-  page = 1,
-  limit = 100,
-  enabled = true,
-) {
-  const api = useApi();
-  const { userId, authReady } = useAuthQueryContext();
-  const { permissions } = usePermissions();
-  return useQuery({
-    queryKey: ['shelf-equipment', shelfId, page, limit, userId],
-    queryFn: () =>
-      ShelfService.getShelfEquipment(api, shelfId!, { page, limit }, permissions),
-    enabled: enabled && Boolean(shelfId),
-    placeholderData: keepPreviousData,
   });
 }
 
@@ -173,12 +149,11 @@ export function useShelfSerialNumbers(
 ) {
   const api = useApi();
   const { userId, authReady } = useAuthQueryContext();
-  const { permissions } = usePermissions();
   return useQuery({
     queryKey: ['shelf-serial-numbers', shelfId, page, limit, userId],
     queryFn: () =>
-      ShelfService.getShelfSerialNumbers(api, shelfId!, { page, limit }, permissions),
-    enabled: enabled && Boolean(shelfId),
+      ShelfService.getShelfSerialNumbers(api, shelfId!, { page, limit }),
+    enabled: authReady && Boolean(userId) && enabled && Boolean(shelfId),
     placeholderData: keepPreviousData,
   });
 }

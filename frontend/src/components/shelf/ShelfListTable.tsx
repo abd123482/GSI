@@ -140,7 +140,6 @@ export function ShelfListTable({
                   <th className="px-4 py-3">Emplacement</th>
                   <th className="px-4 py-3">Stock</th>
                   <th className="px-4 py-3">Statut</th>
-                  <th className="px-4 py-3 text-center">Quantité</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -177,11 +176,6 @@ export function ShelfListTable({
                         }`}>
                           <span className={`h-1 w-1 rounded-full ${shelfStatus === 'ACTIVE' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                           {shelfStatus === 'ACTIVE' ? 'Actif' : 'Inactif'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="inline-flex items-center justify-center rounded bg-[#2b2622] px-2 py-1 font-mono font-medium border border-[#403b37]">
-                          {shelf.shelfQuantity}
                         </span>
                       </td>
                       <td className="px-4 py-3">

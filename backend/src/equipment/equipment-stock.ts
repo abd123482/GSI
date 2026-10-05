@@ -12,19 +12,18 @@ export function buildShelfMatchesCte(shelfId: string, filters: any) {
   const conditions = [];
   if (filters.equipmentName) conditions.push(Prisma.sql`e.[equipmentName] LIKE ${'%' + filters.equipmentName + '%'}`);
   if (filters.hasSerialNumber !== undefined) conditions.push(Prisma.sql`e.[hasSerialNumber] = ${filters.hasSerialNumber ? 1 : 0}`);
-  if (filters.equipmentStatus !== undefined) conditions.push(Prisma.sql`e.[equipmentStatus] = ${filters.equipmentStatus ? 1 : 0}`);
-  if (filters.equipmentQuantity !== undefined) conditions.push(Prisma.sql`e.[equipmentQuantity] = ${filters.equipmentQuantity}`);
+  if (filters.equipmentStatus !== undefined) conditions.push(Prisma.sql`e.[equipmentStatus] = ${filters.equipmentStatus ? 'ACTIVE' : 'INACTIVE'}`);
   if (filters.minEquipmentQuantity !== undefined) conditions.push(Prisma.sql`e.[minequipmentQuantity] = ${filters.minEquipmentQuantity}`);
 
   const whereClause = conditions.length > 0 ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}` : Prisma.empty;
 
   return Prisma.sql`
     WITH ShelfStock AS (
-      SELECT [equipmentId], SUM(CASE WHEN [destinationShelfId] = ${shelfId} THEN [mouvementQuantity] ELSE 0 END) - SUM(CASE WHEN [sourceShelfId] = ${shelfId} THEN [mouvementQuantity] ELSE 0 END) as qty
-      FROM [dbo].[MouvementEquipment]
+      SELECT [equipmentId], SUM(CASE WHEN [destinationShelfId] = ${shelfId} THEN [equipmentQuantity] ELSE 0 END) - SUM(CASE WHEN [sourceShelfId] = ${shelfId} THEN [equipmentQuantity] ELSE 0 END) as qty
+      FROM [dbo].[MovementEquipment]
       WHERE [destinationShelfId] = ${shelfId} OR [sourceShelfId] = ${shelfId}
       GROUP BY [equipmentId]
-      HAVING SUM(CASE WHEN [destinationShelfId] = ${shelfId} THEN [mouvementQuantity] ELSE 0 END) - SUM(CASE WHEN [sourceShelfId] = ${shelfId} THEN [mouvementQuantity] ELSE 0 END) > 0
+      HAVING SUM(CASE WHEN [destinationShelfId] = ${shelfId} THEN [equipmentQuantity] ELSE 0 END) - SUM(CASE WHEN [sourceShelfId] = ${shelfId} THEN [equipmentQuantity] ELSE 0 END) > 0
     ),
     Matches AS (
       SELECT e.* 
@@ -42,14 +41,14 @@ export function buildEquipmentBalancesQuery(equipmentIds: string[]) {
       s.[shelfId],
       s.[shelfName],
       s.[stockId],
-      SUM(CASE WHEN m.[destinationShelfId] = s.[shelfId] THEN m.[mouvementQuantity] ELSE 0 END) - 
-      SUM(CASE WHEN m.[sourceShelfId] = s.[shelfId] THEN m.[mouvementQuantity] ELSE 0 END) AS quantity
-    FROM [dbo].[MouvementEquipment] m
+      SUM(CASE WHEN m.[destinationShelfId] = s.[shelfId] THEN m.[equipmentQuantity] ELSE 0 END) - 
+      SUM(CASE WHEN m.[sourceShelfId] = s.[shelfId] THEN m.[equipmentQuantity] ELSE 0 END) AS quantity
+    FROM [dbo].[MovementEquipment] m
     INNER JOIN [dbo].[Shelf] s ON s.[shelfId] = m.[destinationShelfId] OR s.[shelfId] = m.[sourceShelfId]
     WHERE m.[equipmentId] IN (${Prisma.join(equipmentIds)})
     GROUP BY m.[equipmentId], s.[shelfId], s.[shelfName], s.[stockId]
-    HAVING SUM(CASE WHEN m.[destinationShelfId] = s.[shelfId] THEN m.[mouvementQuantity] ELSE 0 END) - 
-           SUM(CASE WHEN m.[sourceShelfId] = s.[shelfId] THEN m.[mouvementQuantity] ELSE 0 END) > 0
+    HAVING SUM(CASE WHEN m.[destinationShelfId] = s.[shelfId] THEN m.[equipmentQuantity] ELSE 0 END) - 
+           SUM(CASE WHEN m.[sourceShelfId] = s.[shelfId] THEN m.[equipmentQuantity] ELSE 0 END) > 0
   `;
 }
 
@@ -76,11 +75,11 @@ export function summarizeEquipmentStock(equipment: any, rows: ShelfBalanceRow[])
     .sort((a, b) => b.equipmentQuantity - a.equipmentQuantity);
 
   const totalAllocated = equipmentShelfs.reduce((sum, s) => sum + s.equipmentQuantity, 0);
-  const stockIsConsistent = totalAllocated === equipment.equipmentQuantity;
 
   return {
+    equipmentQuantity: totalAllocated,
     equipmentShelfs,
     shelvesCount: equipmentShelfs.length,
-    stockIsConsistent
+    stockIsConsistent: true
   };
 }

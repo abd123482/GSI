@@ -10,7 +10,6 @@ import { ShelfModule } from './shelves/shelves.module.js';
 import { StockModule } from './stock/stock.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { UsersModule } from './users/users.module.js';
-import { OrdersModule } from './orders/orders.module.js';
 import { InventoryModule } from './inventory/inventory.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
@@ -24,7 +23,6 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
     EquipmentMovementModule,
     ShelfModule,
     StockModule,
-    OrdersModule,
     InventoryModule,
     NotificationsModule,
     DashboardModule,

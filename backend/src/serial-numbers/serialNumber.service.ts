@@ -7,16 +7,15 @@ import { paginationSchema } from './dto/index.js';
 const uuid = z.string().trim().uuid().transform((id) => id.toLowerCase());
 const status = z.union([z.boolean(), z.string().trim().toUpperCase()
   .pipe(z.enum(['TRUE', 'FALSE', 'ACTIVE', 'INACTIVE', 'AVAILABLE', 'UNAVAILABLE']))])
-  .transform((value) => value === true || value === 'TRUE' || value === 'ACTIVE' || value === 'AVAILABLE');
+  .transform((value) => value === true || value === 'TRUE' || value === 'ACTIVE' || value === 'AVAILABLE' ? 'ACTIVE' : 'INACTIVE');
 const updateSchema = z.object({ serialNumberStatus: status }).strict();
 const searchSchema = z.object({
   serialNumberCode: z.string().trim().max(200).optional(),
-  serialNumberStatus: status.optional(), equipmentId: uuid.optional(), shelfId: uuid.optional(),
+  serialNumberStatus: status.optional(), equipmentId: uuid.optional(),
 });
 const SERIAL_SELECT = {
-  serialNumberId: true, serialNumberCode: true, serialNumberStatus: true, equipmentId: true, shelfId: true,
+  serialNumberId: true, serialNumberCode: true, serialNumberStatus: true, equipmentId: true,
   equipment: { select: { equipmentId: true, equipmentName: true, hasSerialNumber: true, equipmentStatus: true } },
-  shelf: { select: { shelfId: true, shelfName: true, stockId: true } },
 } satisfies Prisma.SerialNumberSelect;
 
 @Injectable()
@@ -37,7 +36,7 @@ export class SerialNumberService {
       const where: Prisma.SerialNumberWhereInput = {
         ...(f.serialNumberCode ? { serialNumberCode: { contains: f.serialNumberCode } } : {}),
         ...(f.serialNumberStatus !== undefined ? { serialNumberStatus: f.serialNumberStatus } : {}),
-        ...(f.equipmentId ? { equipmentId: f.equipmentId } : {}), ...(f.shelfId ? { shelfId: f.shelfId } : {}),
+        ...(f.equipmentId ? { equipmentId: f.equipmentId } : {}),
       };
       const [serialNumbers, totalSerialNumbers] = await Promise.all([
         this.prisma.serialNumber.findMany({
@@ -78,17 +77,11 @@ export class SerialNumberService {
         if (!lock || (lock.result !== 0 && lock.result !== 1)) throw new ConflictException('Serial is busy; retry');
         const serial = await tx.serialNumber.findUniqueOrThrow({
           where: { serialNumberId },
-          select: { ...SERIAL_SELECT, _count: { select: { movementItems: true, mouvements: true, orders: true, investigationIssues: true } } }
+          select: { ...SERIAL_SELECT, _count: { select: { movementItems: true } } }
         });
-        if (serial.shelfId || Object.values(serial._count).some((count) => count > 0))
+        if (Object.values(serial._count).some((count) => count > 0))
           throw new ConflictException('Serial is allocated or has history; deactivate it instead');
-        const snapshot = await tx.inventory_SerialNumber_Snapshot.findFirst({
-          where: { OR: [{ serialNumberId }, { serialNumberCode: serial.serialNumberCode }] }, select: { snapshotId: true },
-        });
-        const scan = await tx.order.findFirst({ where: { scannedSerialCode: serial.serialNumberCode }, select: { orderId: true } });
-        const issue = await tx.inventoryInvestigationIssue.findFirst({ where: { serialNumberCode: serial.serialNumberCode }, select: { issueId: true } });
-        if (snapshot || scan || issue) throw new ConflictException('Serial is referenced by inventory history');
-        return tx.serialNumber.delete({ where: { serialNumberId, shelfId: null }, select: SERIAL_SELECT });
+        return tx.serialNumber.delete({ where: { serialNumberId }, select: SERIAL_SELECT });
       }, { isolationLevel: 'Serializable', maxWait: 5_000, timeout: 15_000 });
     });
   }

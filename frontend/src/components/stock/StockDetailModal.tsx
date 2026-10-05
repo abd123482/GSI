@@ -71,7 +71,15 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
                 {!stock.shelves || stock.shelves.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-[#4a4540] bg-[#2b2622]/35 p-6 text-center text-xs text-[#aea69c]">Aucun emplacement rattaché à ce stock.</div>
                 ) : (
-                  <div className="overflow-hidden rounded-lg border border-[#3f3a36]"><div className="divide-y divide-[#3f3a36]">{stock.shelves.map((shelf) => <div key={shelf.shelfId} className="flex items-center justify-between gap-3 bg-[#2b2622]/55 px-4 py-3 text-xs"><span className="truncate font-medium">{shelf.shelfName ?? 'Emplacement sans nom'}</span><span className="font-mono text-[#c9c0ad]">{shelf.shelfQuantity} u.</span></div>)}</div></div>
+                  <div className="overflow-hidden rounded-lg border border-[#3f3a36]">
+                    <div className="divide-y divide-[#3f3a36]">
+                      {stock.shelves.map((shelf) => (
+                        <div key={shelf.shelfId} className="flex items-center justify-between gap-3 bg-[#2b2622]/55 px-4 py-3 text-xs">
+                          <span className="truncate font-medium">{shelf.shelfName ?? 'Emplacement sans nom'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </section>
             </div>

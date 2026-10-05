@@ -54,7 +54,6 @@ export function DeleteShelfModal({ shelf, isOpen, onClose, onSuccess }: DeleteSh
           </div>
           <div className="rounded-lg border border-[#3f3a36] bg-[#2b2622]/65 p-3 text-xs">
             <p className="font-semibold">{shelf.shelfName ?? 'Emplacement sans nom'}</p>
-            <p className="mt-2 text-white/55">Quantité actuelle : <strong className="font-mono text-white">{shelf.shelfQuantity}</strong></p>
           </div>
         </div>
 

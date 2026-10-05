@@ -168,7 +168,7 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
 
           <div className="flex gap-2 rounded-lg border border-sky-400/20 bg-sky-400/5 p-3 text-[11px] text-sky-100">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>Un emplacement doit toujours appartenir à un stock ACTIVE. Sa quantité physique démarre à 0 et change uniquement via les mouvements.</p>
+            <p>Un emplacement doit toujours appartenir à un stock ACTIVE.</p>
           </div>
 
           <footer className="flex justify-end gap-2 border-t border-[#3f3a36] pt-4">

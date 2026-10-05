@@ -12,16 +12,17 @@ const uuid = z.string().trim().uuid().transform((id) => id.toLowerCase());
 const unique = (values: string[]) => [...new Set(values)];
 const shelfSelect = { shelfId: true, shelfName: true, stockId: true } as const;
 const equipmentSelect = {
-  equipmentId: true, equipmentName: true, hasSerialNumber: true, equipmentQuantity: true, equipmentStatus: true,
+  equipmentId: true, equipmentName: true, hasSerialNumber: true, equipmentStatus: true,
 } satisfies Prisma.EquipmentSelect;
 const movementInclude = {
-  sourceShelf: { select: shelfSelect }, destinationShelf: { select: shelfSelect },
   createdByUser: { select: { userId: true, userName: true, userEmail: true } },
   inventory: { select: { inventoryId: true, title: true, status: true } },
   items: {
-    orderBy: { rowNum: 'asc' }, include: {
+    orderBy: { movementEquipmentId: 'asc' }, include: {
       equipment: { select: equipmentSelect },
       serialNumber: { select: { serialNumberId: true, serialNumberCode: true, serialNumberStatus: true } },
+      sourceShelf: { select: shelfSelect },
+      destinationShelf: { select: shelfSelect },
     }
   },
 } satisfies Prisma.MouvementInclude;
@@ -65,12 +66,12 @@ export class EquipmentMovementService {
         ]);
         const equipments = await tx.equipment.findMany({ where: { equipmentId: { in: equipmentIds } }, select: equipmentSelect });
         if (equipments.length !== equipmentIds.length) throw new NotFoundException('One or more equipment records do not exist');
-        if (equipments.some((e) => !e.equipmentStatus || e.equipmentQuantity < 0)) throw new ConflictException('Equipment is inactive or has invalid stock');
+        if (equipments.some((e) => !e.equipmentStatus)) throw new ConflictException('Equipment is inactive');
         const shelves = await tx.shelf.findMany({ where: { shelfId: { in: shelfIds }, status: true, stock: { status: true } }, select: { shelfId: true } });
         if (shelves.length !== shelfIds.length) throw new ConflictException('Every shelf and its stock must exist and be active');
         const serials = serialIds.length ? await tx.serialNumber.findMany({
           where: { serialNumberId: { in: serialIds } },
-          select: { serialNumberId: true, equipmentId: true, shelfId: true }
+          select: { serialNumberId: true, equipmentId: true }
         }) : [];
         if (serials.length !== serialIds.length) throw new NotFoundException('One or more serial numbers do not exist');
         const equipmentById = new Map(equipments.map((e) => [e.equipmentId.toLowerCase(), e]));
@@ -81,15 +82,15 @@ export class EquipmentMovementService {
             throw new BadRequestException(`'${equipment.equipmentName}' ${equipment.hasSerialNumber ? 'requires' : 'does not accept'} a serial`);
           if (item.serialNumberId) {
             const serial = serialById.get(item.serialNumberId)!;
-            if (serial.equipmentId.toLowerCase() !== item.equipmentId || (serial.shelfId?.toLowerCase() ?? null) !== (item.sourceShelfId ?? null))
-              throw new ConflictException('Serial ownership or source location does not match; an IN return requires an unallocated serial');
+            if (serial.equipmentId.toLowerCase() !== item.equipmentId)
+              throw new ConflictException('Serial ownership does not match');
           }
         }
         if (audit.inventoryId) {
           const inventory = await tx.inventory.findUnique({ where: { inventoryId: audit.inventoryId }, select: { status: true } });
           if (!inventory || UNLOCKED.includes(inventory.status)) throw new ConflictException('Inventory adjustment requires an active inventory');
         }
-        const conflict = await tx.inventoryWorkUnit.findFirst({
+        const conflict = await tx.inventoryUnit.findFirst({
           where: {
             OR: [{ equipmentId: { in: equipmentIds } }, { shelfId: { in: shelfIds } }],
             inventory: { status: { notIn: UNLOCKED }, ...(audit.inventoryId ? { inventoryId: { not: audit.inventoryId } } : {}) },
@@ -98,28 +99,12 @@ export class EquipmentMovementService {
         if (conflict) throw new ConflictException('Movement is blocked by an active inventory');
         if (type !== 'IN') {
           await this.checkSourceBalances(tx, items);
-          for (const [id, quantity] of totals) if (equipmentById.get(id)!.equipmentQuantity < quantity)
-            throw new ConflictException('Equipment total is smaller than the quantity leaving source shelves');
-        }
-
-        // A single guarded update for all equipment totals; TRANSFER leaves totals unchanged.
-        if (type !== 'TRANSFER') {
-          const values = Prisma.join([...totals].map(([id, qty]) => Prisma.sql`(CAST(${id} AS uniqueidentifier), ${type === 'IN' ? qty : -qty})`));
-          const [result] = await tx.$queryRaw<{ changed: number }[]>(Prisma.sql`
-            DECLARE @changed TABLE (id uniqueidentifier);
-            UPDATE e SET equipmentQuantity = e.equipmentQuantity + v.delta
-            OUTPUT inserted.equipmentId INTO @changed
-            FROM dbo.Equipment e JOIN (VALUES ${values}) v(id, delta) ON v.id = e.equipmentId
-            WHERE e.equipmentStatus = 1 AND e.equipmentQuantity >= 0
-              AND CAST(e.equipmentQuantity AS bigint) + v.delta BETWEEN 0 AND ${MAX};
-            SELECT COUNT(*) AS changed FROM @changed;`);
-          if (result?.changed !== totals.size) throw new ConflictException('Insufficient stock, overflow, or concurrent equipment change');
         }
         if (newSerials.length) {
           const result = await tx.serialNumber.createMany({
             data: newSerials.map((i) => ({
               serialNumberId: i.serialNumberId!, serialNumberCode: i.serialNumberCode!,
-              equipmentId: i.equipmentId, shelfId: i.destinationShelfId!, serialNumberStatus: true,
+              equipmentId: i.equipmentId, serialNumberStatus: 'ACTIVE',
             }))
           });
           if (result.count !== newSerials.length) throw new ConflictException('Serial creation was incomplete');
@@ -140,16 +125,15 @@ export class EquipmentMovementService {
         }
         const header = await tx.mouvement.create({
           data: {
-            mouvementStatus: type === 'OUT', mouvementQuantity: items.reduce((s, i) => s + i.movementQuantity, 0),
-            equipmentId: null, serialNumberId: null, sourceShelfId: null, destinationShelfId: null,
-            createdByUserId, origin: audit.origin, inventoryId: audit.inventoryId, reason: audit.reason,
+            mouvementStatus: type === 'OUT' ? 'OUT' : 'IN',
+            createdByUserId, origin: audit.origin === 'USER', inventoryId: audit.inventoryId, reason: audit.reason,
           }, select: { mouvementId: true }
         });
-        const lines = await tx.mouvementEquipment.createMany({
+        const lines = await tx.movementEquipment.createMany({
           data: resolved.map((i, index) => ({
-            mouvementId: header.mouvementId, rowNum: index + 1, equipmentId: i.equipmentId,
+            movementId: header.mouvementId, equipmentId: i.equipmentId,
             equipmentTypeSnapshot: equipmentById.get(i.equipmentId)!.hasSerialNumber ? 'SERIALIZED' : 'STANDARD',
-            serialNumberId: i.serialNumberId, mouvementQuantity: i.movementQuantity, mouvementStatus: type === 'OUT',
+            serialNumberId: i.serialNumberId, equipmentQuantity: i.movementQuantity,
             sourceShelfId: i.sourceShelfId ?? null, destinationShelfId: i.destinationShelfId ?? null,
           }))
         });
@@ -171,12 +155,13 @@ export class EquipmentMovementService {
         ...(f.equipmentId ? { equipmentId: f.equipmentId } : {}), ...(f.serialNumberId ? { serialNumberId: f.serialNumberId } : {}),
         ...(f.sourceShelfId ? { sourceShelfId: f.sourceShelfId } : {}), ...(f.destinationShelfId ? { destinationShelfId: f.destinationShelfId } : {}),
       };
-      const line: Prisma.MouvementEquipmentWhereInput = { AND: [route, details] };
+      const line: Prisma.MovementEquipmentWhereInput = { AND: [route, details] };
       const where: Prisma.MouvementWhereInput = {
-        ...(f.origin ? { origin: f.origin } : {}), ...(f.inventoryId ? { inventoryId: f.inventoryId } : {}),
+        ...(f.origin ? { origin: f.origin === 'USER' } : {}), ...(f.inventoryId ? { inventoryId: f.inventoryId } : {}),
         ...((f.movementType || Object.keys(details).length) ? {
           OR: [
-            { items: { some: line } }, { items: { none: {} }, AND: [route, details] },
+            { items: { some: line } },
+            ...(!Object.keys(details).length && Object.keys(route).length ? [{ items: { none: {} } }] : [])
           ]
         } : {}),
       };
@@ -213,13 +198,13 @@ export class EquipmentMovementService {
         SELECT m.equipmentId, m.sourceShelfId, -CAST(m.equipmentQuantity AS bigint)
         FROM dbo.MovementEquipment m JOIN wanted w ON w.equipmentId=m.equipmentId AND w.shelfId=m.sourceShelfId
         UNION ALL
-        SELECT m.equipmentId, m.destinationShelfId, CAST(m.movementQuantity AS bigint)
-        FROM dbo.Mouvement m JOIN wanted w ON w.equipmentId=m.equipmentId AND w.shelfId=m.destinationShelfId
-        WHERE NOT EXISTS (SELECT 1 FROM dbo.MovementEquipment c WHERE c.movementId=m.mouvementId)
+        SELECT m.equipmentId, m.destinationShelfId, CAST(h.mouvementQuantity AS bigint)
+        FROM dbo.Mouvement h JOIN dbo.MovementEquipment m ON m.movementId=h.mouvementId JOIN wanted w ON w.equipmentId=m.equipmentId AND w.shelfId=m.destinationShelfId
+        WHERE NOT EXISTS (SELECT 1 FROM dbo.MovementEquipment c WHERE c.movementId=h.mouvementId)
         UNION ALL
-        SELECT m.equipmentId, m.sourceShelfId, -CAST(m.movementQuantity AS bigint)
-        FROM dbo.Mouvement m JOIN wanted w ON w.equipmentId=m.equipmentId AND w.shelfId=m.sourceShelfId
-        WHERE NOT EXISTS (SELECT 1 FROM dbo.MovementEquipment c WHERE c.movementId=m.mouvementId)
+        SELECT m.equipmentId, m.sourceShelfId, -CAST(h.mouvementQuantity AS bigint)
+        FROM dbo.Mouvement h JOIN dbo.MovementEquipment m ON m.movementId=h.mouvementId JOIN wanted w ON w.equipmentId=m.equipmentId AND w.shelfId=m.sourceShelfId
+        WHERE NOT EXISTS (SELECT 1 FROM dbo.MovementEquipment c WHERE c.movementId=h.mouvementId)
       ) SELECT w.equipmentId, w.shelfId, COALESCE(SUM(d.qty),0) quantity
       FROM wanted w LEFT JOIN deltas d ON d.equipmentId=w.equipmentId AND d.shelfId=w.shelfId
       GROUP BY w.equipmentId,w.shelfId;`);

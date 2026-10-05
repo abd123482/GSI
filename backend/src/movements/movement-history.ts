@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client.js';
 
 type MovementHistoryFilter = Pick<
-  Prisma.MouvementEquipmentWhereInput,
+  Prisma.MovementEquipmentWhereInput,
   'equipmentId' | 'serialNumberId' | 'sourceShelfId' | 'destinationShelfId'
 >;
 
@@ -14,9 +14,9 @@ export async function assertNoMovementHistory(
   tx: Prisma.TransactionClient,
   where: MovementHistoryFilter,
 ): Promise<void> {
-  const history = await tx.mouvementEquipment.findFirst({
+  const history = await tx.movementEquipment.findFirst({
     where,
-    select: { mouvementEquipmentId: true },
+    select: { movementEquipmentId: true },
   });
 
   if (history) {

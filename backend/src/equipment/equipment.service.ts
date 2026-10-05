@@ -26,7 +26,6 @@ const EQUIPMENT_SELECT = {
   equipmentId: true,
   equipmentName: true,
   hasSerialNumber: true,
-  equipmentQuantity: true,
   minequipmentQuantity: true,
   equipmentStatus: true,
 } satisfies Prisma.EquipmentSelect;
@@ -58,9 +57,8 @@ export class EquipmentService {
         data: {
           equipmentName: data.equipmentName,
           hasSerialNumber: data.hasSerialNumber,
-          equipmentQuantity: 0,
           minequipmentQuantity: data.minEquipmentQuantity,
-          equipmentStatus: data.equipmentStatus,
+          equipmentStatus: data.equipmentStatus ? 'ACTIVE' : 'INACTIVE',
         },
         select: EQUIPMENT_SELECT,
       });
@@ -137,43 +135,37 @@ export class EquipmentService {
             ...EQUIPMENT_SELECT,
             _count: {
               select: {
-                movementItems: true, mouvements: true, serialNumbers: true,
-                orders: true, serialSnapshots: true, investigationIssues: true,
+                movementItems: true, serialNumbers: true, inventoryUnits: true,
               }
             },
           },
         });
         if (!equipment) throw new NotFoundException(`Equipment with ID '${equipmentId}' not found`);
-        if (equipment._count.movementItems || equipment._count.mouvements) {
+        if (equipment._count.movementItems) {
           throw new ConflictException('This equipment has movement history and cannot be physically deleted; mark it INACTIVE instead');
         }
-        if (equipment.equipmentQuantity !== 0) {
+        const rows = await this.loadBalances(tx, [equipmentId]);
+        const stock = summarizeEquipmentStock(equipment, rows);
+        if (stock.equipmentQuantity !== 0) {
           throw new ConflictException('Equipment with non-zero stock cannot be physically deleted');
         }
         if (equipment._count.serialNumbers) {
           throw new ConflictException('Equipment has serial identities (including inactive ones); mark it INACTIVE instead');
         }
-        if (equipment._count.orders || equipment._count.serialSnapshots || equipment._count.investigationIssues) {
+        if (equipment._count.inventoryUnits) {
           throw new ConflictException('Equipment is referenced by inventory records and cannot be physically deleted');
         }
         // These schema fields are logical references, not Equipment relations.
         // Do not rely solely on FK errors or remove historical child records.
-        const workUnit = await tx.inventoryWorkUnit.findFirst({
+        const workUnit = await tx.inventoryUnit.findFirst({
           where: { equipmentId }, select: { unitId: true },
         });
-        const snapshot = await tx.inventory_Equipment_Shelf_Snapshot.findFirst({
-          where: { equipmentId }, select: { snapshotId: true },
-        });
-        const observation = await tx.order.findFirst({
-          where: { observedEquipmentId: equipmentId }, select: { orderId: true },
-        });
-        // Scope IDs live in JSON text, so normalize casing even under a
-        // case-sensitive SQL Server collation. A text match fails conservatively.
+
         const scopes = await tx.$queryRaw<Array<{ inventoryId: string }>>`
           SELECT TOP (1) [inventoryId] FROM [dbo].[Inventory]
           WHERE CHARINDEX(${equipmentId}, LOWER([equipmentScopeIds])) > 0
         `;
-        if (workUnit || snapshot || observation || scopes.length > 0) {
+        if (workUnit || scopes.length > 0) {
           throw new ConflictException('Equipment is referenced by inventory history or scope and cannot be physically deleted');
         }
         return tx.equipment.delete({ where: { equipmentId }, select: EQUIPMENT_SELECT });
@@ -195,8 +187,8 @@ export class EquipmentService {
           where: { equipmentId }, skip: (page - 1) * limit, take: limit,
           select: {
             serialNumberId: true, serialNumberCode: true, serialNumberStatus: true,
-            equipmentId: true, shelfId: true,
-            shelf: { select: { shelfId: true, shelfName: true, stockId: true } },
+            equipmentId: true,
+            movementItems: { select: { destinationShelf: { select: { shelfId: true, shelfName: true, stockId: true } } }, orderBy: { movementEquipmentId: 'desc' }, take: 1 },
           },
           orderBy: [{ serialNumberCode: 'asc' }, { serialNumberId: 'asc' }],
         });
@@ -236,8 +228,7 @@ export class EquipmentService {
         const where: Prisma.EquipmentWhereInput = {};
         if (filters.equipmentName) where.equipmentName = { contains: filters.equipmentName };
         if (filters.hasSerialNumber !== undefined) where.hasSerialNumber = filters.hasSerialNumber;
-        if (filters.equipmentStatus !== undefined) where.equipmentStatus = filters.equipmentStatus;
-        if (filters.equipmentQuantity !== undefined) where.equipmentQuantity = filters.equipmentQuantity;
+        if (filters.equipmentStatus !== undefined) where.equipmentStatus = filters.equipmentStatus ? 'ACTIVE' : 'INACTIVE';
         if (filters.minEquipmentQuantity !== undefined) where.minequipmentQuantity = filters.minEquipmentQuantity;
         totalEquipments = await tx.equipment.count({ where });
         equipments = await tx.equipment.findMany({
@@ -289,7 +280,7 @@ export class EquipmentService {
     return {
       ...(data.equipmentName !== undefined && { equipmentName: data.equipmentName }),
       ...(data.minEquipmentQuantity !== undefined && { minequipmentQuantity: data.minEquipmentQuantity }),
-      ...(data.equipmentStatus !== undefined && { equipmentStatus: data.equipmentStatus }),
+      ...(data.equipmentStatus !== undefined && { equipmentStatus: data.equipmentStatus ? 'ACTIVE' : 'INACTIVE' }),
     };
   }
 
@@ -306,8 +297,8 @@ export class EquipmentService {
       throw new ConflictException('Equipment physical quantity and movement-derived shelf balances are inconsistent; conversion is blocked');
     }
     const serials = data.conversionSerials ?? [];
-    if (serials.length !== current.equipmentQuantity) {
-      throw new BadRequestException(`Conversion requires exactly ${current.equipmentQuantity} serial codes mapped to the current shelves`);
+    if (serials.length !== stock.equipmentQuantity) {
+      throw new BadRequestException(`Conversion requires exactly ${stock.equipmentQuantity} serial codes mapped to the current shelves`);
     }
     const codes = serials.map((item) => item.serialNumberCode);
     if (new Set(codes).size !== codes.length) {
@@ -331,7 +322,7 @@ export class EquipmentService {
     // Match the stock-freeze policy already used by EquipmentMovementService.
     for (let offset = 0; offset < Math.max(1, shelfIds.length); offset += SERIAL_BATCH_SIZE) {
       const ids = shelfIds.slice(offset, offset + SERIAL_BATCH_SIZE);
-      const inventoryConflict = await tx.inventoryWorkUnit.findFirst({
+      const inventoryConflict = await tx.inventoryUnit.findFirst({
         where: {
           OR: [{ equipmentId: current.equipmentId },
           ...(ids.length ? [{ shelfId: { in: ids } }] : [])],
@@ -378,7 +369,7 @@ export class EquipmentService {
       const result = await tx.serialNumber.createMany({
         data: batch.map((item) => ({
           equipmentId: current.equipmentId, serialNumberCode: item.serialNumberCode,
-          shelfId: item.shelfId, serialNumberStatus: true,
+          serialNumberStatus: 'ACTIVE',
         })),
       });
       if (result.count !== batch.length) throw new ConflictException('Serial conversion was incomplete; the transaction has been cancelled');

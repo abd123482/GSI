@@ -134,12 +134,9 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
             <span className="text-xs font-semibold">Statut de l'emplacement</span>
             <select {...register('status', { setValueAs: (v) => v === 'true' })} disabled={busy} className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50">
               <option value="true">Actif (ACTIVE)</option>
-              <option value="false" disabled={currentShelf.shelfQuantity > 0}>Inactif (INACTIVE)</option>
+              <option value="false">Inactif (INACTIVE)</option>
             </select>
             {errors.status && <p className="text-[11px] text-rose-300">{errors.status.message}</p>}
-            {currentShelf.shelfQuantity > 0 && (
-              <p className="text-[10px] text-amber-400">Impossible de désactiver un emplacement contenant des articles.</p>
-            )}
           </label>
 
           <label className="block space-y-1.5">
@@ -159,7 +156,7 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
 
           <div className="flex gap-2 rounded-lg border border-sky-400/20 bg-sky-400/5 p-3 text-[11px] text-sky-100">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>Seuls les stocks ACTIVE peuvent être choisis comme nouvelle destination. La quantité actuelle ({currentShelf.shelfQuantity}) reste en lecture seule.</p>
+            <p>Seuls les stocks ACTIVE peuvent être choisis comme nouvelle destination.</p>
           </div>
 
           <footer className="flex justify-end gap-2 border-t border-[#3f3a36] pt-4">

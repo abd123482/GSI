@@ -3,13 +3,12 @@ import type { SerialNumber } from './equipment';
 export interface Shelf {
   shelfId: string;
   shelfName: string | null;
-  shelfQuantity: number;
   stockId: string;
-  status?: boolean;
+  status: boolean;
   stock?: {
     stockId: string;
     stockName: string | null;
-    status?: boolean;
+    status: boolean;
   } | null;
 }
 
@@ -30,32 +29,15 @@ export interface ShelfPaginationQuery {
   limit?: number;
 }
 
+export interface SearchShelfQuery {
+  shelfName?: string;
+  stockId?: string;
+  status?: boolean;
+}
+
 export interface PaginatedShelvesResponse {
   shelves: Shelf[];
   totalShelves: number;
-  totalPages: number;
-  currentPage: number;
-  limit: number;
-}
-
-export interface ShelfEquipmentAllocation {
-  equipmentShelfId: string;
-  equipmentId: string;
-  shelfId: string;
-  equipmentQuantity: number;
-  equipment?: {
-    equipmentId: string;
-    equipmentName: string | null;
-    hasSerialNumber: boolean;
-    equipmentQuantity: number;
-    minequipmentQuantity: number;
-    equipmentStatus?: string;
-  } | null;
-}
-
-export interface PaginatedShelfEquipmentResponse {
-  allocations: ShelfEquipmentAllocation[];
-  totalAllocations: number;
   totalPages: number;
   currentPage: number;
   limit: number;
@@ -67,9 +49,4 @@ export interface PaginatedShelfSerialNumbersResponse {
   totalPages: number;
   currentPage: number;
   limit: number;
-}
-
-export interface ShelfContents {
-  allocations: ShelfEquipmentAllocation[];
-  serialNumbers: SerialNumber[];
 }
