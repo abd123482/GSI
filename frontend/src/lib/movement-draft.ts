@@ -18,10 +18,14 @@ export interface MovementDraft {
   quantity: number;
 
   /**
-   * Used only for serialized equipment.
-   * One selected serial becomes one movement item with quantity = 1.
+   * Used for existing serialized equipment returning, moving out, or transferring.
    */
-  serialNumberIds: string[];
+  existingSerialIds: string[];
+
+  /**
+   * Used ONLY for serialized equipment during an IN movement.
+   */
+  newSerialCodes: string[];
 }
 
 export interface BuildMovementPayloadArgs {
@@ -39,7 +43,8 @@ export function createMovementDraft(
     id,
     equipment,
     quantity: 1,
-    serialNumberIds: [],
+    existingSerialIds: [],
+    newSerialCodes: [],
   };
 }
 
@@ -149,21 +154,21 @@ export function buildMovementPayload({
     }
 
     if (equipment.hasSerialNumber) {
-      if (!draft.serialNumberIds.length) {
+      if (!draft.existingSerialIds.length && !draft.newSerialCodes.length) {
         fail('sélectionnez au moins un numéro de série.');
       }
 
-      for (const serialNumberId of draft.serialNumberIds) {
+      for (const serialNumberId of draft.existingSerialIds) {
         const normalizedSerialId =
           serialNumberId.trim().toLowerCase();
 
         if (!normalizedSerialId) {
-          fail('numéro de série invalide.');
+          fail('identifiant de série invalide.');
         }
 
         if (selectedSerialIds.has(normalizedSerialId)) {
           fail(
-            'un numéro de série est sélectionné plusieurs fois.',
+            'un numéro de série existant est sélectionné plusieurs fois.',
           );
         }
 
@@ -173,7 +178,27 @@ export function buildMovementPayload({
           equipmentId,
           serialNumberId,
           movementQuantity: 1,
+          sourceShelfId: source,
+          destinationShelfId: destination,
         });
+      }
+
+      if (movementType === 'IN') {
+        for (const code of draft.newSerialCodes) {
+          const normalizedCode = code.trim();
+          if (!normalizedCode) {
+            fail('code de série invalide.');
+          }
+
+          items.push({
+            equipmentId,
+            serialNumberCode: normalizedCode,
+            movementQuantity: 1,
+            destinationShelfId: destination,
+          });
+        }
+      } else if (draft.newSerialCodes.length > 0) {
+        fail('Impossible de créer de nouveaux numéros de série pour ce type de mouvement.');
       }
 
       continue;
@@ -230,6 +255,8 @@ export function buildMovementPayload({
     items.push({
       equipmentId,
       movementQuantity: draft.quantity,
+      sourceShelfId: source,
+      destinationShelfId: destination,
     });
   }
 

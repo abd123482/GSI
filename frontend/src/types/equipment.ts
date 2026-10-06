@@ -5,7 +5,7 @@ export interface SerialNumber {
   serialNumberCode: string;
   serialNumberStatus: string;
   equipmentId: string;
-  shelfId: string | null;
+  shelfId?: string | null;
 
   equipment?: {
     equipmentId: string;
@@ -38,7 +38,7 @@ export interface Equipment {
   equipmentId: string;
   equipmentName: string | null;
   hasSerialNumber: boolean;
-  equipmentQuantity: number;
+  equipmentQuantity?: number;
   minequipmentQuantity: number;
   equipmentStatus: EquipmentStatus;
 
@@ -51,16 +51,10 @@ export interface Equipment {
   };
 }
 
-export interface EquipmentWithShelvesResponse
-  extends Equipment {
+export interface EquipmentWithShelvesResponse extends Equipment {
   totalAllocated: number;
   unallocatedQuantity: number;
   shelvesCount: number;
-}
-
-export interface EquipmentConversionSerialInput {
-  serialNumberCode: string;
-  shelfId: string;
 }
 
 export interface CreateEquipmentDirectInput {
@@ -68,32 +62,13 @@ export interface CreateEquipmentDirectInput {
   hasSerialNumber: boolean;
   minEquipmentQuantity?: number;
   equipmentStatus?: EquipmentStatus;
-
-  /**
-   * Optional manual serial identities created after the equipment metadata.
-   * The UI NEVER auto-generates these codes.
-   */
-  serialNumbers?: string[];
 }
 
 export interface UpdateEquipmentInput {
   equipmentName?: string;
   minEquipmentQuantity?: number;
   equipmentStatus?: EquipmentStatus;
-
-  /**
-   * Only false -> true is allowed by the backend.
-   * true -> false must never be sent.
-   */
   hasSerialNumber?: true;
-
-  conversionSerials?: EquipmentConversionSerialInput[];
-}
-
-export interface CreateBatchSerialNumberInput {
-  equipmentId: string;
-  serialNumberCodes: string[];
-  serialNumberStatus?: string;
 }
 
 export interface PaginatedSerialNumbersResponse {
@@ -119,3 +94,4 @@ export interface EquipmentPaginationQuery {
   hasSerialNumber?: boolean;
   equipmentStatus?: EquipmentStatus;
 }
+

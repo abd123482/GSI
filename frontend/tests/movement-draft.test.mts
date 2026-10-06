@@ -46,7 +46,7 @@ test('builds one V3 IN document with multiple lines and one shared destination',
   const serialized = createMovementDraft(
     serializedEquipment() as any,
   );
-  serialized.serialNumberIds = ['serial-a', 'serial-b'];
+  serialized.existingSerialIds = ['serial-a', 'serial-b'];
 
   const payload = buildMovementPayload({
     movementType: 'IN',
@@ -130,7 +130,7 @@ test('rejects more than 100 child lines', () => {
     serializedEquipment() as any,
   );
 
-  draft.serialNumberIds = Array.from(
+  draft.existingSerialIds = Array.from(
     { length: 101 },
     (_, index) => `serial-${index}`,
   );
@@ -145,3 +145,5 @@ test('rejects more than 100 child lines', () => {
     /100 lignes/i,
   );
 });
+
+

@@ -59,13 +59,7 @@ export function CreateEquipmentModal({
     canCreateSerialNumber,
   } = usePermissions();
 
-  const [
-    serials,
-    setSerials,
-  ] =
-    useState<string[]>(
-      [],
-    );
+
 
   const [
     serverError,
@@ -100,7 +94,7 @@ export function CreateEquipmentModal({
           0,
         equipmentStatus:
           true,
-        serialNumbers: [],
+        
       },
     });
 
@@ -119,41 +113,10 @@ export function CreateEquipmentModal({
     isSubmitting ||
     isCreatingEquipment;
 
-  function syncSerials(
-    next: string[],
-  ) {
-    setSerials(next);
 
-    setValue(
-      'serialNumbers',
-      next,
-      {
-        shouldDirty: true,
-        shouldValidate: true,
-      },
-    );
-  }
-
-  function addSerialInput() {
-    syncSerials([
-      ...serials,
-      '',
-    ]);
-  }
-
-  function generateSerialInput() {
-    const timestamp = Date.now().toString(36).toUpperCase();
-    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const code = `SN-${timestamp}-${random}`;
-    syncSerials([
-      ...serials,
-      code,
-    ]);
-  }
 
   function close() {
     reset();
-    setSerials([]);
     setServerError(null);
     onClose();
   }
@@ -170,24 +133,7 @@ export function CreateEquipmentModal({
       return;
     }
 
-    const serialNumbers =
-      values.hasSerialNumber
-        ? serials
-          .map((code) =>
-            code.trim(),
-          )
-          .filter(Boolean)
-        : [];
 
-    if (
-      serialNumbers.length &&
-      !canCreateSerialNumber
-    ) {
-      setServerError(
-        "Permission 'serial-number.create' requise pour créer les identités de série.",
-      );
-      return;
-    }
 
     try {
       await createEquipment({
@@ -199,7 +145,6 @@ export function CreateEquipmentModal({
           values.minEquipmentQuantity,
         equipmentStatus:
           values.equipmentStatus,
-        serialNumbers,
       });
 
       onSuccess?.();
@@ -335,130 +280,12 @@ export function CreateEquipmentModal({
                 type="checkbox"
                 {...register(
                   'hasSerialNumber',
-                  {
-                    onChange: (
-                      event,
-                    ) => {
-                      if (
-                        !event.target
-                          .checked
-                      ) {
-                        syncSerials(
-                          [],
-                        );
-                      }
-                    },
-                  },
                 )}
                 className="h-4 w-4"
               />
             </div>
 
-            {serialized && (
-              <div className="mt-4 space-y-3 border-t border-[#3f3a36] pt-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold">
-                      Numéros de série
-                    </p>
 
-                    <p className="mt-0.5 text-[10px] text-white/45">
-                      Aucun code n’est généré automatiquement.
-                    </p>
-                  </div>
-
-                  {canCreateSerialNumber && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={generateSerialInput}
-                        className="inline-flex items-center gap-1.5 rounded border border-[#4a4540] bg-[#383330] px-3 py-1.5 text-xs text-sky-300 hover:bg-[#4a4540]"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        Générer
-                      </button>
-                      <button
-                        type="button"
-                        onClick={addSerialInput}
-                        className="inline-flex items-center gap-1.5 rounded border border-[#4a4540] bg-[#383330] px-3 py-1.5 text-xs hover:bg-[#4a4540]"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Ajouter
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {serials.length ===
-                  0 ? (
-                  <div className="rounded-lg border border-dashed border-[#4a4540] p-4 text-center text-[11px] text-white/45">
-                    Aucun numéro de série ajouté.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {serials.map(
-                      (
-                        code,
-                        index,
-                      ) => (
-                        <div
-                          key={
-                            index
-                          }
-                          className="flex items-center gap-2"
-                        >
-                          <input
-                            value={
-                              code
-                            }
-                            readOnly={code.startsWith('SN-')}
-                            onChange={(
-                              event,
-                            ) => {
-                              if (code.startsWith('SN-')) return;
-                              const next =
-                                [
-                                  ...serials,
-                                ];
-
-                              next[index] =
-                                event.target
-                                  .value;
-
-                              syncSerials(
-                                next,
-                              );
-                            }}
-                            placeholder={`Code série ${index + 1}`}
-                            className={`h-9 min-w-0 flex-1 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-xs outline-none focus:border-white/40 ${code.startsWith('SN-') ? 'opacity-60 cursor-not-allowed' : ''
-                              }`}
-                          />
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              syncSerials(
-                                serials.filter(
-                                  (
-                                    _,
-                                    current,
-                                  ) =>
-                                    current !==
-                                    index,
-                                ),
-                              )
-                            }
-                            className="rounded p-2 text-rose-300 hover:bg-rose-950/20"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ),
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
 
@@ -491,3 +318,4 @@ export function CreateEquipmentModal({
     </div>
   );
 }
+

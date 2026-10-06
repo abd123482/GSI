@@ -245,7 +245,7 @@ export function MovementListTable({
                     <div className="flex min-w-52 items-center gap-2 text-xs">
                       <span className="max-w-32 truncate text-[#c9c0ad]">
                         {routeName(
-                          movement.sourceShelf,
+                          movement.items?.[0]?.sourceShelf,
                           'Extérieur',
                         )}
                       </span>
@@ -254,7 +254,7 @@ export function MovementListTable({
 
                       <span className="max-w-32 truncate">
                         {routeName(
-                          movement.destinationShelf,
+                          movement.items?.[0]?.destinationShelf,
                           'Extérieur',
                         )}
                       </span>
@@ -271,14 +271,13 @@ export function MovementListTable({
                   </td>
 
                   <td className="px-4 py-3 text-right font-mono text-xs font-semibold">
-                    {movement.mouvementQuantity ??
+                    {(movement.items?.reduce((acc, item) => acc + (item.equipmentQuantity ?? 0), 0) ?? 0) ??
                       0}
                   </td>
 
                   <td className="px-4 py-3">
                     <span className="text-[10px] text-[#c9c0ad]">
-                      {movement.origin ===
-                      'INVENTORY_ADJUSTMENT'
+                      {movement.origin === false
                         ? 'Ajustement inventaire'
                         : 'Utilisateur'}
                     </span>
@@ -360,3 +359,4 @@ export function MovementListTable({
     </div>
   );
 }
+

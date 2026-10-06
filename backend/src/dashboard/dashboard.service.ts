@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -91,17 +91,46 @@ export class DashboardService {
     ] = await Promise.all([
       this.prisma.equipment.count(),
       this.prisma.equipment.aggregate({
-        _sum: { equipmentQuantity: true },
-      }),
+        _sum: { minequipmentQuantity: true },
+      }).then(() => this.prisma.$queryRaw`
+        SELECT SUM(
+          CASE 
+            WHEN destinationShelfId IS NOT NULL THEN equipmentQuantity 
+            WHEN sourceShelfId IS NOT NULL THEN -equipmentQuantity 
+            ELSE 0 
+          END
+        ) as total
+        FROM dbo.MovementEquipment
+      `).then((res: any) => ({ _sum: { equipmentQuantity: Number(res[0]?.total ?? 0) } })),
       this.prisma.serialNumber.count(),
-      this.prisma.serialNumber.count({
-        where: { shelfId: { not: null } },
-      }),
+      this.prisma.$queryRaw`
+        WITH CurrentSerials AS (
+          SELECT serialNumberId FROM (
+            SELECT serialNumberId, CONVERT(bigint, equipmentQuantity) AS delta
+            FROM dbo.MovementEquipment
+            WHERE destinationShelfId IS NOT NULL AND serialNumberId IS NOT NULL
+            UNION ALL
+            SELECT serialNumberId, -CONVERT(bigint, equipmentQuantity) AS delta
+            FROM dbo.MovementEquipment
+            WHERE sourceShelfId IS NOT NULL AND serialNumberId IS NOT NULL
+          ) AS entries
+          GROUP BY serialNumberId HAVING SUM(delta) > 0
+        )
+        SELECT COUNT(*) as count FROM CurrentSerials
+      `.then((res: any) => Number(res[0]?.count ?? 0)),
       this.prisma.shelf.count(),
       this.prisma.stock.count(),
       this.prisma.$queryRaw<Array<{ count: bigint | number }>>`
+        WITH EquipmentStock AS (
+          SELECT e.equipmentId, e.minequipmentQuantity,
+            SUM(CASE WHEN m.destinationShelfId IS NOT NULL THEN m.equipmentQuantity ELSE 0 END) -
+            SUM(CASE WHEN m.sourceShelfId IS NOT NULL THEN m.equipmentQuantity ELSE 0 END) AS equipmentQuantity
+          FROM dbo.Equipment e
+          LEFT JOIN dbo.MovementEquipment m ON e.equipmentId = m.equipmentId
+          GROUP BY e.equipmentId, e.minequipmentQuantity
+        )
         SELECT COUNT(*) as [count] 
-        FROM dbo.Equipment 
+        FROM EquipmentStock 
         WHERE equipmentQuantity <= minequipmentQuantity AND minequipmentQuantity > 0
       `,
       this.prisma.$queryRaw<Array<{
@@ -110,8 +139,16 @@ export class DashboardService {
         equipmentQuantity: number;
         minequipmentQuantity: number;
       }>>`
-        SELECT TOP 5 equipmentId, equipmentName, equipmentQuantity, minequipmentQuantity 
-        FROM dbo.Equipment 
+        WITH EquipmentStock AS (
+          SELECT e.equipmentId, e.equipmentName, e.minequipmentQuantity,
+            SUM(CASE WHEN m.destinationShelfId IS NOT NULL THEN m.equipmentQuantity ELSE 0 END) -
+            SUM(CASE WHEN m.sourceShelfId IS NOT NULL THEN m.equipmentQuantity ELSE 0 END) AS equipmentQuantity
+          FROM dbo.Equipment e
+          LEFT JOIN dbo.MovementEquipment m ON e.equipmentId = m.equipmentId
+          GROUP BY e.equipmentId, e.equipmentName, e.minequipmentQuantity
+        )
+        SELECT TOP 5 equipmentId, equipmentName, COALESCE(equipmentQuantity, 0) as equipmentQuantity, minequipmentQuantity 
+        FROM EquipmentStock 
         WHERE equipmentQuantity <= minequipmentQuantity AND minequipmentQuantity > 0
         ORDER BY equipmentQuantity ASC
       `,
@@ -122,10 +159,15 @@ export class DashboardService {
         totalUnits: bigint | number;
       }>>`
         SELECT s.stockId, COALESCE(s.stockName, 'Stock Principal') as stockName,
-               COUNT(sh.shelfId) as shelvesCount,
-               COALESCE(SUM(sh.shelfQuantity), 0) as totalUnits
+               COUNT(DISTINCT sh.shelfId) as shelvesCount,
+               COALESCE(SUM(
+                  CASE WHEN m.destinationShelfId = sh.shelfId THEN m.equipmentQuantity ELSE 0 END
+               ) - SUM(
+                  CASE WHEN m.sourceShelfId = sh.shelfId THEN m.equipmentQuantity ELSE 0 END
+               ), 0) as totalUnits
         FROM dbo.Stock s
         LEFT JOIN dbo.Shelf sh ON s.stockId = sh.stockId
+        LEFT JOIN dbo.MovementEquipment m ON (m.destinationShelfId = sh.shelfId OR m.sourceShelfId = sh.shelfId)
         GROUP BY s.stockId, s.stockName
       `,
       this.prisma.mouvement.count(),
@@ -158,20 +200,20 @@ export class DashboardService {
         },
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.inventoryWorkUnit.count({
+      this.prisma.inventoryUnit.count({
         where: { status: 'COUNTED' },
       }),
     ]);
 
     const lowStockCount = Number(lowStockCountRaw[0]?.count ?? 0);
-    const lowStockItems = lowStockItemsRaw.map((item) => ({
+    const lowStockItems = lowStockItemsRaw.map((item: any) => ({
       equipmentId: String(item.equipmentId),
       equipmentName: item.equipmentName,
       equipmentQuantity: Number(item.equipmentQuantity),
       minequipmentQuantity: Number(item.minequipmentQuantity),
     }));
 
-    const stockDistribution = stockDistributionRaw.map((s) => ({
+    const stockDistribution = stockDistributionRaw.map((s: any) => ({
       stockId: String(s.stockId),
       stockName: s.stockName,
       totalUnits: Number(s.totalUnits),
@@ -194,15 +236,15 @@ export class DashboardService {
       else otherCount += count;
     }
 
-    const recentMovements = recentMouvementsRaw.map((m) => ({
+    const recentMovements = recentMouvementsRaw.map((m: any) => ({
       mouvementId: m.mouvementId,
       mouvementStatus: m.mouvementStatus || 'TRANSFER',
       mouvementQuantity: m.mouvementQuantity ?? 1,
-      equipmentName: (m.items.length ? [...new Set(m.items.map(item => item.equipment.equipmentName))].join(', ') : m.equipment?.equipmentName) || 'Article non spécifié',
-      sourceShelfName: (m.items.length ? [...new Set(m.items.map(item => item.sourceShelf?.shelfName).filter(Boolean))].join(', ') : m.sourceShelf?.shelfName) || null,
-      destinationShelfName: (m.items.length ? [...new Set(m.items.map(item => item.destinationShelf?.shelfName).filter(Boolean))].join(', ') : m.destinationShelf?.shelfName) || null,
+      equipmentName: (m.items.length ? [...new Set(m.items.map((item: any) => item.equipment.equipmentName))].join(', ') : m.equipment?.equipmentName) || 'Article non spécifié',
+      sourceShelfName: (m.items.length ? [...new Set(m.items.map((item: any) => item.sourceShelf?.shelfName).filter(Boolean))].join(', ') : m.sourceShelf?.shelfName) || null,
+      destinationShelfName: (m.items.length ? [...new Set(m.items.map((item: any) => item.destinationShelf?.shelfName).filter(Boolean))].join(', ') : m.destinationShelf?.shelfName) || null,
       serialNumberCode: m.items.length === 1 ? m.items[0].serialNumber?.serialNumberCode ?? null : m.serialNumber?.serialNumberCode ?? null,
-      items: m.items.map(item => ({
+      items: m.items.map((item: any) => ({
         mouvementEquipmentId: item.mouvementEquipmentId,
         mouvementStatus: item.mouvementStatus,
         mouvementQuantity: item.mouvementQuantity,
@@ -214,9 +256,9 @@ export class DashboardService {
     }));
 
     // Compute Inventory Stats
-    const activeInventoriesList = inventories.map((inv) => {
+    const activeInventoriesList = inventories.map((inv: any) => {
       const totalWorkUnits = inv.workUnits.length;
-      const completedWorkUnits = inv.workUnits.filter((u) =>
+      const completedWorkUnits = inv.workUnits.filter((u: any) =>
         ['COUNTED', 'ADJUDICATED', 'FINALIZED'].includes(u.status.toUpperCase()),
       ).length;
       const progressPercent = totalWorkUnits > 0 ? Math.round((completedWorkUnits / totalWorkUnits) * 100) : 0;
@@ -232,11 +274,11 @@ export class DashboardService {
       };
     });
 
-    const activeInventoriesCount = inventories.filter((inv) =>
+    const activeInventoriesCount = inventories.filter((inv: any) =>
       ['DRAFT', 'ACTIVE', 'IN_PROGRESS', 'ADJUDICATION'].includes(inv.status.toUpperCase()),
     ).length;
 
-    const completedInventoriesCount = inventories.filter((inv) =>
+    const completedInventoriesCount = inventories.filter((inv: any) =>
       ['COMPLETED', 'FINALIZED'].includes(inv.status.toUpperCase()),
     ).length;
 

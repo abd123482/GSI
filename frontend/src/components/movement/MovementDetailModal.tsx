@@ -139,8 +139,7 @@ export function MovementDetailModal({
                   Mouvement {typeText}
                 </h2>
 
-                {movement.origin ===
-                  'INVENTORY_ADJUSTMENT' && (
+                {movement.origin === false && (
                   <span className="rounded border border-violet-400/30 bg-violet-950/25 px-2 py-0.5 text-[9px] font-semibold text-violet-200">
                     AJUSTEMENT INVENTAIRE
                   </span>
@@ -175,7 +174,7 @@ export function MovementDetailModal({
             <InfoCard
               icon={Package}
               label="Quantité totale"
-              value={`${movement.mouvementQuantity ?? 0} unité(s)`}
+              value={`${(movement.items?.reduce((acc, item) => acc + (item.equipmentQuantity ?? 0), 0) ?? 0) ?? 0} unité(s)`}
             />
 
             <InfoCard
@@ -206,7 +205,7 @@ export function MovementDetailModal({
               <RouteBox
                 label="Source"
                 value={shelfName(
-                  movement.sourceShelf,
+                  movement.items?.[0]?.sourceShelf,
                   'Extérieur',
                 )}
               />
@@ -216,7 +215,7 @@ export function MovementDetailModal({
               <RouteBox
                 label="Destination"
                 value={shelfName(
-                  movement.destinationShelf,
+                  movement.items?.[0]?.destinationShelf,
                   'Extérieur',
                 )}
               />
@@ -262,7 +261,7 @@ export function MovementDetailModal({
                 ) => (
                   <div
                     key={
-                      item.mouvementEquipmentId ??
+                      item.movementEquipmentId ??
                       `${index}-${item.equipmentId}`
                     }
                     className="grid grid-cols-1 gap-3 px-4 py-3 sm:grid-cols-[42px_minmax(0,1fr)_minmax(0,1fr)_100px] sm:items-center"
@@ -314,7 +313,7 @@ export function MovementDetailModal({
                     <div className="text-left sm:text-right">
                       <span className="inline-flex rounded border border-[#3f3a36] bg-[#383330] px-2 py-1 font-mono text-xs font-semibold">
                         {
-                          item.mouvementQuantity
+                          item.equipmentQuantity
                         }{' '}
                         u.
                       </span>
@@ -393,3 +392,4 @@ function RouteBox({
     </div>
   );
 }
+

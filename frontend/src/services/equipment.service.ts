@@ -254,10 +254,7 @@ export class EquipmentService {
           0,
         equipmentStatus:
           input.equipmentStatus ??
-          'ACTIVE',
-        serialNumbers:
-          input.serialNumbers ??
-          [],
+          true,
       });
 
     try {
@@ -278,24 +275,6 @@ export class EquipmentService {
 
       const created =
         response.data;
-
-      if (
-        validated.hasSerialNumber &&
-        validated.serialNumbers.length
-      ) {
-        await SerialNumberService.createBatchSerialNumbers(
-          client,
-          {
-            equipmentId:
-              created.equipmentId,
-            serialNumberCodes:
-              validated.serialNumbers,
-            serialNumberStatus:
-              'AVAILABLE',
-          },
-          userPermissions,
-        );
-      }
 
       return created;
     } catch (error: unknown) {

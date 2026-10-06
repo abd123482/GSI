@@ -1,19 +1,5 @@
-export type MovementType =
-  | 'IN'
-  | 'OUT'
-  | 'TRANSFER';
-
-export type MovementOrigin =
-  | 'USER'
-  | 'INVENTORY_ADJUSTMENT';
-
-export type MovementStatus =
-  | MovementType
-  | 'ENTRY'
-  | 'EXIT'
-  | 'ENTRÉE'
-  | 'SORTIE'
-  | 'MIXED';
+export type MovementType = "IN" | "OUT" | "TRANSFER";
+export type MovementOrigin = "USER" | "INVENTORY_ADJUSTMENT";
 
 export interface MovementShelf {
   shelfId: string;
@@ -47,19 +33,17 @@ export interface MovementInventorySummary {
 }
 
 export interface MovementItem {
-  mouvementEquipmentId: string;
-  mouvementId?: string;
-  rowNum?: number;
+  movementEquipmentId: string;
+  movementId: string;
 
   equipmentId: string;
-  equipmentTypeSnapshot?: 'STANDARD' | 'SERIALIZED';
+  equipmentTypeSnapshot: "STANDARD" | "SERIALIZED";
   serialNumberId: string | null;
 
   sourceShelfId: string | null;
   destinationShelfId: string | null;
 
-  mouvementQuantity: number;
-  mouvementStatus: MovementStatus;
+  equipmentQuantity: number;
 
   equipment?: MovementEquipmentSummary | null;
   serialNumber?: MovementSerialSummary | null;
@@ -69,42 +53,24 @@ export interface MovementItem {
 
 export interface Movement {
   mouvementId: string;
-  createdAt?: string | null;
-  createdByUserId?: string | null;
+  mouvementStatus: MovementType;
+  createdAt: string;
+  happenedAt: string;
+  createdByUserId: string | null;
+  origin: boolean;
+  inventoryId: string | null;
+  reason: string | null;
 
-  mouvementStatus: MovementStatus | null;
-  mouvementQuantity: number | null;
-
-  equipmentId?: string | null;
-  serialNumberId?: string | null;
-
-  /**
-   * Present on legacy/flattened line reads. New movement headers use items[].
-   */
-  mouvementEquipmentId?: string;
-
-  equipment?: MovementEquipmentSummary | null;
-  serialNumber?: MovementSerialSummary | null;
-
-  sourceShelfId: string | null;
-  destinationShelfId: string | null;
-
-  origin?: MovementOrigin | string;
-  inventoryId?: string | null;
-  reason?: string | null;
-
-  sourceShelf?: MovementShelf | null;
-  destinationShelf?: MovementShelf | null;
   createdByUser?: MovementUserSummary | null;
   inventory?: MovementInventorySummary | null;
-
-  items?: MovementItem[];
+  items: MovementItem[];
 }
 
 export interface CreateMovementItemInput {
   equipmentId: string;
-  serialNumberId?: string | null;
   movementQuantity: number;
+  serialNumberId?: string | null;
+  serialNumberCode?: string;
   sourceShelfId?: string | null;
   destinationShelfId?: string | null;
 }
@@ -134,6 +100,7 @@ export interface PaginatedMovementsResponse {
   limit: number;
 }
 
+
 export interface MovementDraftLine {
   clientId: string;
   equipmentId: string;
@@ -148,17 +115,3 @@ export interface MovementDraftLine {
   destinationName?: string;
 }
 
-export interface MovementLedgerEntry {
-  movement: Movement;
-  type: MovementType;
-  delta: number;
-  runningBalance: number;
-}
-
-export interface MovementAuditSummary {
-  initialQuantity: number;
-  totalIn: number;
-  totalOut: number;
-  currentQuantity: number;
-  ledger: MovementLedgerEntry[];
-}

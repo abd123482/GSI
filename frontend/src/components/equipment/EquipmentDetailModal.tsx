@@ -582,10 +582,7 @@ export function EquipmentDetailModal({
                         );
 
                       const quantity =
-                        line
-                          ?.mouvementQuantity ??
-                        movement.mouvementQuantity ??
-                        0;
+                        line?.equipmentQuantity ?? 0;
 
                       return (
                         <div
@@ -603,13 +600,11 @@ export function EquipmentDetailModal({
 
                           <div className="min-w-0">
                             <p className="truncate text-white/75">
-                              {movement
-                                .sourceShelf
+                              {line?.sourceShelf
                                 ?.shelfName ??
                                 'Extérieur'}
                               {' → '}
-                              {movement
-                                .destinationShelf
+                              {line?.destinationShelf
                                 ?.shelfName ??
                                 'Extérieur'}
                             </p>

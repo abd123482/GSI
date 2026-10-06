@@ -21,7 +21,6 @@ import {
 
 import type {
   Equipment,
-  EquipmentConversionSerialInput,
   UpdateEquipmentInput,
 } from '@/types/equipment';
 
@@ -53,7 +52,6 @@ interface BasicForm {
   equipmentName: string;
   minEquipmentQuantity: number;
   equipmentStatus: boolean;
-  convertToSerialized: boolean;
 }
 
 export function EditEquipmentModal({
@@ -78,13 +76,7 @@ export function EditEquipmentModal({
       null,
     );
 
-  const [
-    conversionCodes,
-    setConversionCodes,
-  ] =
-    useState<
-      EquipmentConversionSerialInput[]
-    >([]);
+
 
   const {
     register,
@@ -101,40 +93,10 @@ export function EditEquipmentModal({
         0,
       equipmentStatus:
         true,
-      convertToSerialized:
-        false,
     },
   });
 
-  const conversionEnabled =
-    watch(
-      'convertToSerialized',
-    );
 
-  const allocationQuery =
-    useQuery({
-      queryKey: [
-        'equipment-conversion-allocations',
-        equipment?.equipmentId,
-      ],
-
-      queryFn: () =>
-        EquipmentService.getEquipmentShelves(
-          api,
-          equipment!
-            .equipmentId,
-          permissions,
-        ),
-
-      enabled:
-        isOpen &&
-        Boolean(
-          equipment &&
-          !equipment.hasSerialNumber,
-        ),
-
-      staleTime: 10_000,
-    });
 
   useEffect(() => {
     if (!equipment) {
@@ -150,13 +112,7 @@ export function EditEquipmentModal({
       equipmentStatus:
         equipment.equipmentStatus ??
         true,
-      convertToSerialized:
-        false,
     });
-
-    setConversionCodes(
-      [],
-    );
 
     setServerError(
       null,
@@ -167,78 +123,7 @@ export function EditEquipmentModal({
     reset,
   ]);
 
-  useEffect(() => {
-    if (
-      !conversionEnabled ||
-      !allocationQuery.data ||
-      equipment
-        ?.hasSerialNumber
-    ) {
-      if (
-        !conversionEnabled
-      ) {
-        setConversionCodes(
-          [],
-        );
-      }
 
-      return;
-    }
-
-    const rows:
-      EquipmentConversionSerialInput[] =
-      [];
-
-    for (
-      const allocation of
-      allocationQuery.data
-        .equipmentShelfs ?? []
-    ) {
-      for (
-        let index = 0;
-        index <
-        allocation.equipmentQuantity;
-        index += 1
-      ) {
-        rows.push({
-          serialNumberCode:
-            '',
-          shelfId:
-            allocation.shelfId,
-        });
-      }
-    }
-
-    setConversionCodes(
-      rows,
-    );
-  }, [
-    conversionEnabled,
-    allocationQuery.data,
-    equipment?.hasSerialNumber,
-  ]);
-
-  const shelfNameById =
-    useMemo(
-      () =>
-        new Map(
-          (
-            allocationQuery.data
-              ?.equipmentShelfs ??
-            []
-          ).map(
-            (allocation) => [
-              allocation.shelfId,
-              allocation.shelf
-                ?.shelfName ??
-              'Emplacement',
-            ],
-          ),
-        ),
-      [
-        allocationQuery.data,
-      ],
-    );
 
   if (
     !isOpen ||
@@ -254,20 +139,6 @@ export function EditEquipmentModal({
     isUpdating ||
     isSubmitting;
 
-  const conversionBlocked =
-    conversionEnabled &&
-    equipment.equipmentQuantity >
-    0 &&
-    (
-      !allocationQuery.data ||
-      allocationQuery.data
-        .unallocatedQuantity >
-      0 ||
-      allocationQuery.data
-        .totalAllocated !==
-      equipment.equipmentQuantity
-    );
-
   async function submit(
     values: BasicForm,
   ) {
@@ -280,28 +151,7 @@ export function EditEquipmentModal({
       return;
     }
 
-    if (
-      values.convertToSerialized &&
-      conversionBlocked
-    ) {
-      setServerError(
-        'La conversion nécessite que toute la quantité physique soit répartie dans des emplacements.',
-      );
-      return;
-    }
 
-    if (
-      values.convertToSerialized &&
-      conversionCodes.some(
-        (row) =>
-          !row.serialNumberCode.trim(),
-      )
-    ) {
-      setServerError(
-        'Saisissez manuellement un code pour chaque unité physique avant la conversion.',
-      );
-      return;
-    }
 
     const payload:
       UpdateEquipmentInput =
@@ -339,23 +189,7 @@ export function EditEquipmentModal({
         values.equipmentStatus;
     }
 
-    if (
-      values.convertToSerialized &&
-      !currentEquipment.hasSerialNumber
-    ) {
-      payload.hasSerialNumber =
-        true;
 
-      payload.conversionSerials =
-        conversionCodes.map(
-          (row) => ({
-            serialNumberCode:
-              row.serialNumberCode.trim(),
-            shelfId:
-              row.shelfId,
-          }),
-        );
-    }
 
     if (
       Object.keys(
@@ -486,109 +320,26 @@ export function EditEquipmentModal({
                   <p className="text-xs font-semibold">
                     Article sérialisé
                   </p>
-
                   <p className="mt-0.5 text-[10px] text-white/45">
-                    La conversion Sérialisé → Standard est bloquée pour préserver l’intégrité des séries et de l’historique.
+                    Cet article gère son stock via les numéros de série.
                   </p>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="space-y-4 rounded-lg border border-[#3f3a36] bg-[#2b2622]/55 p-4">
-              <label className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Barcode className="h-4 w-4" />
+            <div className="rounded-lg border border-[#3f3a36] bg-[#2b2622]/55 p-4">
+              <div className="flex items-center gap-2">
+                <Barcode className="h-4 w-4" />
 
-                  <div>
-                    <p className="text-xs font-semibold">
-                      Convertir en article sérialisé
-                    </p>
-
-                  </div>
+                <div>
+                  <p className="text-xs font-semibold">
+                    Article standard
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-white/45">
+                    Cet article gère son stock de manière quantitative.
+                  </p>
                 </div>
-
-                <input
-                  type="checkbox"
-                  {...register(
-                    'convertToSerialized',
-                  )}
-                  className="h-4 w-4"
-                />
-              </label>
-
-              {conversionEnabled && (
-                <div className="space-y-3 border-t border-[#3f3a36] pt-4">
-                  {allocationQuery.isLoading ? (
-                    <p className="text-xs text-white/50">
-                      Chargement des allocations actuelles...
-                    </p>
-                  ) : conversionBlocked ? (
-                    <div className="rounded border border-amber-400/30 bg-amber-950/20 p-3 text-[11px] text-amber-200">
-                      Conversion indisponible : la quantité globale doit être entièrement représentée par les allocations actuelles.
-                    </div>
-                  ) : equipment.equipmentQuantity ===
-                    0 ? (
-                    <div className="rounded border border-emerald-400/20 bg-emerald-950/15 p-3 text-[11px] text-emerald-200">
-                      Quantité physique = 0. La conversion ne nécessite aucun numéro de série initial.
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-[11px] text-white/55">
-                        Saisissez exactement {equipment.equipmentQuantity} code(s), un par unité physique. L’emplacement est conservé automatiquement.
-                      </p>
-
-                      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                        {conversionCodes.map(
-                          (
-                            row,
-                            index,
-                          ) => (
-                            <div
-                              key={`${row.shelfId}:${index}`}
-                              className="grid grid-cols-[minmax(0,1fr)_minmax(120px,180px)] gap-2"
-                            >
-                              <input
-                                value={
-                                  row.serialNumberCode
-                                }
-                                onChange={(
-                                  event,
-                                ) => {
-                                  const next =
-                                    [
-                                      ...conversionCodes,
-                                    ];
-
-                                  next[index] =
-                                  {
-                                    ...row,
-                                    serialNumberCode:
-                                      event.target
-                                        .value,
-                                  };
-
-                                  setConversionCodes(
-                                    next,
-                                  );
-                                }}
-                                placeholder={`Code série ${index + 1}`}
-                                className="h-9 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-xs"
-                              />
-
-                              <div className="flex h-9 items-center rounded border border-[#3f3a36] bg-[#383330] px-3 text-[10px] text-white/55">
-                                {shelfNameById.get(
-                                  row.shelfId,
-                                ) ??
-                                  'Emplacement'}
-                              </div>
-                            </div>
-                          ),
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
+              </div>
             </div>
           )}
 
