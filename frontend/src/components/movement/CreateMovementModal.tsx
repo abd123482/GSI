@@ -53,6 +53,8 @@ export function CreateMovementModal({
 
   const [movementType, setMovementType] = useState<MovementType>("IN");
 
+  const [happenedAt, setHappenedAt] = useState("");
+
   const [selectedEquipmentId, setSelectedEquipmentId] = useState("");
 
   const [selectedSerialId, setSelectedSerialId] = useState("");
@@ -466,7 +468,7 @@ export function CreateMovementModal({
     let payloadItems: CreateMovementItemInput[] = lines.map((line) => ({
       equipmentId: line.equipmentId,
       serialNumberId: line.serialNumberId,
-      serialNumberCode: line.serialNumberCode ?? undefined,
+      serialNumberCode: line.serialNumberId ? undefined : (line.serialNumberCode ?? undefined),
       movementQuantity: line.movementQuantity,
       sourceShelfId: movementType === "IN" ? null : line.sourceShelfId,
       destinationShelfId:
@@ -553,7 +555,7 @@ export function CreateMovementModal({
           {
             equipmentId: selectedEquipment.equipmentId,
             serialNumberId: serialEntryMode === "NEW" && movementType === "IN" ? null : (selectedSerial?.serialNumberId ?? null),
-            serialNumberCode: serialEntryMode === "NEW" && movementType === "IN" ? newSerialCode.trim() : (selectedSerial?.serialNumberCode ?? undefined),
+            serialNumberCode: serialEntryMode === "NEW" && movementType === "IN" ? newSerialCode.trim() : undefined,
             movementQuantity: lineQuantity,
             sourceShelfId: movementType === "IN" ? null : sourceShelfId,
             destinationShelfId:
@@ -569,10 +571,16 @@ export function CreateMovementModal({
       }
     }
 
+    if (happenedAt && new Date(happenedAt) > new Date()) {
+      setError("La date du mouvement ne peut pas être dans le futur.");
+      document.querySelector(".overflow-y-auto")?.scrollTo(0, 0);
+      return;
+    }
+
     try {
       await createMovement.mutateAsync({
         movementType,
-
+        happenedAt: happenedAt ? new Date(happenedAt).toISOString() : undefined,
         items: payloadItems,
       });
 
@@ -585,8 +593,8 @@ export function CreateMovementModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm">
-      <div className="my-8 flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#26221f] px-5 py-4">
+      <div className="my-8 flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-[#3f3f46] bg-[#27272a] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3f46] bg-[#26221f] px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold">Nouveau mouvement</h2>
           </div>
@@ -635,7 +643,21 @@ export function CreateMovementModal({
             />
           </div>
 
-          <section className="space-y-4 rounded-xl border border-[#3f3a36] bg-[#2b2622]/55 p-4">
+          <label className="block space-y-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
+              Date et Heure du mouvement (optionnel)
+            </span>
+            <input
+              type="datetime-local"
+              value={happenedAt}
+              onChange={(e) => setHappenedAt(e.target.value)}
+              disabled={busy}
+              max={new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+              className="h-10 w-full rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-xs text-white outline-none focus:border-[#52525b]"
+            />
+          </label>
+
+          <section className="space-y-4 rounded-xl border border-[#3f3f46] bg-[#18181b]/55 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-xs font-semibold">Ajouter une ligne</h3>
@@ -660,7 +682,7 @@ export function CreateMovementModal({
                     setSelectedEquipmentId(event.target.value)
                   }
                   disabled={busy || equipmentQuery.isLoading}
-                  className="h-10 w-full rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs"
+                  className="h-10 w-full rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-xs"
                 >
                   <option value="">Sélectionnez un article</option>
 
@@ -676,7 +698,7 @@ export function CreateMovementModal({
                 </select>
 
                 {selectedEquipment && allocations.length > 0 && (
-                  <div className="mt-2 text-[10px] text-[#aea69c]">
+                  <div className="mt-2 text-[10px] text-[#a1a1aa]">
                     <span className="font-semibold text-white/70">
                       Stock actuel :{" "}
                     </span>
@@ -704,7 +726,7 @@ export function CreateMovementModal({
                       setQuantity(Math.max(1, Number(event.target.value) || 1))
                     }
                     disabled={busy}
-                    className="h-10 w-full rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-xs"
+                    className="h-10 w-full rounded border border-[#3f3f46] bg-[#1f1b18] px-3 font-mono text-xs"
                   />
                 </label>
               )}
@@ -718,7 +740,7 @@ export function CreateMovementModal({
                   </span>
                   
                   {movementType === "IN" && (
-                    <div className="flex bg-[#1f1b18] border border-[#3f3a36] rounded text-[10px] overflow-hidden">
+                    <div className="flex bg-[#1f1b18] border border-[#3f3f46] rounded text-[10px] overflow-hidden">
                       <button
                         type="button"
                         className={`px-3 py-1 transition ${serialEntryMode === "NEW" ? "bg-[#453e3a] text-white font-semibold" : "text-white/40 hover:text-white/70"}`}
@@ -756,7 +778,7 @@ export function CreateMovementModal({
                     }}
                     disabled={busy}
                     placeholder="Saisir un nouveau code (puis Entrée)..."
-                    className="h-10 w-full rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-xs focus:outline-none focus:border-amber-500/50"
+                    className="h-10 w-full rounded border border-[#3f3f46] bg-[#1f1b18] px-3 font-mono text-xs focus:outline-none focus:border-amber-500/50"
                   />
                 ) : (
                   <>
@@ -764,7 +786,7 @@ export function CreateMovementModal({
                       value={selectedSerialId}
                       onChange={(event) => setSelectedSerialId(event.target.value)}
                       disabled={busy || serialsQuery.isLoading}
-                      className="h-10 w-full rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-xs focus:outline-none focus:border-amber-500/50"
+                      className="h-10 w-full rounded border border-[#3f3f46] bg-[#1f1b18] px-3 font-mono text-xs focus:outline-none focus:border-amber-500/50"
                     >
                       <option value="">Sélectionnez un numéro de série existant</option>
 
@@ -801,7 +823,7 @@ export function CreateMovementModal({
                 </span>
 
                 {selectedEquipment?.hasSerialNumber ? (
-                  <div className="flex h-10 items-center rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs">
+                  <div className="flex h-10 items-center rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-xs">
                     {sourceName || "Sélectionnez d’abord un numéro de série"}
                   </div>
                 ) : (
@@ -811,7 +833,7 @@ export function CreateMovementModal({
                     disabled={
                       busy || !selectedEquipment || allocationsQuery.isLoading
                     }
-                    className="h-10 w-full rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs"
+                    className="h-10 w-full rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-xs"
                   >
                     <option value="">
                       Sélectionnez une source avec quantité suffisante
@@ -841,7 +863,7 @@ export function CreateMovementModal({
                   <div
                     className={`flex h-10 items-center rounded border px-3 text-xs ${
                       routeDestinationAllowedForCurrentEquipment
-                        ? "border-[#3f3a36] bg-[#1f1b18]"
+                        ? "border-[#3f3f46] bg-[#1f1b18]"
                         : "border-rose-400/40 bg-rose-950/20 text-rose-200"
                     }`}
                   >
@@ -858,7 +880,7 @@ export function CreateMovementModal({
                       !selectedEquipment ||
                       (movementType === "TRANSFER" && !sourceShelfId)
                     }
-                    className="h-10 w-full rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs"
+                    className="h-10 w-full rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-xs"
                   >
                     <option value="">Sélectionnez une destination</option>
 
@@ -899,7 +921,7 @@ export function CreateMovementModal({
                   !selectedEquipment ||
                   !routeDestinationAllowedForCurrentEquipment
                 }
-                className="inline-flex items-center gap-1.5 rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622] disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b] disabled:opacity-40"
               >
                 <Plus className="h-3.5 w-3.5" />
                 Ajouter la ligne
@@ -907,8 +929,8 @@ export function CreateMovementModal({
             </div>
           </section>
 
-          <section className="overflow-hidden rounded-xl border border-[#3f3a36]">
-            <div className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-4 py-3">
+          <section className="overflow-hidden rounded-xl border border-[#3f3f46]">
+            <div className="flex items-center justify-between border-b border-[#3f3f46] bg-[#18181b] px-4 py-3">
               <div>
                 <h3 className="text-xs font-semibold">Lignes préparées</h3>
 
@@ -931,7 +953,7 @@ export function CreateMovementModal({
                 Aucune ligne ajoutée.
               </div>
             ) : (
-              <div className="divide-y divide-[#3f3a36]">
+              <div className="divide-y divide-[#3f3f46]">
                 {lines.map((line, index) => (
                   <div
                     key={line.clientId}
@@ -953,7 +975,7 @@ export function CreateMovementModal({
 
                     <div className="min-w-0">
                       {line.serialNumberCode ? (
-                        <span className="flex items-center gap-1 truncate font-mono text-[10px] text-[#c9c0ad]">
+                        <span className="flex items-center gap-1 truncate font-mono text-[10px] text-[#d4d4d8]">
                           <Barcode className="h-3 w-3 shrink-0" />
                           {line.serialNumberCode}
                         </span>
@@ -1003,7 +1025,7 @@ export function CreateMovementModal({
           </div>
         </div>
 
-        <footer className="flex items-center justify-between gap-2 border-t border-[#3f3a36] bg-[#26221f] px-5 py-3">
+        <footer className="flex items-center justify-between gap-2 border-t border-[#3f3f46] bg-[#26221f] px-5 py-3">
           <div className="text-[10px] font-medium text-amber-200/80">
             {lines.length === 0 &&
               !selectedEquipment &&
@@ -1014,7 +1036,7 @@ export function CreateMovementModal({
               type="button"
               onClick={onClose}
               disabled={busy}
-              className="rounded border border-[#3f3a36] px-4 py-2 text-xs"
+              className="rounded border border-[#3f3f46] px-4 py-2 text-xs"
             >
               Annuler
             </button>
@@ -1029,7 +1051,7 @@ export function CreateMovementModal({
                 !canCreateMovement ||
                 (lines.length === 0 && !selectedEquipment)
               }
-              className="inline-flex items-center gap-1.5 rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622] disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b] disabled:opacity-40"
             >
               {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Enregistrer le mouvement
@@ -1061,8 +1083,8 @@ function TypeButton({
       disabled={disabled}
       className={`rounded-lg border p-3 text-left transition ${
         active
-          ? "border-[#dad2c1] bg-[#f7f5f0] text-[#2b2622]"
-          : "border-[#3f3a36] bg-[#2b2622] text-white hover:border-[#6b625b]"
+          ? "border-[#f4f4f5] bg-[#fafafa] text-[#18181b]"
+          : "border-[#3f3f46] bg-[#18181b] text-white hover:border-[#6b625b]"
       } disabled:opacity-40`}
     >
       <div className="flex items-center gap-2">

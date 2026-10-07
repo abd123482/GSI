@@ -94,17 +94,17 @@ export function UserListTable({
           </span>
         );
       default:
-        return <span className="text-xs font-mono text-[#aea69c]">{status}</span>;
+        return <span className="text-xs font-mono text-[#a1a1aa]">{status}</span>;
     }
   };
 
   return (
-    <div className="bg-[#383330] rounded-[4px] border border-[#3f3a36] overflow-hidden flex flex-col shadow-xs">
+    <div className="bg-[#27272a] rounded-[4px] border border-[#3f3f46] overflow-hidden flex flex-col shadow-xs">
       {/* Table Content */}
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-[#2b2622] border-b border-[#3f3a36] text-[11px] font-mono uppercase tracking-wider text-[#aea69c]">
+            <tr className="bg-[#18181b] border-b border-[#3f3f46] text-[11px] font-mono uppercase tracking-wider text-[#a1a1aa]">
               <th className="px-5 py-3">Utilisateur</th>
               <th className="px-5 py-3">Statut</th>
               <th className="px-5 py-3">Rôle Assigné</th>
@@ -112,44 +112,44 @@ export function UserListTable({
               <th className="px-5 py-3 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#3f3a36] text-xs">
+          <tbody className="divide-y divide-[#3f3f46] text-xs">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, idx) => (
                 <tr key={idx} className="animate-pulse">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-[3px] bg-[#2b2622]" />
+                      <div className="w-7 h-7 rounded-[3px] bg-[#18181b]" />
                       <div className="space-y-1.5">
-                        <div className="w-32 h-3.5 bg-[#2b2622] rounded" />
-                        <div className="w-48 h-3 bg-[#2b2622] rounded" />
+                        <div className="w-32 h-3.5 bg-[#18181b] rounded" />
+                        <div className="w-48 h-3 bg-[#18181b] rounded" />
                       </div>
                     </div>
                   </td>
                   <td className="px-5 py-4">
-                    <div className="w-16 h-5 bg-[#2b2622] rounded" />
+                    <div className="w-16 h-5 bg-[#18181b] rounded" />
                   </td>
                   <td className="px-5 py-4">
-                    <div className="w-28 h-7 bg-[#2b2622] rounded" />
+                    <div className="w-28 h-7 bg-[#18181b] rounded" />
                   </td>
                   <td className="px-5 py-4">
-                    <div className="w-20 h-4 bg-[#2b2622] rounded" />
+                    <div className="w-20 h-4 bg-[#18181b] rounded" />
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <div className="w-6 h-6 bg-[#2b2622] rounded inline-block" />
+                    <div className="w-6 h-6 bg-[#18181b] rounded inline-block" />
                   </td>
                 </tr>
               ))
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-5 py-12 text-center text-[#aea69c]">
+                <td colSpan={5} className="px-5 py-12 text-center text-[#a1a1aa]">
                   <div className="flex flex-col items-center justify-center gap-2">
-                    <div className="w-9 h-9 rounded-[3px] bg-[#2b2622] border border-[#3f3a36] flex items-center justify-center text-[#aea69c]">
+                    <div className="w-9 h-9 rounded-[3px] bg-[#18181b] border border-[#3f3f46] flex items-center justify-center text-[#a1a1aa]">
                       <Shield className="w-4 h-4" />
                     </div>
-                    <p className="font-medium text-sm text-[#f7f5f0]">
+                    <p className="font-medium text-sm text-[#fafafa]">
                       Aucun utilisateur trouvé
                     </p>
-                    <p className="text-xs text-[#aea69c]">
+                    <p className="text-xs text-[#a1a1aa]">
                       Les utilisateurs connectés via Clerk apparaîtront ici.
                     </p>
                   </div>
@@ -165,26 +165,26 @@ export function UserListTable({
                 return (
                   <tr
                     key={user.userId}
-                    className="hover:bg-[#2b2622]/40 transition-colors"
+                    className="hover:bg-[#18181b]/40 transition-colors"
                   >
                     {/* User Profile */}
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-[3px] bg-[#2b2622] border border-[#3f3a36] text-[#f7f5f0] font-mono text-xs flex items-center justify-center shrink-0">
+                        <div className="w-7 h-7 rounded-[3px] bg-[#18181b] border border-[#3f3f46] text-[#fafafa] font-mono text-xs flex items-center justify-center shrink-0">
                           {initial}
                         </div>
                         <div className="flex flex-col min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-[#f7f5f0] truncate">
+                            <span className="font-medium text-[#fafafa] truncate">
                               {user.userName || 'Sans nom'}
                             </span>
                             {isSelf && (
-                              <span className="px-1.5 py-0.2 rounded-[2px] text-[10px] font-mono font-medium bg-[#2b2622] text-[#dad2c1] border border-[#3f3a36]">
+                              <span className="px-1.5 py-0.2 rounded-[2px] text-[10px] font-mono font-medium bg-[#18181b] text-[#f4f4f5] border border-[#3f3f46]">
                                 Vous
                               </span>
                             )}
                           </div>
-                          <span className="text-[11px] font-mono text-[#aea69c] truncate">
+                          <span className="text-[11px] font-mono text-[#a1a1aa] truncate">
                             {user.userEmail}
                           </span>
                         </div>
@@ -206,10 +206,10 @@ export function UserListTable({
                             onChange={(e) =>
                               handleRoleChange(user.userId, e.target.value)
                             }
-                            className={`w-full text-xs font-mono py-1 px-2 rounded-[3px] border transition-colors appearance-none cursor-pointer focus:outline-none focus:border-[#f7f5f0] ${
+                            className={`w-full text-xs font-mono py-1 px-2 rounded-[3px] border transition-colors appearance-none cursor-pointer focus:outline-none focus:border-[#fafafa] ${
                               user.role
-                                ? 'bg-[#2b2622] border-[#3f3a36] text-[#f7f5f0]'
-                                : 'bg-[#2b2622] border-[#3f3a36] text-[#aea69c]'
+                                ? 'bg-[#18181b] border-[#3f3f46] text-[#fafafa]'
+                                : 'bg-[#18181b] border-[#3f3f46] text-[#a1a1aa]'
                             }`}
                           >
                             <option value="none">-- Aucun rôle --</option>
@@ -221,7 +221,7 @@ export function UserListTable({
                           </select>
                           {isCurrentUpdating && (
                             <div className="absolute right-2 top-2">
-                              <Loader2 className="w-3.5 h-3.5 text-[#f7f5f0] animate-spin" />
+                              <Loader2 className="w-3.5 h-3.5 text-[#fafafa] animate-spin" />
                             </div>
                           )}
                         </div>
@@ -229,8 +229,8 @@ export function UserListTable({
                         <span
                           className={`inline-block text-xs font-mono px-2 py-0.5 rounded-[2px] border ${
                             user.role
-                              ? 'bg-[#2b2622] border-[#3f3a36] text-[#f7f5f0]'
-                              : 'text-[#aea69c] border-transparent'
+                              ? 'bg-[#18181b] border-[#3f3f46] text-[#fafafa]'
+                              : 'text-[#a1a1aa] border-transparent'
                           }`}
                         >
                           {user.role ? user.role.roleName : 'Aucun'}
@@ -240,14 +240,14 @@ export function UserListTable({
 
                     {/* Permissions summary */}
                     <td className="px-5 py-3">
-                      <span className="text-xs font-mono text-[#c9c0ad]">
+                      <span className="text-xs font-mono text-[#d4d4d8]">
                         {permissionsCount > 0 ? (
-                          <span className="text-[#f7f5f0]">
+                          <span className="text-[#fafafa]">
                             {permissionsCount} permission
                             {permissionsCount > 1 ? 's' : ''}
                           </span>
                         ) : (
-                          <span className="text-[#aea69c]">Aucune</span>
+                          <span className="text-[#a1a1aa]">Aucune</span>
                         )}
                       </span>
                     </td>
@@ -257,7 +257,7 @@ export function UserListTable({
                       {canManageUsers && (
                         <div className="inline-flex items-center gap-1.5">
                           {isSelf ? (
-                            <span className="text-[11px] font-mono text-[#aea69c] px-1">
+                            <span className="text-[11px] font-mono text-[#a1a1aa] px-1">
                               Session active
                             </span>
                           ) : user.userStatus === 'PENDING' ? (
@@ -266,7 +266,7 @@ export function UserListTable({
                               onClick={() => handleStatusToggle(user.userId, user.userStatus)}
                               disabled={isCurrentUpdating}
                               title="Activer ce compte"
-                              className="px-2.5 py-1 text-xs font-medium text-[#2b2622] bg-[#f7f5f0] hover:bg-[#dad2c1] rounded-[3px] transition-colors flex items-center gap-1 cursor-pointer"
+                              className="px-2.5 py-1 text-xs font-medium text-[#18181b] bg-[#fafafa] hover:bg-[#f4f4f5] rounded-[3px] transition-colors flex items-center gap-1 cursor-pointer"
                             >
                               <UserCheck className="w-3 h-3" />
                               <span>Activer</span>
@@ -283,8 +283,8 @@ export function UserListTable({
                               }
                               className={`p-1.5 rounded-[3px] transition-colors cursor-pointer ${
                                 user.userStatus === 'ACTIVE'
-                                  ? 'text-[#aea69c] hover:text-[#ef4444] hover:bg-[#2b2622]'
-                                  : 'text-[#10b981] hover:bg-[#2b2622]'
+                                  ? 'text-[#a1a1aa] hover:text-[#ef4444] hover:bg-[#18181b]'
+                                  : 'text-[#10b981] hover:bg-[#18181b]'
                               }`}
                             >
                               {user.userStatus === 'ACTIVE' ? (
@@ -306,9 +306,9 @@ export function UserListTable({
       </div>
 
       {/* Pagination Footer */}
-      <div className="px-5 py-2.5 border-t border-[#3f3a36] bg-[#2b2622] flex items-center justify-between text-xs text-[#aea69c] font-mono">
+      <div className="px-5 py-2.5 border-t border-[#3f3f46] bg-[#18181b] flex items-center justify-between text-xs text-[#a1a1aa] font-mono">
         <span>
-          Total : <strong className="text-[#f7f5f0]">{totalUsers}</strong>{' '}
+          Total : <strong className="text-[#fafafa]">{totalUsers}</strong>{' '}
           compte{totalUsers > 1 ? 's' : ''}
         </span>
 
@@ -321,7 +321,7 @@ export function UserListTable({
               type="button"
               onClick={() => onPageChange(currentPage - 1)}
               disabled={currentPage <= 1 || isLoading}
-              className="p-1 rounded-[2px] border border-[#3f3a36] bg-[#383330] hover:bg-[#3f3a36] text-[#c9c0ad] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="p-1 rounded-[2px] border border-[#3f3f46] bg-[#27272a] hover:bg-[#3f3f46] text-[#d4d4d8] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
@@ -329,7 +329,7 @@ export function UserListTable({
               type="button"
               onClick={() => onPageChange(currentPage + 1)}
               disabled={currentPage >= totalPages || isLoading}
-              className="p-1 rounded-[2px] border border-[#3f3a36] bg-[#383330] hover:bg-[#3f3a36] text-[#c9c0ad] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="p-1 rounded-[2px] border border-[#3f3f46] bg-[#27272a] hover:bg-[#3f3f46] text-[#d4d4d8] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>

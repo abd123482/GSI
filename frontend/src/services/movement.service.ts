@@ -177,15 +177,8 @@ export class MovementService {
           {
             movementType:
               input.movementType,
-
-            sourceShelfId:
-              input.items[0]?.sourceShelfId ??
-              null,
-
-            destinationShelfId:
-              input.items[0]?.destinationShelfId ??
-              null,
-
+            happenedAt:
+              input.happenedAt,
             items:
               input.items.map(
                 (item) => ({
@@ -194,8 +187,17 @@ export class MovementService {
                   serialNumberId:
                     item.serialNumberId ??
                     null,
+                  serialNumberCode:
+                    item.serialNumberCode ??
+                    undefined,
                   movementQuantity:
                     item.movementQuantity,
+                  sourceShelfId:
+                    item.sourceShelfId ??
+                    null,
+                  destinationShelfId:
+                    item.destinationShelfId ??
+                    null,
                 }),
               ),
           },

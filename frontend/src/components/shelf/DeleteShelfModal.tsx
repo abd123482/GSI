@@ -40,8 +40,8 @@ export function DeleteShelfModal({ shelf, isOpen, onClose, onSuccess }: DeleteSh
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-5 py-4">
+      <div className="w-full max-w-md overflow-hidden rounded-xl border border-[#3f3f46] bg-[#27272a] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3f46] bg-[#18181b] px-5 py-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold"><Trash2 className="h-4 w-4 text-rose-300" />Supprimer l’emplacement</h2>
           <button type="button" onClick={onClose} className="rounded p-1.5 text-white/60 hover:bg-white/10"><X className="h-4 w-4" /></button>
         </header>
@@ -52,13 +52,13 @@ export function DeleteShelfModal({ shelf, isOpen, onClose, onSuccess }: DeleteSh
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="space-y-1"><p className="font-semibold">Suppression protégée.</p><p>Le backend refusera la suppression si l’emplacement contient du stock, un numéro de série ou un historique de mouvements.</p></div>
           </div>
-          <div className="rounded-lg border border-[#3f3a36] bg-[#2b2622]/65 p-3 text-xs">
+          <div className="rounded-lg border border-[#3f3f46] bg-[#18181b]/65 p-3 text-xs">
             <p className="font-semibold">{shelf.shelfName ?? 'Emplacement sans nom'}</p>
           </div>
         </div>
 
-        <footer className="flex justify-end gap-2 border-t border-[#3f3a36] bg-[#2b2622] px-5 py-3">
-          <button type="button" onClick={onClose} disabled={isDeleting} className="rounded border border-[#3f3a36] px-3 py-1.5 text-xs">Annuler</button>
+        <footer className="flex justify-end gap-2 border-t border-[#3f3f46] bg-[#18181b] px-5 py-3">
+          <button type="button" onClick={onClose} disabled={isDeleting} className="rounded border border-[#3f3f46] px-3 py-1.5 text-xs">Annuler</button>
           <button type="button" onClick={handleDelete} disabled={isDeleting || !canDeleteShelf} className="inline-flex items-center gap-1.5 rounded bg-rose-600 px-3.5 py-1.5 text-xs disabled:opacity-40">
             {isDeleting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Supprimer
           </button>

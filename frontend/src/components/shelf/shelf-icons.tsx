@@ -23,9 +23,9 @@ export interface ShelfVisualTheme {
 export const SHELF_PALETTES: ShelfVisualTheme[] = [
   {
     icon: Layers,
-    bg: 'bg-[#2b2622]',
-    border: 'border-[#3f3a36]',
-    text: 'text-[#dad2c1]',
+    bg: 'bg-[#18181b]',
+    border: 'border-[#3f3f46]',
+    text: 'text-[#f4f4f5]',
     label: 'Rayonnage Standard',
   },
   {

@@ -133,7 +133,7 @@ export function NotificationBell() {
     >
       <DropdownMenuTrigger
         aria-label="Notifications"
-        className="relative rounded border border-transparent p-2 text-[#aea69c] outline-none transition-colors hover:border-[#3f3a36] hover:bg-[#383330] hover:text-[#f7f5f0]"
+        className="relative rounded border border-transparent p-2 text-[#a1a1aa] outline-none transition-colors hover:border-[#3f3f46] hover:bg-[#27272a] hover:text-[#fafafa]"
       >
         <Bell className="h-4 w-4" />
 
@@ -148,9 +148,9 @@ export function NotificationBell() {
 
       <DropdownMenuContent
         align="end"
-        className="z-50 w-80 overflow-hidden rounded border border-[#3f3a36] bg-[#26221f] p-0 text-[#f7f5f0] shadow-xl sm:w-96"
+        className="z-50 w-80 overflow-hidden rounded border border-[#3f3f46] bg-[#26221f] p-0 text-[#fafafa] shadow-xl sm:w-96"
       >
-        <div className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2f2a26] p-3">
+        <div className="flex items-center justify-between border-b border-[#3f3f46] bg-[#27272a] p-3">
           <div className="flex items-center gap-2">
             <Bell className="h-3.5 w-3.5 text-[#10b981]" />
 
@@ -173,7 +173,7 @@ export function NotificationBell() {
                 event.preventDefault();
                 await markAllRead();
               }}
-              className="flex items-center gap-1 text-[11px] text-[#aea69c] transition-colors hover:text-[#10b981] disabled:opacity-40"
+              className="flex items-center gap-1 text-[11px] text-[#a1a1aa] transition-colors hover:text-[#10b981] disabled:opacity-40"
             >
               <CheckCheck className="h-3 w-3" />
               Tout marquer lu
@@ -181,16 +181,16 @@ export function NotificationBell() {
           )}
         </div>
 
-        <div className="max-h-80 divide-y divide-[#383330] overflow-y-auto">
+        <div className="max-h-80 divide-y divide-[#27272a] overflow-y-auto">
           {isLoading ? (
-            <div className="flex items-center justify-center gap-2 p-6 text-xs text-[#aea69c]">
+            <div className="flex items-center justify-center gap-2 p-6 text-xs text-[#a1a1aa]">
               <Loader2 className="h-4 w-4 animate-spin" />
               Chargement...
             </div>
           ) : !notifications?.length ? (
             <div className="space-y-1.5 p-8 text-center">
               <Inbox className="mx-auto h-6 w-6 text-[#5c544d]" />
-              <p className="text-xs text-[#aea69c]">
+              <p className="text-xs text-[#a1a1aa]">
                 Aucune notification.
               </p>
             </div>
@@ -212,7 +212,7 @@ export function NotificationBell() {
                     className={`flex w-full items-start gap-2.5 p-3 text-left transition-colors ${
                       unread
                         ? 'bg-[#10b981]/10 hover:bg-[#10b981]/15'
-                        : 'hover:bg-[#2f2a26]'
+                        : 'hover:bg-[#27272a]'
                     }`}
                   >
                     <span
@@ -243,7 +243,7 @@ export function NotificationBell() {
                         </span>
                       </span>
 
-                      <span className="block text-[11px] leading-relaxed text-[#aea69c]">
+                      <span className="block text-[11px] leading-relaxed text-[#a1a1aa]">
                         {notification.payload?.message ??
                           'Une mise à jour d’inventaire est disponible.'}
                       </span>

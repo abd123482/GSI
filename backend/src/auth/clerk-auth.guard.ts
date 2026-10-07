@@ -8,12 +8,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { verifyToken } from '@clerk/backend';
-import type { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import { AuthService } from './auth.service.js';
 import type { AuthenticatedUser } from './types/authenticated-user.type.js';
 import { ALL_SYSTEM_PERMISSIONS } from './constants/permissions.constant.js';
 
-export type AuthenticatedRequest = Request & {
+export type AuthenticatedRequest = FastifyRequest & {
   authUser?: AuthenticatedUser;
 };
 

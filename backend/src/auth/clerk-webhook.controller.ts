@@ -9,7 +9,8 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { RawBodyRequest } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { Webhook } from 'svix';
 import { AuthService } from './auth.service.js';
 
@@ -22,7 +23,7 @@ export class ClerkWebhookController {
   @Post('clerk')
   @HttpCode(HttpStatus.OK)
   async handleClerkWebhook(
-    @Req() req: Request,
+    @Req() req: RawBodyRequest<FastifyRequest>,
     @Headers('svix-id') svixId?: string,
     @Headers('svix-timestamp') svixTimestamp?: string,
     @Headers('svix-signature') svixSignature?: string,
@@ -37,7 +38,7 @@ export class ClerkWebhookController {
       throw new BadRequestException('Missing required Svix webhook verification headers');
     }
 
-    const rawBody = (req as any).rawBody;
+    const rawBody = req.rawBody;
     if (!rawBody) {
       this.logger.error(
         'Raw request body unavailable for signature verification. Ensure rawBody: true is configured in NestFactory.create.',

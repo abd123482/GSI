@@ -1,9 +1,9 @@
 import 'dotenv/config';
 import { Logger } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, HttpAdapterHost } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './all-exceptions.filter.js';
-import { json, urlencoded } from 'express';
+import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 
 function validateEnvironment() {
   const logger = new Logger('EnvironmentValidator');
@@ -28,35 +28,24 @@ async function bootstrap() {
   validateEnvironment();
 
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule, {
+  const adapter = new FastifyAdapter({
+    bodyLimit: 50 * 1024 * 1024, // 50mb
+  });
+
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, {
     rawBody: true,
-    bodyParser: false,
   });
 
   // Enable generous payload limits (50mb) for bulk counting and serial number audits
-  app.useGlobalFilters(new AllExceptionsFilter());
-  app.use(
-    json({
-      limit: '50mb',
-      verify: (req: any, _res, buf) => {
-        req.rawBody = buf;
-      },
-    }),
-  );
-  app.use(
-    urlencoded({
-      extended: true,
-      limit: '50mb',
-      verify: (req: any, _res, buf) => {
-        req.rawBody = buf;
-      },
-    }),
-  );
+  const httpAdapterHost = app.get(HttpAdapterHost);
+  app.useGlobalFilters(new AllExceptionsFilter(httpAdapterHost));
 
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   app.enableCors({
     origin: frontendUrl,
     credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
   const port = Number(process.env.PORT ?? 3001);

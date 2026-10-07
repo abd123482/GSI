@@ -16,7 +16,34 @@ const searchSchema = z.object({
 const SERIAL_SELECT = {
   serialNumberId: true, serialNumberCode: true, serialNumberStatus: true, equipmentId: true,
   equipment: { select: { equipmentId: true, equipmentName: true, hasSerialNumber: true, equipmentStatus: true } },
+  movementItems: {
+    take: 1,
+    orderBy: [
+      { movement: { happenedAt: 'desc' } },
+      { movement: { mouvementStatus: 'asc' } },
+      { movementEquipmentId: 'desc' }
+    ],
+    select: { 
+      destinationShelfId: true, 
+      destinationShelf: { select: { shelfId: true, shelfName: true } },
+      movement: { select: { mouvementStatus: true } }
+    }
+  }
 } satisfies Prisma.SerialNumberSelect;
+
+function mapSerial(s: any) {
+  const lastMove = s.movementItems?.[0];
+  const isOnShelf = !!lastMove?.destinationShelfId;
+  return {
+    serialNumberId: s.serialNumberId,
+    serialNumberCode: s.serialNumberCode,
+    serialNumberStatus: s.serialNumberStatus,
+    equipmentId: s.equipmentId,
+    equipment: s.equipment,
+    shelfId: isOnShelf ? lastMove.destinationShelfId : null,
+    shelf: isOnShelf ? lastMove.destinationShelf : null,
+  };
+}
 
 @Injectable()
 export class SerialNumberService {
@@ -45,22 +72,22 @@ export class SerialNumberService {
         }),
         this.prisma.serialNumber.count({ where }),
       ]);
-      return { serialNumbers, totalSerialNumbers, totalPages: Math.ceil(totalSerialNumbers / limit) || 1, currentPage: page, limit };
+      return { serialNumbers: serialNumbers.map(mapSerial), totalSerialNumbers, totalPages: Math.ceil(totalSerialNumbers / limit) || 1, currentPage: page, limit };
     });
   }
 
   async getSerialNumberById(id: string) {
-    return this.run(() => this.prisma.serialNumber.findUniqueOrThrow({ where: { serialNumberId: uuid.parse(id) }, select: SERIAL_SELECT }));
+    return this.run(async () => mapSerial(await this.prisma.serialNumber.findUniqueOrThrow({ where: { serialNumberId: uuid.parse(id) }, select: SERIAL_SELECT })));
   }
   async getSerialNumberByCode(code: string) {
-    return this.run(() => this.prisma.serialNumber.findUniqueOrThrow({
+    return this.run(async () => mapSerial(await this.prisma.serialNumber.findUniqueOrThrow({
       where: { serialNumberCode: z.string().trim().min(1).max(200).parse(code) }, select: SERIAL_SELECT,
-    }));
+    })));
   }
   async updateSerialNumber(id: string, dto: unknown) {
-    return this.run(() => this.prisma.serialNumber.update({
+    return this.run(async () => mapSerial(await this.prisma.serialNumber.update({
       where: { serialNumberId: uuid.parse(id) }, data: updateSchema.parse(dto), select: SERIAL_SELECT,
-    }));
+    })));
   }
   async updateSerialNumberStatus(id: string, dto: unknown) { return this.updateSerialNumber(id, dto); }
 
@@ -81,7 +108,7 @@ export class SerialNumberService {
         });
         if (Object.values(serial._count).some((count) => count > 0))
           throw new ConflictException('Serial is allocated or has history; deactivate it instead');
-        return tx.serialNumber.delete({ where: { serialNumberId }, select: SERIAL_SELECT });
+        return mapSerial(await tx.serialNumber.delete({ where: { serialNumberId }, select: SERIAL_SELECT }));
       }, { isolationLevel: 'Serializable', maxWait: 5_000, timeout: 15_000 });
     });
   }

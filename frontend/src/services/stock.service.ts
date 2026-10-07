@@ -116,14 +116,11 @@ export class StockService {
     client: AxiosInstance,
     input: CreateStockInput,
   ): Promise<Stock> {
-    const validated = createStockSchema.parse({
-      ...input,
-      status:
-        input.status ??
-        true,
-    });
     try {
-      const response = await client.post<Stock>('/stocks', validated);
+      const response = await client.post<Stock>('/stocks', {
+        ...input,
+        status: input.status ?? true,
+      });
       return response.data;
     } catch (error: unknown) {
       throwStockError(error, 'Erreur lors de la création du stock.');
@@ -135,9 +132,8 @@ export class StockService {
     id: string,
     input: UpdateStockInput,
   ): Promise<Stock> {
-    const validated = updateStockSchema.parse(input);
     try {
-      const response = await client.patch<Stock>(`/stocks/${id}`, validated);
+      const response = await client.patch<Stock>(`/stocks/${id}`, input);
       return response.data;
     } catch (error: unknown) {
       throwStockError(error, 'Erreur lors de la modification du stock.');

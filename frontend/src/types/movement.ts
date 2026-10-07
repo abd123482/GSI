@@ -53,7 +53,7 @@ export interface MovementItem {
 
 export interface Movement {
   mouvementId: string;
-  mouvementStatus: MovementType;
+  mouvementStatus: boolean;
   createdAt: string;
   happenedAt: string;
   createdByUserId: string | null;
@@ -77,6 +77,7 @@ export interface CreateMovementItemInput {
 
 export interface CreateMovementInput {
   movementType: MovementType;
+  happenedAt?: string;
   items: CreateMovementItemInput[];
 }
 

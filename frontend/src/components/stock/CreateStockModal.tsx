@@ -61,8 +61,8 @@ export function CreateStockModal({ isOpen, onClose, onSuccess }: CreateStockModa
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-5 py-4">
+      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-[#3f3f46] bg-[#27272a] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3f46] bg-[#18181b] px-5 py-4">
           <div className="flex items-center gap-3"><Warehouse className="h-5 w-5" /><div><h2 className="text-sm font-semibold">Nouveau stock</h2><p className="mt-0.5 text-[10px] text-white/45">Statuts autorisés : ACTIVE / INACTIVE</p></div></div>
           <button type="button" onClick={onClose} disabled={busy} className="rounded p-1.5 text-white/60 hover:bg-white/10"><X className="h-4 w-4" /></button>
         </header>
@@ -72,13 +72,13 @@ export function CreateStockModal({ isOpen, onClose, onSuccess }: CreateStockModa
         <form onSubmit={handleSubmit(submit)} className="space-y-5 p-5">
           {serverError && <div className="flex gap-2 rounded-lg border border-rose-500/40 bg-rose-950/30 p-3 text-xs text-rose-200"><AlertCircle className="h-4 w-4 shrink-0" />{serverError}</div>}
 
-          <label className="block space-y-1.5"><span className="text-xs font-semibold">Nom du stock *</span><input {...register('stockName')} className="h-10 w-full rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50" placeholder="Ex: Stock Principal" />{errors.stockName && <p className="text-[11px] text-rose-300">{errors.stockName.message}</p>}</label>
+          <label className="block space-y-1.5"><span className="text-xs font-semibold">Nom du stock *</span><input {...register('stockName')} className="h-10 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs outline-none focus:border-white/50" placeholder="Ex: Stock Principal" />{errors.stockName && <p className="text-[11px] text-rose-300">{errors.stockName.message}</p>}</label>
 
-          <label className="block space-y-1.5"><span className="text-xs font-semibold">Statut</span><select {...register('stockStatus')} className="h-10 w-full rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"><option value="true">ACTIVE</option><option value="false">INACTIVE</option></select></label>
+          <label className="block space-y-1.5"><span className="text-xs font-semibold">Statut</span><select {...register('stockStatus')} className="h-10 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs"><option value="true">ACTIVE</option><option value="false">INACTIVE</option></select></label>
 
-          <footer className="flex justify-end gap-2 border-t border-[#3f3a36] pt-4">
-            <button type="button" onClick={onClose} disabled={busy} className="rounded border border-[#3f3a36] px-4 py-2 text-xs">Annuler</button>
-            <button type="submit" disabled={busy || !canCreateStock} className="inline-flex items-center gap-1.5 rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622] disabled:opacity-40">{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}Créer le stock</button>
+          <footer className="flex justify-end gap-2 border-t border-[#3f3f46] pt-4">
+            <button type="button" onClick={onClose} disabled={busy} className="rounded border border-[#3f3f46] px-4 py-2 text-xs">Annuler</button>
+            <button type="submit" disabled={busy || !canCreateStock} className="inline-flex items-center gap-1.5 rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b] disabled:opacity-40">{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}Créer le stock</button>
           </footer>
         </form>
       </div>

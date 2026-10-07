@@ -35,10 +35,10 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-5 py-4">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[#3f3f46] bg-[#27272a] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3f46] bg-[#18181b] px-5 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#3f3a36] bg-[#383330]"><Warehouse className="h-5 w-5" /></div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#3f3f46] bg-[#27272a]"><Warehouse className="h-5 w-5" /></div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-semibold">{stock?.stockName ?? 'Détails du stock'}</h2>
@@ -62,19 +62,19 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
           ) : stock ? (
             <div className="space-y-5">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-[#3f3a36] bg-[#2b2622]/60 p-4"><p className="flex items-center justify-between text-xs text-[#aea69c]">Emplacements associés<Layers className="h-4 w-4" /></p><p className="mt-2 text-2xl font-semibold">{stock._count?.shelves ?? stock.shelves?.length ?? 0}</p></div>
-                <div className="rounded-lg border border-[#3f3a36] bg-[#2b2622]/60 p-4"><p className="text-xs text-[#aea69c]">Statut opérationnel</p><p className={`mt-2 text-sm font-semibold ${status === 'ACTIVE' ? 'text-emerald-300' : 'text-amber-300'}`}>{status}</p></div>
+                <div className="rounded-lg border border-[#3f3f46] bg-[#18181b]/60 p-4"><p className="flex items-center justify-between text-xs text-[#a1a1aa]">Emplacements associés<Layers className="h-4 w-4" /></p><p className="mt-2 text-2xl font-semibold">{stock._count?.shelves ?? stock.shelves?.length ?? 0}</p></div>
+                <div className="rounded-lg border border-[#3f3f46] bg-[#18181b]/60 p-4"><p className="text-xs text-[#a1a1aa]">Statut opérationnel</p><p className={`mt-2 text-sm font-semibold ${status === 'ACTIVE' ? 'text-emerald-300' : 'text-amber-300'}`}>{status}</p></div>
               </div>
 
               <section className="space-y-3">
-                <div className="flex items-center justify-between"><h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide"><Layers className="h-3.5 w-3.5" />Emplacements</h3><Link href="/shelves" className="flex items-center gap-1 text-xs text-[#c9c0ad] hover:text-white">Voir les emplacements<ArrowUpRight className="h-3.5 w-3.5" /></Link></div>
+                <div className="flex items-center justify-between"><h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide"><Layers className="h-3.5 w-3.5" />Emplacements</h3></div>
                 {!stock.shelves || stock.shelves.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-[#4a4540] bg-[#2b2622]/35 p-6 text-center text-xs text-[#aea69c]">Aucun emplacement rattaché à ce stock.</div>
+                  <div className="rounded-lg border border-dashed border-[#4a4540] bg-[#18181b]/35 p-6 text-center text-xs text-[#a1a1aa]">Aucun emplacement rattaché à ce stock.</div>
                 ) : (
-                  <div className="overflow-hidden rounded-lg border border-[#3f3a36]">
-                    <div className="divide-y divide-[#3f3a36]">
+                  <div className="overflow-hidden rounded-lg border border-[#3f3f46]">
+                    <div className="divide-y divide-[#3f3f46]">
                       {stock.shelves.map((shelf) => (
-                        <div key={shelf.shelfId} className="flex items-center justify-between gap-3 bg-[#2b2622]/55 px-4 py-3 text-xs">
+                        <div key={shelf.shelfId} className="flex items-center justify-between gap-3 bg-[#18181b]/55 px-4 py-3 text-xs">
                           <span className="truncate font-medium">{shelf.shelfName ?? 'Emplacement sans nom'}</span>
                         </div>
                       ))}
@@ -86,7 +86,7 @@ export function StockDetailModal({ stockId, isOpen, onClose }: StockDetailModalP
           ) : null}
         </div>
 
-        <footer className="flex justify-end border-t border-[#3f3a36] bg-[#2b2622] px-5 py-3"><button type="button" onClick={onClose} className="rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622]">Fermer</button></footer>
+        <footer className="flex justify-end border-t border-[#3f3f46] bg-[#18181b] px-5 py-3"><button type="button" onClick={onClose} className="rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b]">Fermer</button></footer>
       </div>
     </div>
   );

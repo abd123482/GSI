@@ -32,30 +32,8 @@ interface MovementListTableProps {
   ) => void;
 }
 
-function movementType(
-  movement: Movement,
-): 'IN' | 'OUT' | 'TRANSFER' {
-  const status =
-    movement.mouvementStatus
-      ?.toUpperCase();
-
-  if (
-    status === 'IN' ||
-    status === 'ENTRY' ||
-    status === 'ENTRÉE'
-  ) {
-    return 'IN';
-  }
-
-  if (
-    status === 'OUT' ||
-    status === 'EXIT' ||
-    status === 'SORTIE'
-  ) {
-    return 'OUT';
-  }
-
-  return 'TRANSFER';
+function movementType(movement: any): 'IN' | 'OUT' | 'TRANSFER' {
+  return movement.mouvementStatus ? 'OUT' : 'IN';
 }
 
 function typeBadge(
@@ -148,8 +126,8 @@ export function MovementListTable({
 }: MovementListTableProps) {
   if (isLoading) {
     return (
-      <div className="flex min-h-64 items-center justify-center rounded border border-[#3f3a36] bg-[#2f2a26]">
-        <div className="flex items-center gap-2 text-xs text-[#aea69c]">
+      <div className="flex min-h-64 items-center justify-center rounded border border-[#3f3f46] bg-[#27272a]">
+        <div className="flex items-center gap-2 text-xs text-[#a1a1aa]">
           <Loader2 className="h-4 w-4 animate-spin" />
           Chargement des mouvements...
         </div>
@@ -159,15 +137,15 @@ export function MovementListTable({
 
   if (!movements.length) {
     return (
-      <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded border border-[#3f3a36] bg-[#2f2a26] px-6 text-center">
-        <ArrowRightLeft className="h-7 w-7 text-[#aea69c]" />
+      <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded border border-[#3f3f46] bg-[#27272a] px-6 text-center">
+        <ArrowRightLeft className="h-7 w-7 text-[#a1a1aa]" />
 
         <div>
           <p className="text-sm font-medium">
             Aucun mouvement
           </p>
 
-          <p className="mt-1 text-xs text-[#8c827a]">
+          <p className="mt-1 text-xs text-[#71717a]">
             Aucun mouvement ne correspond aux filtres actuels.
           </p>
         </div>
@@ -188,13 +166,16 @@ export function MovementListTable({
     );
 
   return (
-    <div className="overflow-hidden rounded border border-[#3f3a36] bg-[#2f2a26]">
+    <div className="overflow-hidden rounded border border-[#3f3f46] bg-[#27272a]">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
-          <thead className="border-b border-[#3f3a36] bg-[#383330]/60">
-            <tr className="text-left text-[10px] uppercase tracking-wider text-[#8c827a]">
+          <thead className="border-b border-[#3f3f46] bg-[#27272a]/60">
+            <tr className="text-left text-[10px] uppercase tracking-wider text-[#71717a]">
               <th className="px-4 py-3 font-medium">
-                Date
+                Date d'effet
+              </th>
+              <th className="px-4 py-3 font-medium">
+                Créé le
               </th>
               <th className="px-4 py-3 font-medium">
                 Type
@@ -215,7 +196,7 @@ export function MovementListTable({
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-[#3f3a36]">
+          <tbody className="divide-y divide-[#3f3f46]">
             {movements.map(
               (movement) => (
                 <tr
@@ -227,9 +208,14 @@ export function MovementListTable({
                       movement,
                     )
                   }
-                  className="cursor-pointer hover:bg-[#383330]/55"
+                  className="cursor-pointer hover:bg-[#27272a]/55"
                 >
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-[#c9c0ad]">
+                  <td className="whitespace-nowrap px-4 py-3 text-xs text-[#d4d4d8]">
+                    {formatDate(
+                      movement.happenedAt,
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-xs text-[#71717a]">
                     {formatDate(
                       movement.createdAt,
                     )}
@@ -243,7 +229,7 @@ export function MovementListTable({
 
                   <td className="px-4 py-3">
                     <div className="flex min-w-52 items-center gap-2 text-xs">
-                      <span className="max-w-32 truncate text-[#c9c0ad]">
+                      <span className="max-w-32 truncate text-[#d4d4d8]">
                         {routeName(
                           movement.items?.[0]?.sourceShelf,
                           'Extérieur',
@@ -262,7 +248,7 @@ export function MovementListTable({
                   </td>
 
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-[#c9c0ad]">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-[#d4d4d8]">
                       <Package className="h-3.5 w-3.5" />
                       {movement.items
                         ?.length ??
@@ -276,7 +262,7 @@ export function MovementListTable({
                   </td>
 
                   <td className="px-4 py-3">
-                    <span className="text-[10px] text-[#c9c0ad]">
+                    <span className="text-[10px] text-[#d4d4d8]">
                       {movement.origin === false
                         ? 'Ajustement inventaire'
                         : 'Utilisateur'}
@@ -294,7 +280,7 @@ export function MovementListTable({
                           movement,
                         );
                       }}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded border border-[#3f3a36] bg-[#383330] text-[#aea69c] hover:text-white"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded border border-[#3f3f46] bg-[#27272a] text-[#a1a1aa] hover:text-white"
                       title="Voir"
                     >
                       <Eye className="h-3.5 w-3.5" />
@@ -307,8 +293,8 @@ export function MovementListTable({
         </table>
       </div>
 
-      <div className="flex items-center justify-between border-t border-[#3f3a36] bg-[#383330]/40 px-4 py-3">
-        <span className="text-[10px] text-[#8c827a]">
+      <div className="flex items-center justify-between border-t border-[#3f3f46] bg-[#27272a]/40 px-4 py-3">
+        <span className="text-[10px] text-[#71717a]">
           {start}–{end} sur{' '}
           {totalMovements}
           {isFetching &&
@@ -326,12 +312,12 @@ export function MovementListTable({
                 currentPage - 1,
               )
             }
-            className="rounded border border-[#3f3a36] p-2 disabled:opacity-30"
+            className="rounded border border-[#3f3f46] p-2 disabled:opacity-30"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
 
-          <span className="text-[10px] text-[#aea69c]">
+          <span className="text-[10px] text-[#a1a1aa]">
             {currentPage} /{' '}
             {Math.max(
               totalPages,
@@ -350,7 +336,7 @@ export function MovementListTable({
                 currentPage + 1,
               )
             }
-            className="rounded border border-[#3f3a36] p-2 disabled:opacity-30"
+            className="rounded border border-[#3f3f46] p-2 disabled:opacity-30"
           >
             <ChevronRight className="h-3.5 w-3.5" />
           </button>

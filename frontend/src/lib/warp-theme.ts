@@ -5,20 +5,20 @@
 
 export const warpColors = {
   // Brand & Surfaces
-  canvas: '#2b2622',        // Warm near-charcoal page background (oklch warmth)
-  canvasSoft: '#383330',    // Elevated card, tile & modal surface
-  hairline: '#3f3a36',      // 1px divider & border on dark surfaces
-  hairlineLight: '#4d4742', // Interactive border hover
+  canvas: '#18181b',        // Warm near-charcoal page background (oklch warmth)
+  canvasSoft: '#27272a',    // Elevated card, tile & modal surface
+  hairline: '#3f3f46',      // 1px divider & border on dark surfaces
+  hairlineLight: '#52525b', // Interactive border hover
 
   // Primary & Accents
-  primary: '#f7f5f0',       // Warm off-white (primary CTA fill, wordmark)
-  onPrimary: '#2b2622',     // Dark text on primary button
+  primary: '#fafafa',       // Warm off-white (primary CTA fill, wordmark)
+  onPrimary: '#18181b',     // Dark text on primary button
   
   // Typography
-  ink: '#f7f5f0',           // Default text on canvas
-  bodyStrong: '#dad2c1',    // Mid-emphasis text
-  body: '#c9c0ad',          // Secondary body text
-  mute: '#aea69c',          // Lowest-priority text, fine print, timestamps
+  ink: '#fafafa',           // Default text on canvas
+  bodyStrong: '#f4f4f5',    // Mid-emphasis text
+  body: '#d4d4d8',          // Secondary body text
+  mute: '#a1a1aa',          // Lowest-priority text, fine print, timestamps
 
   // Semantic (subtle dark tints)
   success: '#10b981',

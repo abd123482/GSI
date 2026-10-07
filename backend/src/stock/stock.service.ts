@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, HttpException } from '@nestjs/common';
 import { ZodError } from 'zod';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -22,10 +22,16 @@ function parse<T>(schema: { parse(input: unknown): T }, input: unknown): T {
 }
 
 function handlePrismaError(error: unknown): never {
+  if (error instanceof HttpException) {
+    throw error;
+  }
+  
+  console.error('[handlePrismaError] Raw error:', error);
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === 'P2002') throw new BadRequestException('Stock name already exists');
     if (error.code === 'P2025') throw new NotFoundException('Stock not found');
   }
+  
   throw error;
 }
 
@@ -46,16 +52,28 @@ export class StockService {
     if (stockName === undefined && status === undefined) {
       throw new BadRequestException('Provide stockName or status');
     }
-    return this.prisma.stock.update({
-      where: { stockId },
-      data: {
-        ...(stockName !== undefined && { stockName }),
-        ...(status !== undefined && { status }),
-        ...(status === false && {
-          shelves: { updateMany: { where: { status: true }, data: { status: false } } },
-        }),
-      },
-      select: stockSelect,
+
+    return this.prisma.$transaction(async (tx) => {
+      if (status === false) {
+        const activeShelvesCount = await tx.shelf.count({
+          where: { stockId, status: true },
+        });
+        
+        if (activeShelvesCount > 0) {
+          throw new BadRequestException(
+            'Ce stock possède encore des emplacements actifs. Veuillez tous les désactiver avant de pouvoir désactiver le stock.'
+          );
+        }
+      }
+
+      return tx.stock.update({
+        where: { stockId },
+        data: {
+          stockName: stockName !== undefined ? stockName : undefined,
+          status: status !== undefined ? status : undefined,
+        },
+        select: stockSelect,
+      });
     }).catch(handlePrismaError);
   }
 

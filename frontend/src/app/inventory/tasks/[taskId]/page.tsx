@@ -243,14 +243,14 @@ export default function InventoryTaskPage() {
 
   if (taskQuery.isLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#2b2622] text-white">
+      <main className="flex min-h-screen items-center justify-center bg-[#18181b] text-white">
         <Loader2 className="h-5 w-5 animate-spin" />
       </main>
     );
   }
   if (taskQuery.isError || !task) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-[#2b2622] text-white space-y-4">
+      <main className="flex min-h-screen flex-col items-center justify-center bg-[#18181b] text-white space-y-4">
         <p className="text-rose-400">
           Erreur lors du chargement de la tâche ou accès refusé.
         </p>
@@ -422,12 +422,12 @@ export default function InventoryTaskPage() {
   }
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-white">
+    <main className="min-h-[calc(100vh-3.5rem)] bg-[#18181b] text-white">
       <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-6">
-        <header className="flex items-start gap-3 border-b border-[#3f3a36] pb-4">
+        <header className="flex items-start gap-3 border-b border-[#3f3f46] pb-4">
           <Link
             href="/inventory/tasks"
-            className="rounded border border-[#3f3a36] p-2 text-[#aea69c] hover:text-white"
+            className="rounded border border-[#3f3f46] p-2 text-[#a1a1aa] hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
@@ -449,7 +449,7 @@ export default function InventoryTaskPage() {
               </span>
             </div>
 
-            <p className="mt-1 text-xs text-[#aea69c]">
+            <p className="mt-1 text-xs text-[#a1a1aa]">
               {task.unit.inventory.title}
               {" • "}
               Unité #{task.unit.unitOrder + 1}
@@ -471,8 +471,8 @@ export default function InventoryTaskPage() {
         )}
 
         {byEquipment && (
-          <div className="rounded border border-[#3f3a36] bg-[#2f2a26] p-4">
-            <p className="text-[10px] uppercase tracking-wider text-[#8c827a]">
+          <div className="rounded border border-[#3f3f46] bg-[#27272a] p-4">
+            <p className="text-[10px] uppercase tracking-wider text-[#71717a]">
               Article contrôlé
             </p>
 
@@ -481,15 +481,15 @@ export default function InventoryTaskPage() {
             </p>
 
             {expectedShelves.length > 0 && (
-              <div className="mt-3 border-t border-[#3f3a36] pt-3">
-                <p className="mb-1.5 text-[10px] uppercase tracking-wider text-[#8c827a]">
+              <div className="mt-3 border-t border-[#3f3f46] pt-3">
+                <p className="mb-1.5 text-[10px] uppercase tracking-wider text-[#71717a]">
                   Emplacements attendus ({expectedShelves.length})
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {expectedShelves.map((allocation: any) => (
                     <span
                       key={allocation.shelfId}
-                      className="inline-flex items-center rounded border border-[#3f3a36] bg-[#1f1b18] px-2 py-0.5 text-[10px] text-emerald-100"
+                      className="inline-flex items-center rounded border border-[#3f3f46] bg-[#1f1b18] px-2 py-0.5 text-[10px] text-emerald-100"
                     >
                       {allocation.shelfName} ({allocation.quantity ?? 0})
                     </span>
@@ -501,8 +501,8 @@ export default function InventoryTaskPage() {
         )}
 
         {byShelf && (
-          <div className="rounded border border-[#3f3a36] bg-[#2f2a26] p-4">
-            <p className="text-[10px] uppercase tracking-wider text-[#8c827a]">
+          <div className="rounded border border-[#3f3f46] bg-[#27272a] p-4">
+            <p className="text-[10px] uppercase tracking-wider text-[#71717a]">
               Emplacement contrôlé
             </p>
 
@@ -514,8 +514,8 @@ export default function InventoryTaskPage() {
 
         {/* SECTION COMPTAGE QUANTITATIF (NON-SERIALISÉ) */}
         {!task.isSerialized && (
-          <section className="overflow-hidden rounded-lg border border-[#3f3a36] bg-[#2f2a26]">
-            <div className="flex items-center justify-between border-b border-[#3f3a36] px-4 py-3">
+          <section className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#27272a]">
+            <div className="flex items-center justify-between border-b border-[#3f3f46] px-4 py-3">
               <h2 className="flex items-center gap-1.5 text-xs font-semibold">
                 <Package className="h-3.5 w-3.5" />
                 Comptage quantitatif par emplacement
@@ -523,11 +523,11 @@ export default function InventoryTaskPage() {
 
             </div>
 
-            <div className="divide-y divide-[#3f3a36]">
+            <div className="divide-y divide-[#3f3f46]">
               {byEquipment ? (
                 <div className="p-4 space-y-4">
                   {renderedShelfIds.length === 0 ? (
-                    <div className="rounded border border-[#3f3a36] bg-[#26221f] p-4 text-center text-xs text-white/50">
+                    <div className="rounded border border-[#3f3f46] bg-[#26221f] p-4 text-center text-xs text-white/50">
                       Aucun emplacement attendu pour cet article. Utilisez le
                       bouton ci-dessous pour ajouter un emplacement.
                     </div>
@@ -547,9 +547,9 @@ export default function InventoryTaskPage() {
                       return (
                         <div
                           key={shelfId}
-                          className="overflow-hidden rounded-lg border border-[#3f3a36] bg-[#26221f]"
+                          className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#26221f]"
                         >
-                          <div className="flex items-center justify-between border-b border-[#3f3a36] bg-[#1f1b18] px-4 py-3">
+                          <div className="flex items-center justify-between border-b border-[#3f3f46] bg-[#1f1b18] px-4 py-3">
                             <div className="flex items-center gap-2">
                               <Warehouse className="h-4 w-4 text-amber-400" />
                               <h3 className="text-sm font-semibold text-white">
@@ -619,7 +619,7 @@ export default function InventoryTaskPage() {
                                       ];
                                     });
                                   }}
-                                  className="h-10 w-28 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-sm font-semibold text-white focus:border-amber-500 focus:outline-none"
+                                  className="h-10 w-28 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 font-mono text-sm font-semibold text-white focus:border-amber-500 focus:outline-none"
                                 />
                                 <span className="text-xs text-white/50">
                                   unités
@@ -662,7 +662,7 @@ export default function InventoryTaskPage() {
                           <select
                             value={shelfToAdd}
                             onChange={(e) => setShelfToAdd(e.target.value)}
-                            className="h-10 flex-1 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs text-white focus:border-amber-500 focus:outline-none"
+                            className="h-10 flex-1 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-xs text-white focus:border-amber-500 focus:outline-none"
                           >
                             <option value="">
                               Sélectionnez l&apos;emplacement...
@@ -692,7 +692,7 @@ export default function InventoryTaskPage() {
                                 setIsAddingShelf(false);
                                 setShelfToAdd("");
                               }}
-                              className="h-10 rounded border border-[#3f3a36] px-3 text-xs text-white/70 hover:bg-white/5"
+                              className="h-10 rounded border border-[#3f3f46] px-3 text-xs text-white/70 hover:bg-white/5"
                             >
                               Annuler
                             </button>
@@ -708,7 +708,7 @@ export default function InventoryTaskPage() {
                     const eq = expectedEquipments.find((e: any) => e.equipmentId === id) ?? equipments.equipments.find((e) => e.equipmentId === id);
                     return eq && !eq.hasSerialNumber;
                   }).length === 0 ? (
-                    <div className="rounded border border-[#3f3a36] bg-[#26221f] p-4 text-center text-xs text-white/50">
+                    <div className="rounded border border-[#3f3f46] bg-[#26221f] p-4 text-center text-xs text-white/50">
                       Aucun article standard attendu dans cet emplacement.
                     </div>
                   ) : (
@@ -724,9 +724,9 @@ export default function InventoryTaskPage() {
                       return (
                         <div
                           key={equipmentId}
-                          className="overflow-hidden rounded-lg border border-[#3f3a36] bg-[#26221f]"
+                          className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#26221f]"
                         >
-                          <div className="flex items-center justify-between border-b border-[#3f3a36] bg-[#1f1b18] px-4 py-3">
+                          <div className="flex items-center justify-between border-b border-[#3f3f46] bg-[#1f1b18] px-4 py-3">
                             <div className="flex items-center gap-2">
                               <Package className="h-4 w-4 text-amber-400" />
                               <h3 className="text-sm font-semibold text-white">
@@ -776,7 +776,7 @@ export default function InventoryTaskPage() {
                                       return [...current, { id: newId(), equipmentId, shelfId: task.unit.shelfId ?? "", quantity: val }];
                                     });
                                   }}
-                                  className="h-10 w-24 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-center font-mono text-sm font-semibold text-amber-100 focus:border-amber-500 focus:outline-none"
+                                  className="h-10 w-24 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-center font-mono text-sm font-semibold text-amber-100 focus:border-amber-500 focus:outline-none"
                                 />
                                 <span className="text-xs text-white/40">unités</span>
                               </div>
@@ -795,7 +795,7 @@ export default function InventoryTaskPage() {
                           <select
                             value={equipmentToAdd}
                             onChange={(e) => setEquipmentToAdd(e.target.value)}
-                            className="h-10 flex-1 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs text-white focus:border-amber-500 focus:outline-none"
+                            className="h-10 flex-1 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-xs text-white focus:border-amber-500 focus:outline-none"
                           >
                             <option value="">Sélectionnez un article...</option>
                             {equipments.equipments
@@ -822,7 +822,7 @@ export default function InventoryTaskPage() {
                             <button
                               type="button"
                               onClick={() => { setIsAddingEquipment(false); setEquipmentToAdd(""); }}
-                              className="h-10 rounded border border-[#3f3a36] px-3 text-xs text-white/70 hover:bg-white/5"
+                              className="h-10 rounded border border-[#3f3f46] px-3 text-xs text-white/70 hover:bg-white/5"
                             >
                               Annuler
                             </button>
@@ -848,8 +848,8 @@ export default function InventoryTaskPage() {
 
         {/* SECTION NUMÉROS DE SÉRIE (SERIALISÉ) */}
         {task.isSerialized && (
-          <section className="overflow-hidden rounded-lg border border-[#3f3a36] bg-[#2f2a26]">
-            <div className="flex items-center justify-between border-b border-[#3f3a36] px-4 py-3">
+          <section className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#27272a]">
+            <div className="flex items-center justify-between border-b border-[#3f3f46] px-4 py-3">
               <h2 className="flex items-center gap-1.5 text-xs font-semibold">
                 <Barcode className="h-3.5 w-3.5" />
                 Numéros de série observés par emplacement
@@ -857,11 +857,11 @@ export default function InventoryTaskPage() {
 
             </div>
 
-            <div className="divide-y divide-[#3f3a36]">
+            <div className="divide-y divide-[#3f3f46]">
               {byEquipment ? (
                 <div className="p-4 space-y-4">
                   {renderedShelfIds.length === 0 ? (
-                    <div className="rounded border border-[#3f3a36] bg-[#26221f] p-4 text-center text-xs text-white/50">
+                    <div className="rounded border border-[#3f3f46] bg-[#26221f] p-4 text-center text-xs text-white/50">
                       Aucun emplacement attendu pour cet article. Utilisez le
                       bouton ci-dessous pour ajouter un emplacement.
                     </div>
@@ -884,9 +884,9 @@ export default function InventoryTaskPage() {
                       return (
                         <div
                           key={shelfId}
-                          className="overflow-hidden rounded-lg border border-[#3f3a36] bg-[#26221f]"
+                          className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#26221f]"
                         >
-                          <div className="flex items-center justify-between border-b border-[#3f3a36] bg-[#1f1b18] px-4 py-3">
+                          <div className="flex items-center justify-between border-b border-[#3f3f46] bg-[#1f1b18] px-4 py-3">
                             <div className="flex items-center gap-2">
                               <Warehouse className="h-4 w-4 text-amber-400" />
                               <h3 className="text-sm font-semibold text-white">
@@ -937,7 +937,7 @@ export default function InventoryTaskPage() {
                                 <button
                                   type="button"
                                   onClick={() => addSerialRow(shelfId)}
-                                  className="inline-flex items-center gap-1.5 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 py-1.5 text-xs font-medium text-amber-300 transition hover:bg-white/5"
+                                  className="inline-flex items-center gap-1.5 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 py-1.5 text-xs font-medium text-amber-300 transition hover:bg-white/5"
                                 >
                                   <Plus className="h-3.5 w-3.5" />
                                   Saisir un code série
@@ -966,7 +966,7 @@ export default function InventoryTaskPage() {
                                           )
                                         }
                                         placeholder="Code série observé (ex: SN-...)"
-                                        className="h-9 flex-1 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-xs text-white focus:border-amber-500 focus:outline-none"
+                                        className="h-9 flex-1 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 font-mono text-xs text-white focus:border-amber-500 focus:outline-none"
                                       />
                                       <button
                                         type="button"
@@ -989,7 +989,7 @@ export default function InventoryTaskPage() {
                                   <button
                                     type="button"
                                     onClick={() => addSerialRow(shelfId)}
-                                    className="inline-flex items-center gap-1.5 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/5 hover:text-white"
+                                    className="inline-flex items-center gap-1.5 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/5 hover:text-white"
                                   >
                                     <Plus className="h-3.5 w-3.5 text-amber-400" />
                                     Ajouter un autre numéro de série
@@ -1033,7 +1033,7 @@ export default function InventoryTaskPage() {
                           <select
                             value={shelfToAdd}
                             onChange={(e) => setShelfToAdd(e.target.value)}
-                            className="h-10 flex-1 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 text-xs text-white focus:border-amber-500 focus:outline-none"
+                            className="h-10 flex-1 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-xs text-white focus:border-amber-500 focus:outline-none"
                           >
                             <option value="">
                               Sélectionnez l&apos;emplacement...
@@ -1063,7 +1063,7 @@ export default function InventoryTaskPage() {
                                 setIsAddingShelf(false);
                                 setShelfToAdd("");
                               }}
-                              className="h-10 rounded border border-[#3f3a36] px-3 text-xs text-white/70 hover:bg-white/5"
+                              className="h-10 rounded border border-[#3f3f46] px-3 text-xs text-white/70 hover:bg-white/5"
                             >
                               Annuler
                             </button>
@@ -1091,10 +1091,10 @@ export default function InventoryTaskPage() {
                         )
                       }
                       placeholder="Code série observé"
-                      className="h-9 w-full rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-xs"
+                      className="h-9 w-full rounded border border-[#3f3f46] bg-[#1f1b18] px-3 font-mono text-xs"
                     />
 
-                    <div className="flex h-9 items-center rounded border border-[#3f3a36] bg-[#383330]/50 px-3 text-xs">
+                    <div className="flex h-9 items-center rounded border border-[#3f3f46] bg-[#27272a]/50 px-3 text-xs">
                       {scopeShelf?.shelfName ?? "Emplacement"}
                     </div>
 
@@ -1116,14 +1116,14 @@ export default function InventoryTaskPage() {
           </section>
         )}
 
-        <div className="flex flex-col gap-2 border-t border-[#3f3a36] pt-4 sm:flex-row sm:justify-end">
+        <div className="flex flex-col gap-2 border-t border-[#3f3f46] pt-4 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={() => {
               void persist(false);
             }}
             disabled={busy}
-            className="inline-flex items-center justify-center gap-2 rounded border border-[#3f3a36] bg-[#383330] px-4 py-2 text-xs disabled:opacity-40"
+            className="inline-flex items-center justify-center gap-2 rounded border border-[#3f3f46] bg-[#27272a] px-4 py-2 text-xs disabled:opacity-40"
           >
             <Save className="h-3.5 w-3.5" />
             Brouillon
@@ -1137,7 +1137,7 @@ export default function InventoryTaskPage() {
               }
             }}
             disabled={busy}
-            className="inline-flex items-center justify-center gap-2 rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622] disabled:opacity-40"
+            className="inline-flex items-center justify-center gap-2 rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b] disabled:opacity-40"
           >
             {submitTask.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />

@@ -30,17 +30,14 @@ import type {
   MovementType,
 } from '@/types/movement';
 
+import dynamic from 'next/dynamic';
+
 import {
   MovementListTable,
 } from '@/components/movement/MovementListTable';
 
-import {
-  MovementDetailModal,
-} from '@/components/movement/MovementDetailModal';
-
-import {
-  CreateMovementModal,
-} from '@/components/movement/CreateMovementModal';
+const MovementDetailModal = dynamic(() => import('@/components/movement/MovementDetailModal').then(m => m.MovementDetailModal));
+const CreateMovementModal = dynamic(() => import('@/components/movement/CreateMovementModal').then(m => m.CreateMovementModal));
 
 export default function MovementsPage() {
   const {
@@ -114,8 +111,8 @@ export default function MovementsPage() {
     permissions.isLoading
   ) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#2b2622] text-[#f7f5f0]">
-        <div className="flex items-center gap-2 text-xs text-[#aea69c]">
+      <main className="flex min-h-screen items-center justify-center bg-[#18181b] text-[#fafafa]">
+        <div className="flex items-center gap-2 text-xs text-[#a1a1aa]">
           <Loader2 className="h-4 w-4 animate-spin" />
           Chargement des mouvements...
         </div>
@@ -125,15 +122,15 @@ export default function MovementsPage() {
 
   if (!isSignedIn) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
-        <div className="w-full max-w-md rounded-lg border border-[#3f3a36] bg-[#383330] p-8 text-center">
+      <main className="flex min-h-screen items-center justify-center bg-[#18181b] p-6 text-[#fafafa]">
+        <div className="w-full max-w-md rounded-lg border border-[#3f3f46] bg-[#27272a] p-8 text-center">
           <ArrowRightLeft className="mx-auto h-8 w-8" />
 
           <h1 className="mt-4 text-base font-semibold">
             Connexion requise
           </h1>
 
-          <p className="mt-2 text-xs text-[#c9c0ad]">
+          <p className="mt-2 text-xs text-[#d4d4d8]">
             Connectez-vous pour consulter les mouvements.
           </p>
 
@@ -141,7 +138,7 @@ export default function MovementsPage() {
             <SignInButton mode="modal">
               <button
                 type="button"
-                className="w-full rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622]"
+                className="w-full rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b]"
               >
                 Se connecter
               </button>
@@ -156,15 +153,15 @@ export default function MovementsPage() {
     !permissions.canReadMovement
   ) {
     return (
-      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
-        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#2f2a26] p-7 text-center">
+      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#18181b] p-6 text-[#fafafa]">
+        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#27272a] p-7 text-center">
           <ShieldAlert className="mx-auto h-6 w-6 text-amber-400" />
 
           <h1 className="mt-3 text-sm font-semibold">
             Accès non autorisé
           </h1>
 
-          <p className="mt-2 text-xs text-[#aea69c]">
+          <p className="mt-2 text-xs text-[#a1a1aa]">
             La permission movement.read est requise.
           </p>
         </div>
@@ -173,11 +170,11 @@ export default function MovementsPage() {
   }
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-[#f7f5f0]">
+    <main className="min-h-[calc(100vh-3.5rem)] bg-[#18181b] text-[#fafafa]">
       <div className="mx-auto w-full max-w-7xl space-y-5 px-4 py-6 sm:px-6">
-        <div className="flex flex-col gap-4 border-b border-[#3f3a36] pb-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 border-b border-[#3f3f46] pb-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="mb-1 flex items-center gap-2 font-mono text-xs text-[#8c827a]">
+            <div className="mb-1 flex items-center gap-2 font-mono text-xs text-[#71717a]">
               <Link
                 href="/"
                 className="hover:text-white"
@@ -200,30 +197,12 @@ export default function MovementsPage() {
 
           <div className="flex items-center gap-2">
 
-            <button
-              type="button"
-              onClick={() => {
-                void movementsQuery.refetch();
-              }}
-              disabled={
-                movementsQuery.isFetching
-              }
-              className="inline-flex h-9 w-9 items-center justify-center rounded border border-[#3f3a36] bg-[#383330] text-[#aea69c] disabled:opacity-50"
-              title="Actualiser"
-            >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${movementsQuery.isFetching
-                    ? 'animate-spin'
-                    : ''
-                  }`}
-              />
-            </button>
           </div>
         </div>
 
-        <section className="flex flex-col gap-3 rounded border border-[#3f3a36] bg-[#2f2a26] p-4 sm:flex-row sm:items-end">
+        <section className="flex flex-col gap-3 rounded border border-[#3f3f46] bg-[#27272a] p-4 sm:flex-row sm:items-end">
           <label className="block min-w-52">
-            <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-[#8c827a]">
+            <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-[#71717a]">
               Type
             </span>
 
@@ -242,7 +221,7 @@ export default function MovementsPage() {
                 );
                 setPage(1);
               }}
-              className="h-9 w-full rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"
+              className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs"
             >
               <option value="">
                 Tous
@@ -260,7 +239,7 @@ export default function MovementsPage() {
           </label>
 
           <label className="block w-32">
-            <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-[#8c827a]">
+            <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-[#71717a]">
               Par page
             </span>
 
@@ -277,7 +256,7 @@ export default function MovementsPage() {
                 );
                 setPage(1);
               }}
-              className="h-9 w-full rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"
+              className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs"
             >
               <option value={10}>
                 10
@@ -295,7 +274,7 @@ export default function MovementsPage() {
             <button
               type="button"
               onClick={() => setCreateOpen(true)}
-              className="mt-3 inline-flex h-9 items-center justify-center gap-2 rounded bg-[#f7f5f0] px-3 text-xs font-semibold text-[#2b2622] sm:ml-auto sm:mt-0"
+              className="mt-3 inline-flex h-9 items-center justify-center gap-2 rounded bg-[#fafafa] px-3 text-xs font-semibold text-[#18181b] sm:ml-auto sm:mt-0"
             >
               <Plus className="h-3.5 w-3.5" />
               Nouveau mouvement

@@ -115,9 +115,9 @@ export function DeleteEquipmentModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="delete-equipment-title"
-        className="w-full max-w-md overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl"
+        className="w-full max-w-md overflow-hidden rounded-xl border border-[#3f3f46] bg-[#27272a] text-white shadow-2xl"
       >
-        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-5 py-4">
+        <header className="flex items-center justify-between border-b border-[#3f3f46] bg-[#18181b] px-5 py-4">
           <div className="flex items-center gap-2">
             <Trash2 className="h-4 w-4 text-rose-300" />
 
@@ -168,7 +168,7 @@ export function DeleteEquipmentModal({
             </div>
           </div>
 
-          <div className="space-y-2 rounded-lg border border-[#3f3a36] bg-[#2b2622]/65 p-3 text-xs">
+          <div className="space-y-2 rounded-lg border border-[#3f3f46] bg-[#18181b]/65 p-3 text-xs">
             <p className="font-semibold">
               {currentEquipment.equipmentName ??
                 currentEquipment.equipmentId}
@@ -208,7 +208,7 @@ export function DeleteEquipmentModal({
               </div>
             )}
 
-            <div className="border-t border-[#3f3a36] pt-2">
+            <div className="border-t border-[#3f3f46] pt-2">
               <span className="block text-[9px] uppercase tracking-wider text-white/35">
                 GUID
               </span>
@@ -220,12 +220,12 @@ export function DeleteEquipmentModal({
           </div>
         </div>
 
-        <footer className="flex justify-end gap-2 border-t border-[#3f3a36] bg-[#2b2622] px-5 py-3">
+        <footer className="flex justify-end gap-2 border-t border-[#3f3f46] bg-[#18181b] px-5 py-3">
           <button
             type="button"
             disabled={isDeleting}
             onClick={onClose}
-            className="rounded border border-[#3f3a36] px-3 py-1.5 text-xs transition-colors hover:bg-white/5 disabled:opacity-40"
+            className="rounded border border-[#3f3f46] px-3 py-1.5 text-xs transition-colors hover:bg-white/5 disabled:opacity-40"
           >
             Annuler
           </button>

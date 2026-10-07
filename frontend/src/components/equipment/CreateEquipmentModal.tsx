@@ -161,8 +161,8 @@ export function CreateEquipmentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-sm">
-      <div className="my-8 w-full max-w-2xl overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-6 py-4">
+      <div className="my-8 w-full max-w-2xl overflow-hidden rounded-xl border border-[#3f3f46] bg-[#27272a] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3f46] bg-[#18181b] px-6 py-4">
           <div className="flex items-center gap-2.5">
             <PackagePlus className="h-4 w-4" />
 
@@ -207,7 +207,7 @@ export function CreateEquipmentModal({
                 {...register(
                   'equipmentName',
                 )}
-                className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50"
+                className="h-10 w-full rounded-lg border border-[#3f3f46] bg-[#18181b] px-3 text-xs outline-none focus:border-white/50"
               />
 
               {errors.equipmentName && (
@@ -230,7 +230,7 @@ export function CreateEquipmentModal({
                 {...register(
                   'equipmentStatus',
                 )}
-                className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"
+                className="h-10 w-full rounded-lg border border-[#3f3f46] bg-[#18181b] px-3 text-xs"
               >
                 <option value="true">
                   ACTIVE
@@ -258,11 +258,11 @@ export function CreateEquipmentModal({
                     true,
                 },
               )}
-              className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 font-mono text-xs"
+              className="h-10 w-full rounded-lg border border-[#3f3f46] bg-[#18181b] px-3 font-mono text-xs"
             />
           </label>
 
-          <div className="rounded-xl border border-[#3f3a36] bg-[#2b2622]/60 p-4">
+          <div className="rounded-xl border border-[#3f3f46] bg-[#18181b]/60 p-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Barcode className="h-4 w-4" />
@@ -290,12 +290,12 @@ export function CreateEquipmentModal({
 
 
 
-          <footer className="flex justify-end gap-2 border-t border-[#3f3a36] pt-4">
+          <footer className="flex justify-end gap-2 border-t border-[#3f3f46] pt-4">
             <button
               type="button"
               onClick={close}
               disabled={busy}
-              className="rounded border border-[#3f3a36] px-4 py-2 text-xs"
+              className="rounded border border-[#3f3f46] px-4 py-2 text-xs"
             >
               Annuler
             </button>
@@ -306,7 +306,7 @@ export function CreateEquipmentModal({
                 busy ||
                 !canCreateEquipment
               }
-              className="rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622] disabled:opacity-40"
+              className="rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b] disabled:opacity-40"
             >
               {busy
                 ? 'Création...'

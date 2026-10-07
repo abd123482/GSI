@@ -195,18 +195,18 @@ export function CreateRoleModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-2xl bg-[#383330] rounded-[4px] shadow-2xl border border-[#3f3a36] flex flex-col max-h-[90vh] overflow-hidden text-[#f7f5f0]">
+      <div className="relative w-full max-w-2xl bg-[#27272a] rounded-[4px] shadow-2xl border border-[#3f3f46] flex flex-col max-h-[90vh] overflow-hidden text-[#fafafa]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#3f3a36] flex items-center justify-between bg-[#2b2622]">
+        <div className="px-6 py-4 border-b border-[#3f3f46] flex items-center justify-between bg-[#18181b]">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-[3px] bg-[#383330] text-[#f7f5f0] border border-[#3f3a36] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-[3px] bg-[#27272a] text-[#fafafa] border border-[#3f3f46] flex items-center justify-center">
               <ShieldCheck className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-medium text-[#f7f5f0]">
+              <h2 className="text-sm font-medium text-[#fafafa]">
                 Créer un Nouveau Rôle
               </h2>
-              <p className="text-xs text-[#c9c0ad]">
+              <p className="text-xs text-[#d4d4d8]">
                 Définissez un profil d&apos;autorisation RBAC et associez les permissions.
               </p>
             </div>
@@ -214,7 +214,7 @@ export function CreateRoleModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-[3px] text-[#aea69c] hover:text-[#f7f5f0] hover:bg-[#383330] transition-colors"
+            className="p-1.5 rounded-[3px] text-[#a1a1aa] hover:text-[#fafafa] hover:bg-[#27272a] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -234,7 +234,7 @@ export function CreateRoleModal({
             <div>
               <label
                 htmlFor="roleName"
-                className="block text-[11px] font-mono uppercase tracking-wider text-[#aea69c] mb-1.5"
+                className="block text-[11px] font-mono uppercase tracking-wider text-[#a1a1aa] mb-1.5"
               >
                 Nom du Rôle <span className="text-[#ef4444]">*</span>
               </label>
@@ -244,10 +244,10 @@ export function CreateRoleModal({
                 value={roleName}
                 onChange={(e) => setRoleName(e.target.value)}
                 placeholder="Ex: MAGASINIER, AUDITEUR, SUPERVISEUR..."
-                className="w-full px-3 py-2 text-xs font-mono bg-[#2b2622] text-[#f7f5f0] border border-[#3f3a36] rounded-[3px] focus:outline-none focus:border-[#f7f5f0] transition-all placeholder:text-[#aea69c]"
+                className="w-full px-3 py-2 text-xs font-mono bg-[#18181b] text-[#fafafa] border border-[#3f3f46] rounded-[3px] focus:outline-none focus:border-[#fafafa] transition-all placeholder:text-[#a1a1aa]"
                 autoFocus
               />
-              <p className="text-[11px] text-[#aea69c] mt-1 font-mono">
+              <p className="text-[11px] text-[#a1a1aa] mt-1 font-mono">
                 Convention : majuscules normalisées (ex: TECHNICIAN, ADMIN).
               </p>
             </div>
@@ -255,7 +255,7 @@ export function CreateRoleModal({
             {/* Permissions Selection Header */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-[11px] font-mono uppercase tracking-wider text-[#aea69c]">
+                <label className="block text-[11px] font-mono uppercase tracking-wider text-[#a1a1aa]">
                   Permissions ({selectedPermissions.length} cochée
                   {selectedPermissions.length > 1 ? 's' : ''})
                 </label>
@@ -263,15 +263,15 @@ export function CreateRoleModal({
                   <button
                     type="button"
                     onClick={handleSelectAll}
-                    className="text-[11px] text-[#f7f5f0] hover:underline"
+                    className="text-[11px] text-[#fafafa] hover:underline"
                   >
                     Tout sélectionner
                   </button>
-                  <span className="text-[#3f3a36]">•</span>
+                  <span className="text-[#3f3f46]">•</span>
                   <button
                     type="button"
                     onClick={handleDeselectAll}
-                    className="text-[11px] text-[#aea69c] hover:underline"
+                    className="text-[11px] text-[#a1a1aa] hover:underline"
                   >
                     Tout décocher
                   </button>
@@ -279,7 +279,7 @@ export function CreateRoleModal({
               </div>
 
               {/* Grouped Permissions Grid */}
-              <div className="space-y-3 border border-[#3f3a36] rounded-[3px] p-3 bg-[#2b2622]">
+              <div className="space-y-3 border border-[#3f3f46] rounded-[3px] p-3 bg-[#18181b]">
                 {groupsToDisplay.map((group) => {
                   const groupPermNames = group.permissions.map((p) => p.name);
                   const isAllGroupSelected = groupPermNames.every((p) =>
@@ -292,13 +292,13 @@ export function CreateRoleModal({
                   return (
                     <div
                       key={group.id}
-                      className="bg-[#383330] rounded-[3px] border border-[#3f3a36] p-3"
+                      className="bg-[#27272a] rounded-[3px] border border-[#3f3f46] p-3"
                     >
                       {/* Group Header */}
-                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#3f3a36]">
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#3f3f46]">
                         <div className="flex items-center gap-2">
                           <span className="text-xs">{group.icon}</span>
-                          <span className="text-xs font-medium text-[#f7f5f0]">
+                          <span className="text-xs font-medium text-[#fafafa]">
                             {group.title}
                           </span>
                         </div>
@@ -307,10 +307,10 @@ export function CreateRoleModal({
                           onClick={() => handleToggleGroup(groupPermNames)}
                           className={`text-[10px] font-mono px-2 py-0.5 rounded-[2px] transition-colors border ${
                             isAllGroupSelected
-                              ? 'bg-[#2b2622] text-[#f7f5f0] border-[#f7f5f0]'
+                              ? 'bg-[#18181b] text-[#fafafa] border-[#fafafa]'
                               : isSomeGroupSelected
-                                ? 'bg-[#2b2622] text-[#dad2c1] border-[#3f3a36]'
-                                : 'text-[#aea69c] border-transparent hover:border-[#3f3a36]'
+                                ? 'bg-[#18181b] text-[#f4f4f5] border-[#3f3f46]'
+                                : 'text-[#a1a1aa] border-transparent hover:border-[#3f3f46]'
                           }`}
                         >
                           {isAllGroupSelected
@@ -328,24 +328,24 @@ export function CreateRoleModal({
                               key={perm.name}
                               className={`flex items-start gap-2.5 p-2 rounded-[2px] cursor-pointer text-xs transition-colors border ${
                                 isChecked
-                                  ? 'bg-[#2b2622] border-[#f7f5f0] text-[#f7f5f0]'
-                                  : 'hover:bg-[#2b2622] border-[#3f3a36]/60 text-[#c9c0ad]'
+                                  ? 'bg-[#18181b] border-[#fafafa] text-[#fafafa]'
+                                  : 'hover:bg-[#18181b] border-[#3f3f46]/60 text-[#d4d4d8]'
                               }`}
                             >
                               <div
                                 className={`w-3.5 h-3.5 rounded-[2px] mt-0.5 flex items-center justify-center border transition-colors shrink-0 ${
                                   isChecked
-                                    ? 'bg-[#f7f5f0] border-[#f7f5f0] text-[#2b2622]'
-                                    : 'border-[#3f3a36] bg-[#2b2622]'
+                                    ? 'bg-[#fafafa] border-[#fafafa] text-[#18181b]'
+                                    : 'border-[#3f3f46] bg-[#18181b]'
                                 }`}
                               >
                                 {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                               </div>
                               <div className="flex flex-col">
-                                <span className="font-normal text-xs leading-tight text-[#f7f5f0]">
+                                <span className="font-normal text-xs leading-tight text-[#fafafa]">
                                   {perm.label}
                                 </span>
-                                <span className="font-mono text-[10px] text-[#aea69c]">
+                                <span className="font-mono text-[10px] text-[#a1a1aa]">
                                   {perm.name}
                                 </span>
                               </div>
@@ -361,19 +361,19 @@ export function CreateRoleModal({
           </div>
 
           {/* Footer Actions */}
-          <div className="px-6 py-3 border-t border-[#3f3a36] bg-[#2b2622] flex items-center justify-end gap-2.5">
+          <div className="px-6 py-3 border-t border-[#3f3f46] bg-[#18181b] flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-3 py-1.5 text-xs font-medium text-[#c9c0ad] hover:text-[#f7f5f0] hover:bg-[#383330] rounded-[3px] transition-colors cursor-pointer"
+              className="px-3 py-1.5 text-xs font-medium text-[#d4d4d8] hover:text-[#fafafa] hover:bg-[#27272a] rounded-[3px] transition-colors cursor-pointer"
             >
               Annuler
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex items-center gap-2 px-4 py-1.5 text-xs font-medium text-[#2b2622] bg-[#f7f5f0] hover:bg-[#dad2c1] rounded-[3px] transition-colors shadow-2xs disabled:opacity-50 cursor-pointer"
+              className="flex items-center gap-2 px-4 py-1.5 text-xs font-medium text-[#18181b] bg-[#fafafa] hover:bg-[#f4f4f5] rounded-[3px] transition-colors shadow-2xs disabled:opacity-50 cursor-pointer"
             >
               {isSubmitting ? (
                 <>

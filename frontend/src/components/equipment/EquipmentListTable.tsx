@@ -97,10 +97,10 @@ export function EquipmentListTable({
   canDeleteEquipment = true,
 }: EquipmentListTableProps) {
   return (
-    <div className="overflow-hidden rounded-lg border border-[#3f3a36] bg-[#383330]">
-      <div className="flex flex-col gap-3 border-b border-[#3f3a36] p-3 xl:flex-row xl:items-center xl:justify-between">
+    <div className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#27272a]">
+      <div className="flex flex-col gap-3 border-b border-[#3f3f46] p-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="relative w-full max-w-lg">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#aea69c]" />
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#a1a1aa]" />
 
           <input
             value={searchTerm}
@@ -110,7 +110,7 @@ export function EquipmentListTable({
               )
             }
             placeholder="Rechercher par nom d’article..."
-            className="h-9 w-full rounded border border-[#3f3a36] bg-[#2b2622] pl-9 pr-3 text-xs outline-none placeholder:text-[#aea69c]"
+            className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] pl-9 pr-3 text-xs outline-none placeholder:text-[#a1a1aa]"
           />
         </div>
 
@@ -132,7 +132,7 @@ export function EquipmentListTable({
                     .value === 'true',
               )
             }
-            className="h-9 rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"
+            className="h-9 rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs"
           >
             <option value="ALL">
               Tous les statuts
@@ -164,7 +164,7 @@ export function EquipmentListTable({
                   'SERIALIZED',
               )
             }
-            className="h-9 rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"
+            className="h-9 rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs"
           >
             <option value="ALL">
               Tous les modes
@@ -186,7 +186,7 @@ export function EquipmentListTable({
                 ),
               )
             }
-            className="h-9 rounded border border-[#3f3a36] bg-[#2b2622] px-2 text-xs"
+            className="h-9 rounded border border-[#3f3f46] bg-[#18181b] px-2 text-xs"
           >
             <option value={10}>
               10 / page
@@ -203,7 +203,7 @@ export function EquipmentListTable({
             type="button"
             onClick={onRefresh}
             disabled={isLoading}
-            className="inline-flex h-9 items-center gap-1.5 rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs disabled:opacity-40"
+            className="inline-flex h-9 items-center gap-1.5 rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs disabled:opacity-40"
           >
             <RefreshCw
               className={`h-3.5 w-3.5 ${isLoading
@@ -220,7 +220,7 @@ export function EquipmentListTable({
 
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
-          <thead className="border-b border-[#3f3a36] bg-[#2b2622] text-[10px] uppercase tracking-wide text-[#aea69c]">
+          <thead className="border-b border-[#3f3f46] bg-[#18181b] text-[10px] uppercase tracking-wide text-[#a1a1aa]">
             <tr>
               <th className="px-4 py-3">
                 Article
@@ -243,14 +243,14 @@ export function EquipmentListTable({
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-[#3f3a36]">
+          <tbody className="divide-y divide-[#3f3f46]">
             {isLoading &&
               equipments.length ===
               0 ? (
               <tr>
                 <td
                   colSpan={6}
-                  className="px-4 py-14 text-center text-[#aea69c]"
+                  className="px-4 py-14 text-center text-[#a1a1aa]"
                 >
                   Chargement...
                 </td>
@@ -260,7 +260,7 @@ export function EquipmentListTable({
               <tr>
                 <td
                   colSpan={6}
-                  className="px-4 py-14 text-center text-[#aea69c]"
+                  className="px-4 py-14 text-center text-[#a1a1aa]"
                 >
                   Aucun article disponible.
                 </td>
@@ -272,7 +272,7 @@ export function EquipmentListTable({
                     key={
                       equipment.equipmentId
                     }
-                    className="hover:bg-[#2f2a26]"
+                    className="hover:bg-[#27272a]"
                   >
                     <td className="px-4 py-3">
                       <button
@@ -290,7 +290,7 @@ export function EquipmentListTable({
                     </td>
 
                     <td className="px-4 py-3">
-                      <span className="rounded border border-[#4a4540] bg-[#2b2622] px-2 py-1 text-[10px]">
+                      <span className="rounded border border-[#4a4540] bg-[#18181b] px-2 py-1 text-[10px]">
                         {equipment.hasSerialNumber
                           ? 'SÉRIALISÉ'
                           : 'STANDARD'}
@@ -331,7 +331,7 @@ export function EquipmentListTable({
                               equipment,
                             )
                           }
-                          className="rounded p-2 text-[#aea69c] hover:bg-[#2b2622] hover:text-white"
+                          className="rounded p-2 text-[#a1a1aa] hover:bg-[#18181b] hover:text-white"
                           title="Voir"
                         >
                           <Eye className="h-3.5 w-3.5" />
@@ -348,7 +348,7 @@ export function EquipmentListTable({
                             disabled={
                               !canUpdateEquipment
                             }
-                            className="rounded p-2 text-[#aea69c] hover:bg-[#2b2622] hover:text-white disabled:opacity-30"
+                            className="rounded p-2 text-[#a1a1aa] hover:bg-[#18181b] hover:text-white disabled:opacity-30"
                             title="Modifier"
                           >
                             <Pencil className="h-3.5 w-3.5" />
@@ -382,8 +382,8 @@ export function EquipmentListTable({
         </table>
       </div>
 
-      <div className="flex items-center justify-between border-t border-[#3f3a36] bg-[#2b2622] px-4 py-3">
-        <p className="text-[11px] text-[#aea69c]">
+      <div className="flex items-center justify-between border-t border-[#3f3f46] bg-[#18181b] px-4 py-3">
+        <p className="text-[11px] text-[#a1a1aa]">
           {totalEquipments} article
           {totalEquipments > 1
             ? 's'
@@ -401,12 +401,12 @@ export function EquipmentListTable({
                 currentPage - 1,
               )
             }
-            className="rounded border border-[#3f3a36] p-2 disabled:opacity-30"
+            className="rounded border border-[#3f3f46] p-2 disabled:opacity-30"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
 
-          <span className="text-[11px] text-[#aea69c]">
+          <span className="text-[11px] text-[#a1a1aa]">
             {currentPage} /{' '}
             {Math.max(
               1,
@@ -425,7 +425,7 @@ export function EquipmentListTable({
                 currentPage + 1,
               )
             }
-            className="rounded border border-[#3f3a36] p-2 disabled:opacity-30"
+            className="rounded border border-[#3f3f46] p-2 disabled:opacity-30"
           >
             <ChevronRight className="h-3.5 w-3.5" />
           </button>

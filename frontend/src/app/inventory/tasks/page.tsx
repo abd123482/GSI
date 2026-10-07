@@ -34,12 +34,12 @@ export default function MyInventoryTasksPage() {
     tasksQuery.data ?? [];
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-white">
+    <main className="min-h-[calc(100vh-3.5rem)] bg-[#18181b] text-white">
       <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-6">
-        <div className="flex items-center gap-3 border-b border-[#3f3a36] pb-4">
+        <div className="flex items-center gap-3 border-b border-[#3f3f46] pb-4">
           <Link
             href="/inventory"
-            className="rounded border border-[#3f3a36] p-2 text-[#aea69c] hover:text-white"
+            className="rounded border border-[#3f3f46] p-2 text-[#a1a1aa] hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
@@ -49,26 +49,26 @@ export default function MyInventoryTasksPage() {
               Mes tâches d’inventaire
             </h1>
 
-            <p className="mt-1 text-xs text-[#aea69c]">
+            <p className="mt-1 text-xs text-[#a1a1aa]">
               C3 apparaît uniquement sur les unités où C1 et C2 diffèrent.
             </p>
           </div>
         </div>
 
         {tasksQuery.isLoading ? (
-          <div className="flex min-h-56 items-center justify-center gap-2 text-xs text-[#aea69c]">
+          <div className="flex min-h-56 items-center justify-center gap-2 text-xs text-[#a1a1aa]">
             <Loader2 className="h-4 w-4 animate-spin" />
             Chargement des tâches...
           </div>
         ) : tasks.length === 0 ? (
-          <div className="flex min-h-56 flex-col items-center justify-center rounded border border-dashed border-[#4a4540] bg-[#2f2a26] p-6 text-center">
-            <ClipboardList className="h-7 w-7 text-[#8c827a]" />
+          <div className="flex min-h-56 flex-col items-center justify-center rounded border border-dashed border-[#4a4540] bg-[#27272a] p-6 text-center">
+            <ClipboardList className="h-7 w-7 text-[#71717a]" />
 
             <p className="mt-3 text-sm font-medium">
               Aucune tâche disponible
             </p>
 
-            <p className="mt-1 text-xs text-[#8c827a]">
+            <p className="mt-1 text-xs text-[#71717a]">
               Les prochaines unités apparaîtront lorsqu’elles seront débloquées.
             </p>
           </div>
@@ -78,7 +78,7 @@ export default function MyInventoryTasksPage() {
               (task) => (
                 <article
                   key={task.attemptId}
-                  className="rounded-lg border border-[#3f3a36] bg-[#2f2a26] p-4"
+                  className="rounded-lg border border-[#3f3f46] bg-[#27272a] p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -96,12 +96,12 @@ export default function MyInventoryTasksPage() {
                         {task.unit.inventory.title}
                       </h2>
 
-                      <p className="mt-1 text-xs text-[#aea69c]">
+                      <p className="mt-1 text-xs text-[#a1a1aa]">
                         Unité #{task.unit.unitOrder + 1}
                       </p>
                     </div>
 
-                    <span className="rounded border border-[#3f3a36] bg-[#383330] px-2 py-1 text-[10px] text-[#c9c0ad]">
+                    <span className="rounded border border-[#3f3f46] bg-[#27272a] px-2 py-1 text-[10px] text-[#d4d4d8]">
                       {task.status}
                     </span>
                   </div>
@@ -114,7 +114,7 @@ export default function MyInventoryTasksPage() {
 
                   <Link
                     href={`/inventory/tasks/${task.attemptId}`}
-                    className="mt-4 inline-flex items-center gap-1.5 rounded bg-[#f7f5f0] px-3 py-2 text-xs font-semibold text-[#2b2622]"
+                    className="mt-4 inline-flex items-center gap-1.5 rounded bg-[#fafafa] px-3 py-2 text-xs font-semibold text-[#18181b]"
                   >
                     <PlayCircle className="h-3.5 w-3.5" />
                     Ouvrir la tâche

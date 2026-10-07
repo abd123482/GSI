@@ -53,7 +53,7 @@ export default function RootLayout({
       <ClerkNetworkErrorHandler />
       <html lang="fr" className="h-full dark">
         <body
-          className={`${inter.variable} ${dmMono.variable} ${instrumentSerif.variable} font-sans h-full bg-[#2b2622] text-[#f7f5f0] antialiased flex flex-col`}
+          className={`${inter.variable} ${dmMono.variable} ${instrumentSerif.variable} font-sans h-full bg-[#18181b] text-[#fafafa] antialiased flex flex-col`}
         >
           <QueryProvider>
             <NavbarVisibility />
@@ -65,9 +65,9 @@ export default function RootLayout({
               theme="dark"
               toastOptions={{
                 style: {
-                  background: '#383330',
-                  border: '1px solid #3f3a36',
-                  color: '#f7f5f0',
+                  background: '#27272a',
+                  border: '1px solid #3f3f46',
+                  color: '#fafafa',
                   borderRadius: '4px',
                   fontFamily: 'var(--font-inter), sans-serif',
                   fontSize: '13px',

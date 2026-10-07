@@ -13,8 +13,12 @@ export const movementItemSchema = z.object({
 
 export const createEquipmentMovementSchema = z.object({
   movementType: movementTypeSchema,
+  happenedAt: z.string().datetime().optional(),
   items: z.array(movementItemSchema).min(1).max(100),
-}).strict().superRefine(({ movementType: type, items }, ctx) => {
+}).strict().superRefine(({ movementType: type, items, happenedAt }, ctx) => {
+  if (happenedAt && new Date(happenedAt) > new Date())
+    ctx.addIssue({ code: 'custom', path: ['happenedAt'], message: 'La date du mouvement ne peut pas être dans le futur' });
+
   const ids = new Set<string>(), codes = new Set<string>();
   items.forEach((item, index) => {
     const fail = (message: string) => ctx.addIssue({ code: 'custom', path: ['items', index], message });

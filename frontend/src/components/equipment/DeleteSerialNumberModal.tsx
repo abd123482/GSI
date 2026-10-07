@@ -94,8 +94,8 @@ export function DeleteSerialNumberModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-sm overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-4 py-3">
+      <div className="w-full max-w-sm overflow-hidden rounded-xl border border-[#3f3f46] bg-[#27272a] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3f46] bg-[#18181b] px-4 py-3">
           <h2 className="flex items-center gap-2 text-xs font-semibold">
             <Trash2 className="h-4 w-4 text-rose-300" />
             Supprimer le numéro de série
@@ -144,7 +144,7 @@ export function DeleteSerialNumberModal({
             </div>
           </div>
 
-          <div className="rounded-lg border border-[#3f3a36] bg-[#2b2622]/65 p-3 text-xs">
+          <div className="rounded-lg border border-[#3f3f46] bg-[#18181b]/65 p-3 text-xs">
             <div className="flex items-center justify-between gap-3">
               <span className="flex items-center gap-1.5 text-white/55">
                 <Barcode className="h-3.5 w-3.5" />
@@ -170,12 +170,12 @@ export function DeleteSerialNumberModal({
           </div>
         </div>
 
-        <footer className="flex justify-end gap-2 border-t border-[#3f3a36] bg-[#2b2622] px-4 py-3">
+        <footer className="flex justify-end gap-2 border-t border-[#3f3f46] bg-[#18181b] px-4 py-3">
           <button
             type="button"
             disabled={isDeleting}
             onClick={onClose}
-            className="rounded border border-[#3f3a36] px-3 py-1.5 text-xs"
+            className="rounded border border-[#3f3f46] px-3 py-1.5 text-xs"
           >
             Annuler
           </button>

@@ -1,12 +1,15 @@
-import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
-import * as fs from 'fs';
-import * as path from 'path';
+import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { HttpAdapterHost } from '@nestjs/core';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
+  private readonly logger = new Logger(AllExceptionsFilter.name);
+
+  constructor(private readonly httpAdapterHost: HttpAdapterHost) {}
+
   catch(exception: unknown, host: ArgumentsHost) {
+    const { httpAdapter } = this.httpAdapterHost;
     const ctx = host.switchToHttp();
-    const response = ctx.getResponse();
     const request = ctx.getRequest();
 
     const status =
@@ -14,15 +17,21 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    const logMessage = `Time: ${new Date().toISOString()}\nPath: ${request.url}\nError: ${exception instanceof Error ? exception.stack : JSON.stringify(exception)}\n\n`;
-    
-    fs.appendFileSync(path.join(process.cwd(), 'error.log'), logMessage);
+    const requestUrl = httpAdapter.getRequestUrl(request) || request.url;
+    const message = exception instanceof HttpException 
+      ? exception.message 
+      : 'Internal server error';
 
-    response.status(status).json({
+    // Async logging instead of sync fs.appendFileSync
+    this.logger.error(`Exception on path: ${requestUrl}`, exception instanceof Error ? exception.stack : String(exception));
+
+    const responseBody = {
       statusCode: status,
       timestamp: new Date().toISOString(),
-      path: request.url,
-      message: exception instanceof Error ? exception.message : 'Internal server error',
-    });
+      path: requestUrl,
+      message: message,
+    };
+
+    httpAdapter.reply(ctx.getResponse(), responseBody, status);
   }
 }

@@ -180,10 +180,7 @@ export class DashboardService {
         orderBy: [{ createdAt: 'desc' }, { mouvementId: 'asc' }],
         include: {
           items: { include: { equipment: true, sourceShelf: true, destinationShelf: true, serialNumber: true } },
-          equipment: { select: { equipmentName: true } },
-          sourceShelf: { select: { shelfName: true } },
-          destinationShelf: { select: { shelfName: true } },
-          serialNumber: { select: { serialNumberCode: true } },
+          
         },
       }),
       this.prisma.inventory.findMany({
@@ -227,13 +224,10 @@ export class DashboardService {
     let mixedCount = 0;
     let otherCount = 0;
     for (const group of movementsByType) {
-      const status = group.mouvementStatus ? 'OUT' : 'IN';
+      const isOut = group.mouvementStatus;
       const count = group._count.mouvementId || 0;
-      if (status === 'IN') inCount += count;
-      else if (status === 'OUT' || status === 'EXIT') outCount += count;
-      else if (status === 'TRANSFER') transferCount += count;
-      else if (status === 'MIXED') mixedCount += count;
-      else otherCount += count;
+      if (isOut) outCount += count;
+      else inCount += count;
     }
 
     const recentMovements = recentMouvementsRaw.map((m: any) => ({

@@ -38,9 +38,9 @@ export default function HomePage() {
   // 1. Loading State
   if (!isLoaded || isAuthLoading) {
     return (
-      <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-[#f7f5f0] flex items-center justify-center">
-        <div className="flex items-center gap-2.5 text-xs font-mono text-[#aea69c]">
-          <Loader2 className="w-4 h-4 animate-spin text-[#f7f5f0]" />
+      <main className="min-h-[calc(100vh-3.5rem)] bg-[#18181b] text-[#fafafa] flex items-center justify-center">
+        <div className="flex items-center gap-2.5 text-xs font-mono text-[#a1a1aa]">
+          <Loader2 className="w-4 h-4 animate-spin text-[#fafafa]" />
           <span>Chargement de l'espace Somépharm...</span>
         </div>
       </main>
@@ -50,7 +50,7 @@ export default function HomePage() {
   // 2. Unauthenticated Guest View
   if (!isSignedIn) {
     return (
-      <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-[#f7f5f0] flex flex-col">
+      <main className="min-h-[calc(100vh-3.5rem)] bg-[#18181b] text-[#fafafa] flex flex-col">
         <DashboardGuestView />
       </main>
     );
@@ -59,11 +59,11 @@ export default function HomePage() {
   // 3. Authenticated but lacks dashboard.read Permission
   if (!canReadDashboard) {
     return (
-      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
-        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#2f2a26] p-7 text-center">
+      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#18181b] p-6 text-[#fafafa]">
+        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#27272a] p-7 text-center">
           <ShieldAlert className="mx-auto h-6 w-6 text-amber-400" />
           <h1 className="mt-3 text-sm font-semibold">Accès non autorisé</h1>
-          <p className="mt-2 text-xs text-[#aea69c]">La permission dashboard.read est requise.</p>
+          <p className="mt-2 text-xs text-[#a1a1aa]">La permission dashboard.read est requise.</p>
         </div>
       </main>
     );
@@ -71,7 +71,7 @@ export default function HomePage() {
 
   // 4. Authorized Executive Dashboard View (Admin or dashboard.read)
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-[#f7f5f0] flex flex-col">
+    <main className="min-h-[calc(100vh-3.5rem)] bg-[#18181b] text-[#fafafa] flex flex-col">
       <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Header */}
         <DashboardHeader
@@ -81,8 +81,8 @@ export default function HomePage() {
         />
 
         {isDashboardLoading && !stats ? (
-          <div className="py-24 flex flex-col items-center justify-center gap-2 text-xs font-mono text-[#aea69c]">
-            <Loader2 className="w-5 h-5 animate-spin text-[#f7f5f0]" />
+          <div className="py-24 flex flex-col items-center justify-center gap-2 text-xs font-mono text-[#a1a1aa]">
+            <Loader2 className="w-5 h-5 animate-spin text-[#fafafa]" />
             <span>Chargement des indicateurs et graphiques du tableau de bord...</span>
           </div>
         ) : stats ? (

@@ -38,7 +38,7 @@ export function SerialCodeInput({ value, onChange, placeholder, className }: Ser
         />
         {isLoading && (
           <div className="absolute right-2 top-1/2 -translate-y-1/2">
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8c827a]" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-[#71717a]" />
           </div>
         )}
       </div>

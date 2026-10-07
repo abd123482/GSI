@@ -115,8 +115,8 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-5 py-4">
+      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-[#3f3f46] bg-[#27272a] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3f46] bg-[#18181b] px-5 py-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold"><Edit3 className="h-4 w-4" />Modifier l’emplacement</h2>
           <button type="button" onClick={onClose} disabled={busy} className="rounded p-1.5 text-white/60 hover:bg-white/10"><X className="h-4 w-4" /></button>
         </header>
@@ -126,13 +126,13 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
 
           <label className="block space-y-1.5">
             <span className="text-xs font-semibold">Nom</span>
-            <input {...register('shelfName')} className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50" />
+            <input {...register('shelfName')} className="h-10 w-full rounded-lg border border-[#3f3f46] bg-[#18181b] px-3 text-xs outline-none focus:border-white/50" />
             {errors.shelfName && <p className="text-[11px] text-rose-300">{errors.shelfName.message}</p>}
           </label>
 
           <label className="block space-y-1.5">
             <span className="text-xs font-semibold">Statut de l'emplacement</span>
-            <select {...register('status', { setValueAs: (v) => v === 'true' })} disabled={busy} className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50">
+            <select {...register('status', { setValueAs: (v) => v === 'true' })} disabled={busy} className="h-10 w-full rounded-lg border border-[#3f3f46] bg-[#18181b] px-3 text-xs outline-none focus:border-white/50">
               <option value="true">Actif (ACTIVE)</option>
               <option value="false">Inactif (INACTIVE)</option>
             </select>
@@ -141,7 +141,7 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
 
           <label className="block space-y-1.5">
             <span className="flex items-center gap-1.5 text-xs font-semibold"><Warehouse className="h-3.5 w-3.5" />Stock</span>
-            <select {...register('stockId')} disabled={busy || loadingStocks} className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs">
+            <select {...register('stockId')} disabled={busy || loadingStocks} className="h-10 w-full rounded-lg border border-[#3f3f46] bg-[#18181b] px-3 text-xs">
               {stockOptions.map((stock) => {
                 const inactive = stock.status === false;
                 return (
@@ -159,9 +159,9 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
             <p>Seuls les stocks ACTIVE peuvent être choisis comme nouvelle destination.</p>
           </div>
 
-          <footer className="flex justify-end gap-2 border-t border-[#3f3a36] pt-4">
-            <button type="button" onClick={onClose} disabled={busy} className="rounded border border-[#3f3a36] px-4 py-2 text-xs">Annuler</button>
-            <button type="submit" disabled={busy || !canUpdateShelf} className="inline-flex items-center gap-1.5 rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622] disabled:opacity-40">
+          <footer className="flex justify-end gap-2 border-t border-[#3f3f46] pt-4">
+            <button type="button" onClick={onClose} disabled={busy} className="rounded border border-[#3f3f46] px-4 py-2 text-xs">Annuler</button>
+            <button type="submit" disabled={busy || !canUpdateShelf} className="inline-flex items-center gap-1.5 rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b] disabled:opacity-40">
               {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Enregistrer
             </button>
           </footer>

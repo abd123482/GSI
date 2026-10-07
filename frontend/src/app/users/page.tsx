@@ -58,19 +58,19 @@ export default function UsersAndRolesPage() {
   if (isLoaded && !isSignedIn) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <div className="p-8 bg-[#383330] rounded-[4px] border border-[#3f3a36] max-w-md mx-auto space-y-4 shadow-xl">
-          <div className="w-10 h-10 rounded-[3px] bg-[#2b2622] text-[#f7f5f0] border border-[#3f3a36] flex items-center justify-center mx-auto">
+        <div className="p-8 bg-[#27272a] rounded-[4px] border border-[#3f3f46] max-w-md mx-auto space-y-4 shadow-xl">
+          <div className="w-10 h-10 rounded-[3px] bg-[#18181b] text-[#fafafa] border border-[#3f3f46] flex items-center justify-center mx-auto">
             <Users className="w-5 h-5" />
           </div>
-          <h2 className="text-base font-medium text-[#f7f5f0]">Connexion requise</h2>
-          <p className="text-xs text-[#c9c0ad]">
+          <h2 className="text-base font-medium text-[#fafafa]">Connexion requise</h2>
+          <p className="text-xs text-[#d4d4d8]">
             Veuillez vous authentifier pour accéder au panneau de gestion des utilisateurs et des rôles.
           </p>
           <div className="pt-2">
             <SignInButton mode="modal">
               <button
                 type="button"
-                className="w-full py-2 px-4 bg-[#f7f5f0] hover:bg-[#dad2c1] text-[#2b2622] text-xs font-medium rounded-[3px] transition-colors cursor-pointer"
+                className="w-full py-2 px-4 bg-[#fafafa] hover:bg-[#f4f4f5] text-[#18181b] text-xs font-medium rounded-[3px] transition-colors cursor-pointer"
               >
                 Se connecter
               </button>
@@ -83,40 +83,40 @@ export default function UsersAndRolesPage() {
 
   if (!canManageUsers && !canManageRoles) {
     return (
-      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
-        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#2f2a26] p-7 text-center">
+      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#18181b] p-6 text-[#fafafa]">
+        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#27272a] p-7 text-center">
           <ShieldAlert className="mx-auto h-6 w-6 text-amber-400" />
           <h1 className="mt-3 text-sm font-semibold">Accès non autorisé</h1>
-          <p className="mt-2 text-xs text-[#aea69c]">Les permissions de gestion des utilisateurs ou rôles sont requises.</p>
+          <p className="mt-2 text-xs text-[#a1a1aa]">Les permissions de gestion des utilisateurs ou rôles sont requises.</p>
         </div>
       </main>
     );
   }
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] py-8 text-[#f7f5f0]">
+    <div className="min-h-[calc(100vh-3.5rem)] bg-[#18181b] py-8 text-[#fafafa]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
         {/* Header Breadcrumb & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-xs text-[#aea69c] mb-1 font-mono">
-              <Link href="/" className="hover:text-[#f7f5f0] transition-colors">
+            <div className="flex items-center gap-2 text-xs text-[#a1a1aa] mb-1 font-mono">
+              <Link href="/" className="hover:text-[#fafafa] transition-colors">
                 somepharm
               </Link>
               <span>/</span>
-              <span className="text-[#dad2c1]">admin</span>
+              <span className="text-[#f4f4f5]">admin</span>
               <span>/</span>
-              <span className="text-[#f7f5f0]">users-and-roles</span>
+              <span className="text-[#fafafa]">users-and-roles</span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-[3px] bg-[#383330] text-[#f7f5f0] border border-[#3f3a36] flex items-center justify-center">
+              <div className="w-8 h-8 rounded-[3px] bg-[#27272a] text-[#fafafa] border border-[#3f3f46] flex items-center justify-center">
                 <Users className="w-4 h-4" />
               </div>
               <div>
-                <h1 className="text-xl sm:text-2xl font-normal tracking-tight text-[#f7f5f0]">
+                <h1 className="text-xl sm:text-2xl font-normal tracking-tight text-[#fafafa]">
                   Gouvernance des Utilisateurs & Rôles
                 </h1>
-                <p className="text-xs text-[#c9c0ad]">
+                <p className="text-xs text-[#d4d4d8]">
                   Attribution de rôles RBAC, configuration des permissions et supervision des comptes.
                 </p>
               </div>
@@ -133,10 +133,10 @@ export default function UsersAndRolesPage() {
               }}
               disabled={isUsersFetching}
               title="Rafraîchir les données"
-              className="p-2 bg-[#383330] hover:bg-[#3f3a36] border border-[#3f3a36] text-[#c9c0ad] hover:text-[#f7f5f0] rounded-[3px] transition-colors cursor-pointer disabled:opacity-50"
+              className="p-2 bg-[#27272a] hover:bg-[#3f3f46] border border-[#3f3f46] text-[#d4d4d8] hover:text-[#fafafa] rounded-[3px] transition-colors cursor-pointer disabled:opacity-50"
             >
               <RefreshCw
-                className={`w-3.5 h-3.5 ${isUsersFetching ? 'animate-spin text-[#f7f5f0]' : ''}`}
+                className={`w-3.5 h-3.5 ${isUsersFetching ? 'animate-spin text-[#fafafa]' : ''}`}
               />
             </button>
 
@@ -144,7 +144,7 @@ export default function UsersAndRolesPage() {
               <button
                 type="button"
                 onClick={() => setIsCreateRoleModalOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-[#f7f5f0] hover:bg-[#dad2c1] text-[#2b2622] text-xs font-medium rounded-[3px] transition-colors shadow-2xs cursor-pointer"
+                className="flex items-center gap-2 px-3.5 py-2 bg-[#fafafa] hover:bg-[#f4f4f5] text-[#18181b] text-xs font-medium rounded-[3px] transition-colors shadow-2xs cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Nouveau Rôle</span>
@@ -155,19 +155,19 @@ export default function UsersAndRolesPage() {
 
         {/* Error / Access Status Banner */}
         {error ? (
-          <div className="p-3 bg-[#383330] border border-[#f5c6cb] rounded-[4px] text-xs text-[#b82a2a] flex items-center gap-2">
+          <div className="p-3 bg-[#27272a] border border-[#f5c6cb] rounded-[4px] text-xs text-[#b82a2a] flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 shrink-0" />
             <span>
               Erreur d'authentification : {error instanceof Error ? error.message : 'Impossible de joindre le serveur'}
             </span>
           </div>
         ) : isLoading ? (
-          <div className="p-3 bg-[#383330] border border-[#3f3a36] rounded-[4px] text-xs text-[#c9c0ad] flex items-center gap-2">
+          <div className="p-3 bg-[#27272a] border border-[#3f3f46] rounded-[4px] text-xs text-[#d4d4d8] flex items-center gap-2">
             <RefreshCw className="w-4 h-4 shrink-0 animate-spin" />
             <span>Chargement des permissions...</span>
           </div>
         ) : isSignedIn && !isAdmin && !canManageRoles && !canManageUsers && (
-          <div className="p-3 bg-[#383330] border border-[#453316] rounded-[4px] text-xs text-[#f59e0b] flex items-center gap-2">
+          <div className="p-3 bg-[#27272a] border border-[#453316] rounded-[4px] text-xs text-[#f59e0b] flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 shrink-0 text-[#f59e0b]" />
             <span>
               Mode lecture seule : Votre profil actuel ({roleName || 'Sans rôle'})
@@ -177,14 +177,14 @@ export default function UsersAndRolesPage() {
         )}
 
         {/* Navigation Tabs */}
-        <div className="border-b border-[#3f3a36] flex items-center gap-6">
+        <div className="border-b border-[#3f3f46] flex items-center gap-6">
           <button
             type="button"
             onClick={() => setActiveTab('users')}
             className={`pb-2.5 text-xs font-medium transition-colors relative flex items-center gap-2 cursor-pointer ${
               activeTab === 'users'
-                ? 'text-[#f7f5f0]'
-                : 'text-[#aea69c] hover:text-[#f7f5f0]'
+                ? 'text-[#fafafa]'
+                : 'text-[#a1a1aa] hover:text-[#fafafa]'
             }`}
           >
             <Users className="w-3.5 h-3.5" />
@@ -192,14 +192,14 @@ export default function UsersAndRolesPage() {
             <span
               className={`px-1.5 py-0.5 rounded-[2px] font-mono text-[10px] border ${
                 activeTab === 'users'
-                  ? 'bg-[#f7f5f0] text-[#2b2622] border-[#f7f5f0]'
-                  : 'bg-[#383330] text-[#dad2c1] border-[#3f3a36]'
+                  ? 'bg-[#fafafa] text-[#18181b] border-[#fafafa]'
+                  : 'bg-[#27272a] text-[#f4f4f5] border-[#3f3f46]'
               }`}
             >
               {totalUsers}
             </span>
             {activeTab === 'users' && (
-              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#f7f5f0]" />
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#fafafa]" />
             )}
           </button>
 
@@ -208,8 +208,8 @@ export default function UsersAndRolesPage() {
             onClick={() => setActiveTab('roles')}
             className={`pb-2.5 text-xs font-medium transition-colors relative flex items-center gap-2 cursor-pointer ${
               activeTab === 'roles'
-                ? 'text-[#f7f5f0]'
-                : 'text-[#aea69c] hover:text-[#f7f5f0]'
+                ? 'text-[#fafafa]'
+                : 'text-[#a1a1aa] hover:text-[#fafafa]'
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
@@ -217,14 +217,14 @@ export default function UsersAndRolesPage() {
             <span
               className={`px-1.5 py-0.5 rounded-[2px] font-mono text-[10px] border ${
                 activeTab === 'roles'
-                  ? 'bg-[#f7f5f0] text-[#2b2622] border-[#f7f5f0]'
-                  : 'bg-[#383330] text-[#dad2c1] border-[#3f3a36]'
+                  ? 'bg-[#fafafa] text-[#18181b] border-[#fafafa]'
+                  : 'bg-[#27272a] text-[#f4f4f5] border-[#3f3f46]'
               }`}
             >
               {roles.length}
             </span>
             {activeTab === 'roles' && (
-              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#f7f5f0]" />
+              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#fafafa]" />
             )}
           </button>
         </div>
@@ -233,20 +233,20 @@ export default function UsersAndRolesPage() {
         {activeTab === 'users' && (
           <div className="space-y-4">
             {/* Filter Bar */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#383330] p-3 rounded-[4px] border border-[#3f3a36]">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#27272a] p-3 rounded-[4px] border border-[#3f3f46]">
               <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#aea69c]" />
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#a1a1aa]" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Rechercher par identifiant, nom, email ou rôle..."
-                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-[#2b2622] text-[#f7f5f0] border border-[#3f3a36] rounded-[3px] focus:outline-none focus:border-[#f7f5f0] placeholder:text-[#aea69c] transition-colors"
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-[#18181b] text-[#fafafa] border border-[#3f3f46] rounded-[3px] focus:outline-none focus:border-[#fafafa] placeholder:text-[#a1a1aa] transition-colors"
                 />
               </div>
 
-              <div className="flex items-center gap-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-[#3f3a36]">
-                <span className="text-xs text-[#c9c0ad] whitespace-nowrap font-mono text-[11px]">
+              <div className="flex items-center gap-2 border-t sm:border-t-0 pt-2 sm:pt-0 border-[#3f3f46]">
+                <span className="text-xs text-[#d4d4d8] whitespace-nowrap font-mono text-[11px]">
                   Filtre :
                 </span>
                 <select
@@ -256,7 +256,7 @@ export default function UsersAndRolesPage() {
                     setStatusFilter(val ? (val as UserStatus) : undefined);
                     setPage(1);
                   }}
-                  className="text-xs font-medium py-1.5 px-2.5 rounded-[3px] border border-[#3f3a36] bg-[#2b2622] text-[#f7f5f0] focus:outline-none focus:border-[#f7f5f0] cursor-pointer"
+                  className="text-xs font-medium py-1.5 px-2.5 rounded-[3px] border border-[#3f3f46] bg-[#18181b] text-[#fafafa] focus:outline-none focus:border-[#fafafa] cursor-pointer"
                 >
                   <option value="">Tous les statuts</option>
                   <option value="ACTIVE">Actif uniquement</option>

@@ -37,7 +37,7 @@ export default function InventoryIdRedirectPage() {
   ]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#2b2622] text-white">
+    <main className="flex min-h-screen items-center justify-center bg-[#18181b] text-white">
       <Loader2 className="h-5 w-5 animate-spin" />
     </main>
   );

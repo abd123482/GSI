@@ -5,16 +5,16 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --color-canvas: #2b2622;
-  --color-canvas-soft: #383330;
-  --color-hairline: #3f3a36;
-  --color-hairline-light: #4d4742;
-  --color-ink: #f7f5f0;
-  --color-body-strong: #dad2c1;
-  --color-body: #c9c0ad;
-  --color-mute: #aea69c;
-  --color-primary-warp: #f7f5f0;
-  --color-on-primary-warp: #2b2622;
+  --color-canvas: #18181b;
+  --color-canvas-soft: #27272a;
+  --color-hairline: #3f3f46;
+  --color-hairline-light: #52525b;
+  --color-ink: #fafafa;
+  --color-body-strong: #f4f4f5;
+  --color-body: #d4d4d8;
+  --color-mute: #a1a1aa;
+  --color-primary-warp: #fafafa;
+  --color-on-primary-warp: #18181b;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -30,35 +30,35 @@
 }
 
 :root {
-  /* Warp Warm Near-Charcoal Palette by default */
-  --background: #2b2622;
-  --foreground: #f7f5f0;
-  --card: #383330;
-  --card-foreground: #f7f5f0;
-  --popover: #383330;
-  --popover-foreground: #f7f5f0;
-  --primary: #f7f5f0;
-  --primary-foreground: #2b2622;
-  --secondary: #383330;
-  --secondary-foreground: #f7f5f0;
-  --muted: #383330;
-  --muted-foreground: #aea69c;
-  --accent: #3f3a36;
-  --accent-foreground: #f7f5f0;
+  /* Warp Dark Gray Zinc Palette */
+  --background: #18181b;
+  --foreground: #fafafa;
+  --card: #27272a;
+  --card-foreground: #fafafa;
+  --popover: #27272a;
+  --popover-foreground: #fafafa;
+  --primary: #fafafa;
+  --primary-foreground: #18181b;
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #3f3f46;
+  --accent-foreground: #fafafa;
   --destructive: #ef4444;
-  --border: #3f3a36;
-  --input: #3f3a36;
-  --ring: #f7f5f0;
+  --border: #3f3f46;
+  --input: #3f3f46;
+  --ring: #fafafa;
   --radius: 4px;
 }
 
 @layer base {
   * {
-    border-color: #3f3a36;
+    border-color: #3f3f46;
   }
   body {
-    background-color: #2b2622;
-    color: #f7f5f0;
+    background-color: #18181b;
+    color: #fafafa;
     font-family: var(--font-inter), system-ui, sans-serif;
     letter-spacing: -0.01em;
   }
@@ -69,31 +69,31 @@
 
 /* Warp Primitives & Utility Classes */
 .bg-canvas {
-  background-color: #2b2622;
+  background-color: #18181b;
 }
 
 .bg-canvas-soft {
-  background-color: #383330;
+  background-color: #27272a;
 }
 
 .border-hairline {
-  border-color: #3f3a36;
+  border-color: #3f3f46;
 }
 
 .text-ink {
-  color: #f7f5f0;
+  color: #fafafa;
 }
 
 .text-body-strong {
-  color: #dad2c1;
+  color: #f4f4f5;
 }
 
 .text-body {
-  color: #c9c0ad;
+  color: #d4d4d8;
 }
 
 .text-mute {
-  color: #aea69c;
+  color: #a1a1aa;
 }
 
 .font-serif-italic {
@@ -107,14 +107,14 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #2b2622;
+  background: #18181b;
 }
 ::-webkit-scrollbar-thumb {
-  background: #3f3a36;
+  background: #3f3f46;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4d4742;
+  background: #52525b;
 }
 
 /* Hide Clerk watermarks and dev mode badges */

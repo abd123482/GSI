@@ -59,15 +59,7 @@ interface EquipmentDetailModalProps {
 function movementLabel(
   movement: Movement,
 ) {
-  const status =
-    movement.mouvementStatus
-      ?.toUpperCase();
-
-  if (
-    status === 'IN' ||
-    status === 'ENTRY' ||
-    status === 'ENTRÉE'
-  ) {
+  if (!movement.mouvementStatus) {
     return {
       text: 'ENTRÉE',
       icon:
@@ -75,22 +67,10 @@ function movementLabel(
     };
   }
 
-  if (
-    status === 'OUT' ||
-    status === 'EXIT' ||
-    status === 'SORTIE'
-  ) {
-    return {
-      text: 'SORTIE',
-      icon:
-        ArrowUpFromLine,
-    };
-  }
-
   return {
-    text: 'TRANSFERT',
+    text: 'SORTIE',
     icon:
-      ArrowRightLeft,
+      ArrowUpFromLine,
   };
 }
 
@@ -262,8 +242,8 @@ export function EquipmentDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-5">
-      <div className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#26221f] px-5 py-4">
+      <div className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-[#3f3f46] bg-[#27272a] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3f46] bg-[#26221f] px-5 py-4">
           <div>
             <h2 className="text-base font-semibold">
               {equipment.equipmentName ??
@@ -352,8 +332,8 @@ export function EquipmentDetailModal({
             />
           </div>
 
-          <section className="overflow-hidden rounded-xl border border-[#3f3a36] bg-[#2b2622]/55">
-            <div className="border-b border-[#3f3a36] px-4 py-3">
+          <section className="overflow-hidden rounded-xl border border-[#3f3f46] bg-[#18181b]/55">
+            <div className="border-b border-[#3f3f46] px-4 py-3">
               <h3 className="text-xs font-semibold">Répartition par emplacement</h3>
               <p className="mt-0.5 text-[10px] text-white/45">
                 Où se trouve actuellement cet article.
@@ -363,7 +343,7 @@ export function EquipmentDetailModal({
             {allocationQuery.isLoading || (serialized && allSerialsQuery.isLoading) ? (
               <div className="flex justify-center p-8"><Loader2 className="h-5 w-5 animate-spin text-white/40" /></div>
             ) : (
-              <div className="divide-y divide-[#3f3a36]">
+              <div className="divide-y divide-[#3f3f46]">
                 {(allocationQuery.data?.equipmentShelfs ?? []).map((alloc) => (
                   <div key={alloc.equipmentShelfId} className="px-4 py-3 text-xs">
                     <div className="flex items-center justify-between gap-3">
@@ -375,7 +355,7 @@ export function EquipmentDetailModal({
                         {allSerialsQuery.data
                           .filter(s => s.shelfId === alloc.shelfId)
                           .map(s => (
-                            <span key={s.serialNumberId} className="rounded bg-[#1f1b18] px-1.5 py-0.5 font-mono text-[10px] text-white/60 border border-[#3f3a36]">
+                            <span key={s.serialNumberId} className="rounded bg-[#1f1b18] px-1.5 py-0.5 font-mono text-[10px] text-white/60 border border-[#3f3f46]">
                               {s.serialNumberCode}
                             </span>
                           ))}
@@ -394,8 +374,8 @@ export function EquipmentDetailModal({
           </section>
 
           {serialized && (
-            <section className="overflow-hidden rounded-xl border border-[#3f3a36] bg-[#2b2622]/55">
-              <div className="space-y-3 border-b border-[#3f3a36] px-4 py-3">
+            <section className="overflow-hidden rounded-xl border border-[#3f3f46] bg-[#18181b]/55">
+              <div className="space-y-3 border-b border-[#3f3f46] px-4 py-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h3 className="text-xs font-semibold">
@@ -426,7 +406,7 @@ export function EquipmentDetailModal({
                         );
                       }}
                       placeholder="Rechercher un S/N..."
-                      className="h-8 w-full rounded border border-[#3f3a36] bg-[#1f1b18] pl-8 pr-2 text-xs"
+                      className="h-8 w-full rounded border border-[#3f3f46] bg-[#1f1b18] pl-8 pr-2 text-xs"
                     />
                   </div>
                 </div>
@@ -446,7 +426,7 @@ export function EquipmentDetailModal({
                         )
                       }
                       placeholder="Saisir manuellement le nouveau code série"
-                      className="h-9 min-w-0 flex-1 rounded border border-[#3f3a36] bg-[#1f1b18] px-3 font-mono text-xs"
+                      className="h-9 min-w-0 flex-1 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 font-mono text-xs"
                     />
 
                     <button
@@ -458,7 +438,7 @@ export function EquipmentDetailModal({
                         !newSerialCode.trim() ||
                         createSerial.isPending
                       }
-                      className="inline-flex items-center gap-1.5 rounded bg-[#f7f5f0] px-3 text-xs font-semibold text-[#2b2622] disabled:opacity-40"
+                      className="inline-flex items-center gap-1.5 rounded bg-[#fafafa] px-3 text-xs font-semibold text-[#18181b] disabled:opacity-40"
                     >
                       <Plus className="h-3.5 w-3.5" />
                       Ajouter
@@ -471,7 +451,7 @@ export function EquipmentDetailModal({
                 <LoadingRow text="Chargement des numéros de série..." />
               ) : (
                 <>
-                  <div className="divide-y divide-[#3f3a36]">
+                  <div className="divide-y divide-[#3f3f46]">
                     {(serialQuery.data
                       ?.serialNumbers ??
                       []).map(
@@ -505,7 +485,7 @@ export function EquipmentDetailModal({
                                     serial,
                                   )
                                 }
-                                className="inline-flex items-center gap-1 rounded border border-[#4a4540] px-2.5 py-1.5 text-[10px] text-[#c9c0ad] hover:text-white"
+                                className="inline-flex items-center gap-1 rounded border border-[#4a4540] px-2.5 py-1.5 text-[10px] text-[#d4d4d8] hover:text-white"
                               >
                                 <Pencil className="h-3 w-3" />
                                 Statut
@@ -544,8 +524,8 @@ export function EquipmentDetailModal({
             </section>
           )}
 
-          <section className="overflow-hidden rounded-xl border border-[#3f3a36] bg-[#2b2622]/55">
-            <div className="border-b border-[#3f3a36] px-4 py-3">
+          <section className="overflow-hidden rounded-xl border border-[#3f3f46] bg-[#18181b]/55">
+            <div className="border-b border-[#3f3f46] px-4 py-3">
               <h3 className="text-xs font-semibold">
                 Historique des mouvements
               </h3>
@@ -559,7 +539,7 @@ export function EquipmentDetailModal({
               <LoadingRow text="Chargement des mouvements..." />
             ) : (
               <>
-                <div className="divide-y divide-[#3f3a36]">
+                <div className="divide-y divide-[#3f3f46]">
                   {(movementQuery.data
                     ?.movements ??
                     []).map(
@@ -610,7 +590,9 @@ export function EquipmentDetailModal({
                             </p>
 
                             <p className="mt-0.5 text-[9px] text-white/35">
-                              {formatDate(
+                              Date d'effet: {formatDate(
+                                movement.happenedAt,
+                              )} • Créé le: {formatDate(
                                 movement.createdAt,
                               )}
                             </p>
@@ -656,11 +638,11 @@ export function EquipmentDetailModal({
           </section>
         </div>
 
-        <footer className="flex justify-end border-t border-[#3f3a36] bg-[#26221f] px-5 py-3">
+        <footer className="flex justify-end border-t border-[#3f3f46] bg-[#26221f] px-5 py-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622]"
+            className="rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b]"
           >
             Fermer
           </button>
@@ -680,7 +662,7 @@ function Stat({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-[#3f3a36] bg-[#2b2622]/65 p-3">
+    <div className="rounded-lg border border-[#3f3f46] bg-[#18181b]/65 p-3">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-white/40">
         {icon}
         {label}
@@ -724,7 +706,7 @@ function Pager({
   }
 
   return (
-    <div className="flex items-center justify-end gap-2 border-t border-[#3f3a36] px-4 py-2">
+    <div className="flex items-center justify-end gap-2 border-t border-[#3f3f46] px-4 py-2">
       <button
         type="button"
         disabled={
@@ -735,7 +717,7 @@ function Pager({
             page - 1,
           )
         }
-        className="rounded border border-[#3f3a36] px-2 py-1 text-[10px] disabled:opacity-30"
+        className="rounded border border-[#3f3f46] px-2 py-1 text-[10px] disabled:opacity-30"
       >
         Préc.
       </button>
@@ -755,7 +737,7 @@ function Pager({
             page + 1,
           )
         }
-        className="rounded border border-[#3f3a36] px-2 py-1 text-[10px] disabled:opacity-30"
+        className="rounded border border-[#3f3f46] px-2 py-1 text-[10px] disabled:opacity-30"
       >
         Suiv.
       </button>

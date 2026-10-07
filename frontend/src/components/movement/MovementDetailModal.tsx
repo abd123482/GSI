@@ -24,30 +24,8 @@ interface MovementDetailModalProps {
   onClose: () => void;
 }
 
-function movementType(
-  movement: Movement,
-): 'IN' | 'OUT' | 'TRANSFER' {
-  const status =
-    movement.mouvementStatus
-      ?.toUpperCase();
-
-  if (
-    status === 'IN' ||
-    status === 'ENTRY' ||
-    status === 'ENTRÉE'
-  ) {
-    return 'IN';
-  }
-
-  if (
-    status === 'OUT' ||
-    status === 'EXIT' ||
-    status === 'SORTIE'
-  ) {
-    return 'OUT';
-  }
-
-  return 'TRANSFER';
+function movementType(movement: any): 'IN' | 'OUT' | 'TRANSFER' {
+  return movement.mouvementStatus ? 'OUT' : 'IN';
 }
 
 function formatDate(
@@ -126,10 +104,10 @@ export function MovementDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#26221f] px-5 py-4">
+      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-[#3f3f46] bg-[#27272a] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3f46] bg-[#26221f] px-5 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded border border-[#3f3a36] bg-[#383330]">
+            <div className="flex h-9 w-9 items-center justify-center rounded border border-[#3f3f46] bg-[#27272a]">
               <Icon className="h-4 w-4" />
             </div>
 
@@ -162,10 +140,18 @@ export function MovementDetailModal({
         </header>
 
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <InfoCard
               icon={CalendarClock}
-              label="Date"
+              label="Date d'effet"
+              value={formatDate(
+                movement.happenedAt,
+              )}
+            />
+
+            <InfoCard
+              icon={CalendarClock}
+              label="Créé le"
               value={formatDate(
                 movement.createdAt,
               )}
@@ -196,8 +182,8 @@ export function MovementDetailModal({
             />
           </div>
 
-          <section className="rounded-lg border border-[#3f3a36] bg-[#2b2622] p-4">
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-[#8c827a]">
+          <section className="rounded-lg border border-[#3f3f46] bg-[#18181b] p-4">
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-[#71717a]">
               Trajet commun
             </p>
 
@@ -234,8 +220,8 @@ export function MovementDetailModal({
             </section>
           )}
 
-          <section className="overflow-hidden rounded-lg border border-[#3f3a36]">
-            <div className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-4 py-3">
+          <section className="overflow-hidden rounded-lg border border-[#3f3f46]">
+            <div className="flex items-center justify-between border-b border-[#3f3f46] bg-[#18181b] px-4 py-3">
               <div>
                 <h3 className="text-xs font-semibold">
                   Lignes du mouvement
@@ -246,13 +232,13 @@ export function MovementDetailModal({
                 </p>
               </div>
 
-              <span className="font-mono text-xs text-[#aea69c]">
+              <span className="font-mono text-xs text-[#a1a1aa]">
                 {movement.items
                   ?.length ?? 0}
               </span>
             </div>
 
-            <div className="divide-y divide-[#3f3a36]">
+            <div className="divide-y divide-[#3f3f46]">
               {(movement.items ??
                 []).map(
                 (
@@ -266,7 +252,7 @@ export function MovementDetailModal({
                     }
                     className="grid grid-cols-1 gap-3 px-4 py-3 sm:grid-cols-[42px_minmax(0,1fr)_minmax(0,1fr)_100px] sm:items-center"
                   >
-                    <div className="flex h-8 w-8 items-center justify-center rounded border border-[#3f3a36] bg-[#383330] font-mono text-[10px] text-[#aea69c]">
+                    <div className="flex h-8 w-8 items-center justify-center rounded border border-[#3f3f46] bg-[#27272a] font-mono text-[10px] text-[#a1a1aa]">
                       {String(
                         index + 1,
                       ).padStart(
@@ -297,7 +283,7 @@ export function MovementDetailModal({
 
                     <div className="min-w-0">
                       {item.serialNumberId ? (
-                        <p className="flex items-center gap-1.5 truncate font-mono text-xs text-[#c9c0ad]">
+                        <p className="flex items-center gap-1.5 truncate font-mono text-xs text-[#d4d4d8]">
                           <Barcode className="h-3.5 w-3.5 shrink-0" />
                           {item.serialNumber
                             ?.serialNumberCode ??
@@ -311,7 +297,7 @@ export function MovementDetailModal({
                     </div>
 
                     <div className="text-left sm:text-right">
-                      <span className="inline-flex rounded border border-[#3f3a36] bg-[#383330] px-2 py-1 font-mono text-xs font-semibold">
+                      <span className="inline-flex rounded border border-[#3f3f46] bg-[#27272a] px-2 py-1 font-mono text-xs font-semibold">
                         {
                           item.equipmentQuantity
                         }{' '}
@@ -324,7 +310,7 @@ export function MovementDetailModal({
 
               {!movement.items
                 ?.length && (
-                <div className="px-4 py-8 text-center text-xs text-[#8c827a]">
+                <div className="px-4 py-8 text-center text-xs text-[#71717a]">
                   Aucune ligne enregistrée.
                 </div>
               )}
@@ -332,11 +318,11 @@ export function MovementDetailModal({
           </section>
         </div>
 
-        <footer className="flex justify-end border-t border-[#3f3a36] bg-[#26221f] px-5 py-3">
+        <footer className="flex justify-end border-t border-[#3f3f46] bg-[#26221f] px-5 py-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622]"
+            className="rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b]"
           >
             Fermer
           </button>
@@ -357,8 +343,8 @@ function InfoCard({
   value: string;
 }) {
   return (
-    <div className="rounded border border-[#3f3a36] bg-[#2b2622] p-3">
-      <div className="flex items-center gap-2 text-[#8c827a]">
+    <div className="rounded border border-[#3f3f46] bg-[#18181b] p-3">
+      <div className="flex items-center gap-2 text-[#71717a]">
         <Icon className="h-3.5 w-3.5" />
 
         <span className="text-[10px] uppercase tracking-wider">
@@ -381,8 +367,8 @@ function RouteBox({
   value: string;
 }) {
   return (
-    <div className="min-w-0 flex-1 rounded border border-[#3f3a36] bg-[#383330]/55 p-3">
-      <p className="text-[10px] uppercase tracking-wider text-[#8c827a]">
+    <div className="min-w-0 flex-1 rounded border border-[#3f3f46] bg-[#27272a]/55 p-3">
+      <p className="text-[10px] uppercase tracking-wider text-[#71717a]">
         {label}
       </p>
 

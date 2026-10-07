@@ -29,7 +29,7 @@ export interface DashboardStats {
     otherCount?: number;
     recentMovements: Array<{
       mouvementId: string;
-      mouvementStatus: string;
+      mouvementStatus: boolean;
       mouvementQuantity: number;
       equipmentName: string;
       sourceShelfName: string | null;
@@ -37,7 +37,7 @@ export interface DashboardStats {
       serialNumberCode: string | null;
       items?: Array<{
         mouvementEquipmentId: string;
-        mouvementStatus: string;
+        mouvementStatus: boolean;
         mouvementQuantity: number;
         equipmentName: string;
         sourceShelfName: string | null;

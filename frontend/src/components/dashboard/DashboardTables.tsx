@@ -21,17 +21,17 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* Panel 1: Recent Movements (Takes 2 cols on lg screens) */}
-      <div className="lg:col-span-2 p-4 bg-[#383330] border border-[#3f3a36] rounded-[4px] shadow-2xs space-y-3">
+      <div className="lg:col-span-2 p-4 bg-[#27272a] border border-[#3f3f46] rounded-[4px] shadow-2xs space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ArrowRightLeft className="w-4 h-4 text-[#dad2c1]" />
-            <h2 className="text-xs font-mono font-medium text-[#f7f5f0] uppercase tracking-wider">
+            <ArrowRightLeft className="w-4 h-4 text-[#f4f4f5]" />
+            <h2 className="text-xs font-mono font-medium text-[#fafafa] uppercase tracking-wider">
               Derniers Mouvements Enregistrés
             </h2>
           </div>
           <Link
             href="/equipment"
-            className="text-[11px] font-mono text-[#aea69c] hover:text-[#f7f5f0] inline-flex items-center gap-1 transition-colors"
+            className="text-[11px] font-mono text-[#a1a1aa] hover:text-[#fafafa] inline-flex items-center gap-1 transition-colors"
           >
             <span>Historique complet</span>
             <ArrowRight className="w-3 h-3" />
@@ -39,13 +39,13 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
         </div>
 
         {movementOverview.recentMovements.length === 0 ? (
-          <div className="py-12 text-center text-xs font-mono text-[#aea69c]">
+          <div className="py-12 text-center text-xs font-mono text-[#a1a1aa]">
             Aucun mouvement récent enregistré.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-[#2b2622] border-b border-[#3f3a36] text-[#aea69c] text-[10px] uppercase">
+              <thead className="bg-[#18181b] border-b border-[#3f3f46] text-[#a1a1aa] text-[10px] uppercase">
                 <tr>
                   <th className="py-2 px-2.5">Type</th>
                   <th className="py-2 px-2.5">Article</th>
@@ -54,16 +54,16 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
                   <th className="py-2 px-2.5">N° Série</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#3f3a36]/60 text-[#dad2c1]">
+              <tbody className="divide-y divide-[#3f3f46]/60 text-[#f4f4f5]">
                 {movementOverview.recentMovements.flatMap(header =>
                   header.items?.length ? header.items.map(item => ({ ...header, ...item, rowKey: item.mouvementEquipmentId })) : [{ ...header, rowKey: header.mouvementId }],
                 ).map((m) => {
-                  const typeUpper = m.mouvementStatus.toUpperCase();
-                  const isIN = typeUpper === 'IN' || typeUpper === 'ENTRY';
-                  const isOUT = typeUpper === 'OUT' || typeUpper === 'EXIT';
+                  const typeUpper = m.mouvementStatus ? 'OUT' : 'IN';
+                  const isIN = typeUpper === 'IN';
+                  const isOUT = typeUpper === 'OUT';
 
                   return (
-                    <tr key={m.rowKey} className="hover:bg-[#2b2622]/50 transition-colors">
+                    <tr key={m.rowKey} className="hover:bg-[#18181b]/50 transition-colors">
                       {/* Type Badge */}
                       <td className="py-2 px-2.5 whitespace-nowrap">
                         <span
@@ -75,14 +75,14 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
                               : 'bg-[#152836] text-[#38bdf8] border-[#1c3c54]'
                           }`}
                         >
-                          {m.mouvementStatus}
+                          {m.mouvementStatus ? 'OUT' : 'IN'}
                         </span>
                       </td>
 
                       {/* Equipment Name */}
-                      <td className="py-2 px-2.5 whitespace-nowrap font-medium text-[#f7f5f0] max-w-[180px] truncate">
+                      <td className="py-2 px-2.5 whitespace-nowrap font-medium text-[#fafafa] max-w-[180px] truncate">
                         {m.equipmentName}
-                        <div className="text-[9px] text-[#aea69c]" title={m.mouvementId}>Mvt {m.mouvementId.slice(0, 8)}</div>
+                        <div className="text-[9px] text-[#a1a1aa]" title={m.mouvementId}>Mvt {m.mouvementId.slice(0, 8)}</div>
                       </td>
 
                       {/* Quantity */}
@@ -91,22 +91,22 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
                       </td>
 
                       {/* Path */}
-                      <td className="py-2 px-2.5 whitespace-nowrap text-[11px] text-[#aea69c]">
+                      <td className="py-2 px-2.5 whitespace-nowrap text-[11px] text-[#a1a1aa]">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[#dad2c1]">{m.sourceShelfName || 'Externe'}</span>
+                          <span className="text-[#f4f4f5]">{m.sourceShelfName || 'Externe'}</span>
                           <span>→</span>
-                          <span className="text-[#f7f5f0] font-medium">{m.destinationShelfName || 'Sortie'}</span>
+                          <span className="text-[#fafafa] font-medium">{m.destinationShelfName || 'Sortie'}</span>
                         </div>
                       </td>
 
                       {/* Serial Number */}
                       <td className="py-2 px-2.5 whitespace-nowrap text-[11px]">
                         {m.serialNumberCode ? (
-                          <span className="text-[#f7f5f0] bg-[#2b2622] px-1.5 py-0.5 rounded border border-[#3f3a36]">
+                          <span className="text-[#fafafa] bg-[#18181b] px-1.5 py-0.5 rounded border border-[#3f3f46]">
                             {m.serialNumberCode}
                           </span>
                         ) : (
-                          <span className="text-[#aea69c]/50">—</span>
+                          <span className="text-[#a1a1aa]/50">—</span>
                         )}
                       </td>
                     </tr>
@@ -121,17 +121,17 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
       {/* Panel 2 & 3: Right Column (Inventories & Low Stock Alerts) */}
       <div className="space-y-4">
         {/* Active Inventories */}
-        <div className="p-4 bg-[#383330] border border-[#3f3a36] rounded-[4px] shadow-2xs space-y-3">
+        <div className="p-4 bg-[#27272a] border border-[#3f3f46] rounded-[4px] shadow-2xs space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4 text-[#f59e0b]" />
-              <h2 className="text-xs font-mono font-medium text-[#f7f5f0] uppercase tracking-wider">
+              <h2 className="text-xs font-mono font-medium text-[#fafafa] uppercase tracking-wider">
                 Campagnes d&apos;Inventaire
               </h2>
             </div>
             <Link
               href="/inventory"
-              className="text-[11px] font-mono text-[#aea69c] hover:text-[#f7f5f0] inline-flex items-center gap-1 transition-colors"
+              className="text-[11px] font-mono text-[#a1a1aa] hover:text-[#fafafa] inline-flex items-center gap-1 transition-colors"
             >
               <span>Voir tout</span>
               <ArrowRight className="w-3 h-3" />
@@ -139,7 +139,7 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
           </div>
 
           {inventoryOverview.activeCampaigns.length === 0 ? (
-            <div className="py-6 text-center text-xs font-mono text-[#aea69c]">
+            <div className="py-6 text-center text-xs font-mono text-[#a1a1aa]">
               Aucune campagne d&apos;inventaire active.
             </div>
           ) : (
@@ -148,10 +148,10 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
                 <Link
                   key={inv.inventoryId}
                   href={`/inventory`}
-                  className="block p-2.5 bg-[#2b2622] hover:bg-[#322c28] border border-[#3f3a36] rounded-[3px] transition-colors"
+                  className="block p-2.5 bg-[#18181b] hover:bg-[#322c28] border border-[#3f3f46] rounded-[3px] transition-colors"
                 >
                   <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="font-medium text-[#f7f5f0] truncate max-w-[170px]">
+                    <span className="font-medium text-[#fafafa] truncate max-w-[170px]">
                       {inv.title}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-950/50 text-amber-300 border border-amber-500/30">
@@ -160,9 +160,9 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
                   </div>
 
                   <div className="mt-2 space-y-1">
-                    <div className="flex items-center justify-between text-[10px] font-mono text-[#aea69c]">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-[#a1a1aa]">
                       <span>Comptage ({inv.completedWorkUnits}/{inv.totalWorkUnits})</span>
-                      <span className="font-bold text-[#f7f5f0]">{inv.progressPercent}%</span>
+                      <span className="font-bold text-[#fafafa]">{inv.progressPercent}%</span>
                     </div>
                     <div className="w-full h-1.5 bg-[#1a1715] rounded-full overflow-hidden">
                       <div
@@ -178,11 +178,11 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
         </div>
 
         {/* Low Stock Alerts */}
-        <div className="p-4 bg-[#383330] border border-[#3f3a36] rounded-[4px] shadow-2xs space-y-3">
+        <div className="p-4 bg-[#27272a] border border-[#3f3f46] rounded-[4px] shadow-2xs space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-[#ef4444]" />
-              <h2 className="text-xs font-mono font-medium text-[#f7f5f0] uppercase tracking-wider">
+              <h2 className="text-xs font-mono font-medium text-[#fafafa] uppercase tracking-wider">
                 Articles sous seuil d&apos;alerte
               </h2>
             </div>
@@ -201,13 +201,13 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
               {stockOverview.lowStockItems.map((item) => (
                 <div
                   key={item.equipmentId}
-                  className="p-2 bg-[#2b2622] border border-[#451e1e] rounded-[3px] flex items-center justify-between text-xs font-mono"
+                  className="p-2 bg-[#18181b] border border-[#451e1e] rounded-[3px] flex items-center justify-between text-xs font-mono"
                 >
                   <div className="min-w-0 pr-2">
-                    <p className="font-medium text-[#f7f5f0] truncate max-w-[150px]">
+                    <p className="font-medium text-[#fafafa] truncate max-w-[150px]">
                       {item.equipmentName}
                     </p>
-                    <p className="text-[10px] text-[#aea69c]">
+                    <p className="text-[10px] text-[#a1a1aa]">
                       Seuil min : {item.minequipmentQuantity} u.
                     </p>
                   </div>

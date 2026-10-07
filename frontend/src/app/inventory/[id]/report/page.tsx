@@ -159,8 +159,8 @@ export default function InventoryReportPage() {
     report.isLoading
   ) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#2b2622] text-white">
-        <div className="flex items-center gap-2 text-xs text-[#aea69c]">
+      <main className="flex min-h-screen items-center justify-center bg-[#18181b] text-white">
+        <div className="flex items-center gap-2 text-xs text-[#a1a1aa]">
           <Loader2 className="h-4 w-4 animate-spin" />
           Chargement du rapport...
         </div>
@@ -175,7 +175,7 @@ export default function InventoryReportPage() {
     !report.data
   ) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#2b2622] p-6 text-white">
+      <main className="flex min-h-screen items-center justify-center bg-[#18181b] p-6 text-white">
         <div className="rounded border border-rose-500/25 bg-rose-950/15 p-6 text-sm text-rose-200">
           Impossible de charger cet inventaire.
         </div>
@@ -200,13 +200,13 @@ export default function InventoryReportPage() {
     permissions.canLaunchInventory;
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-white">
+    <main className="min-h-[calc(100vh-3.5rem)] bg-[#18181b] text-white">
       <div className="mx-auto max-w-[1500px] space-y-5 px-4 py-6 sm:px-6">
-        <header className="flex flex-col gap-4 border-b border-[#3f3a36] pb-4 lg:flex-row lg:items-end lg:justify-between">
+        <header className="flex flex-col gap-4 border-b border-[#3f3f46] pb-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex items-start gap-3">
             <Link
               href="/inventory"
-              className="rounded border border-[#3f3a36] p-2 text-[#aea69c] hover:text-white"
+              className="rounded border border-[#3f3f46] p-2 text-[#a1a1aa] hover:text-white"
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>
@@ -217,12 +217,12 @@ export default function InventoryReportPage() {
                   {r.inventory.title}
                 </h1>
 
-                <span className="rounded border border-[#3f3a36] bg-[#383330] px-2 py-1 text-[10px]">
+                <span className="rounded border border-[#3f3f46] bg-[#27272a] px-2 py-1 text-[10px]">
                   {r.inventory.status}
                 </span>
               </div>
 
-              <p className="mt-1 text-xs text-[#aea69c]">
+              <p className="mt-1 text-xs text-[#a1a1aa]">
                 Rapport unité par unité • C1 / C2 / C3 conditionnel / Résultat accepté
               </p>
             </div>
@@ -231,7 +231,7 @@ export default function InventoryReportPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/inventory/tasks"
-              className="inline-flex items-center gap-2 rounded border border-[#3f3a36] bg-[#383330] px-3 py-2 text-xs"
+              className="inline-flex items-center gap-2 rounded border border-[#3f3f46] bg-[#27272a] px-3 py-2 text-xs"
             >
               <ClipboardList className="h-3.5 w-3.5" />
               Mes tâches
@@ -245,7 +245,7 @@ export default function InventoryReportPage() {
                   report.refetch(),
                 ]);
               }}
-              className="inline-flex items-center gap-2 rounded border border-[#3f3a36] bg-[#383330] px-3 py-2 text-xs"
+              className="inline-flex items-center gap-2 rounded border border-[#3f3f46] bg-[#27272a] px-3 py-2 text-xs"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Actualiser
@@ -386,14 +386,14 @@ export default function InventoryReportPage() {
               Comparaison détaillée par unité
             </h2>
 
-            <p className="mt-1 text-[10px] text-[#8c827a]">
+            <p className="mt-1 text-[10px] text-[#71717a]">
               Le résultat accepté est C1 lorsque C1=C2, ou C3 lorsqu’un écart a nécessité le troisième contrôleur.
             </p>
           </div>
 
           {r.units.length ===
           0 ? (
-            <div className="rounded border border-dashed border-[#4a4540] bg-[#2f2a26] p-8 text-center text-xs text-[#8c827a]">
+            <div className="rounded border border-dashed border-[#4a4540] bg-[#27272a] p-8 text-center text-xs text-[#71717a]">
               Aucune unité disponible.
             </div>
           ) : (
@@ -401,9 +401,9 @@ export default function InventoryReportPage() {
               (unit) => (
                 <article
                   key={unit.unitId}
-                  className="overflow-hidden rounded-lg border border-[#3f3a36] bg-[#2f2a26]"
+                  className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#27272a]"
                 >
-                  <div className="flex flex-col gap-2 border-b border-[#3f3a36] bg-[#383330]/45 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-2 border-b border-[#3f3f46] bg-[#27272a]/45 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h3 className="text-xs font-semibold">
                         Unité #
@@ -411,7 +411,7 @@ export default function InventoryReportPage() {
                           1}
                       </h3>
 
-                      <p className="mt-0.5 text-[9px] text-[#8c827a]">
+                      <p className="mt-0.5 text-[9px] text-[#71717a]">
                         Résultat accepté :{' '}
                         {unit.acceptedPurpose ===
                         'FINAL_RECOUNT'
@@ -436,7 +436,7 @@ export default function InventoryReportPage() {
 
                   <div className="overflow-x-auto">
                     <table className="min-w-[1050px] w-full text-left text-xs">
-                      <thead className="border-b border-[#3f3a36] text-[9px] uppercase tracking-wide text-[#8c827a]">
+                      <thead className="border-b border-[#3f3f46] text-[9px] uppercase tracking-wide text-[#71717a]">
                         <tr>
                           <th className="px-3 py-2">
                             Élément
@@ -462,7 +462,7 @@ export default function InventoryReportPage() {
                         </tr>
                       </thead>
 
-                      <tbody className="divide-y divide-[#3f3a36]">
+                      <tbody className="divide-y divide-[#3f3f46]">
                         {unit.rows.map(
                           (row) => (
                             <tr
@@ -477,7 +477,7 @@ export default function InventoryReportPage() {
                                     'Élément'}
                                 </p>
 
-                                <p className="mt-0.5 text-[9px] text-[#8c827a]">
+                                <p className="mt-0.5 text-[9px] text-[#71717a]">
                                   {row.kind}
                                   {row.shelfName
                                     ? ` • ${row.shelfName}`
@@ -564,7 +564,7 @@ export default function InventoryReportPage() {
                           <tr>
                             <td
                               colSpan={7}
-                              className="px-3 py-8 text-center text-[#8c827a]"
+                              className="px-3 py-8 text-center text-[#71717a]"
                             >
                               Les résultats de cette unité ne sont pas encore disponibles.
                             </td>
@@ -580,7 +580,7 @@ export default function InventoryReportPage() {
         </section>
 
         <section className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <div className="rounded-lg border border-[#3f3a36] bg-[#2f2a26] p-4">
+          <div className="rounded-lg border border-[#3f3f46] bg-[#27272a] p-4">
             <h2 className="flex items-center gap-2 text-xs font-semibold">
               <AlertTriangle className="h-3.5 w-3.5 text-amber-300" />
               Écarts / investigations
@@ -595,7 +595,7 @@ export default function InventoryReportPage() {
                       key={
                         issue.issueId
                       }
-                      className="rounded border border-[#3f3a36] bg-[#383330]/40 p-3 text-xs"
+                      className="rounded border border-[#3f3f46] bg-[#27272a]/40 p-3 text-xs"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <span className="font-semibold">
@@ -604,14 +604,14 @@ export default function InventoryReportPage() {
                           }
                         </span>
 
-                        <span className="text-[9px] text-[#aea69c]">
+                        <span className="text-[9px] text-[#a1a1aa]">
                           {
                             issue.status
                           }
                         </span>
                       </div>
 
-                      <p className="mt-1 text-[10px] text-[#aea69c]">
+                      <p className="mt-1 text-[10px] text-[#a1a1aa]">
                         {issue.equipment
                           ?.equipmentName ??
                           issue.serialNumberCode ??
@@ -625,19 +625,19 @@ export default function InventoryReportPage() {
                 )}
               </div>
             ) : (
-              <p className="mt-3 text-xs text-[#8c827a]">
+              <p className="mt-3 text-xs text-[#71717a]">
                 Aucun écart d’investigation enregistré.
               </p>
             )}
           </div>
 
-          <div className="rounded-lg border border-[#3f3a36] bg-[#2f2a26] p-4">
+          <div className="rounded-lg border border-[#3f3f46] bg-[#27272a] p-4">
             <h2 className="flex items-center gap-2 text-xs font-semibold">
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
               Traçabilité
             </h2>
 
-            <div className="mt-3 space-y-2 text-xs text-[#c9c0ad]">
+            <div className="mt-3 space-y-2 text-xs text-[#d4d4d8]">
               <p>
                 Créé :{' '}
                 {formatDate(
@@ -685,8 +685,8 @@ function SummaryCard({
   value: string;
 }) {
   return (
-    <div className="rounded border border-[#3f3a36] bg-[#2f2a26] p-3">
-      <p className="text-[9px] uppercase tracking-wider text-[#8c827a]">
+    <div className="rounded border border-[#3f3f46] bg-[#27272a] p-3">
+      <p className="text-[9px] uppercase tracking-wider text-[#71717a]">
         {label}
       </p>
 
@@ -726,16 +726,16 @@ function ControllerCard({
         0;
 
   return (
-    <div className="rounded border border-[#3f3a36] bg-[#2f2a26] p-4">
+    <div className="rounded border border-[#3f3f46] bg-[#27272a] p-4">
       <div className="flex items-center gap-2">
-        <Users className="h-4 w-4 text-[#aea69c]" />
+        <Users className="h-4 w-4 text-[#a1a1aa]" />
 
         <div>
           <p className="text-xs font-semibold">
             {title}
           </p>
 
-          <p className="mt-0.5 text-[9px] text-[#8c827a]">
+          <p className="mt-0.5 text-[9px] text-[#71717a]">
             {data.user
               ?.userName ??
               data.user
@@ -746,7 +746,7 @@ function ControllerCard({
       </div>
 
       <div className="mt-3 flex items-center justify-between text-xs">
-        <span className="text-[#aea69c]">
+        <span className="text-[#a1a1aa]">
           {conditional
             ? 'Unités requises'
             : 'Progression'}
@@ -783,7 +783,7 @@ function ResultCell({
       className={`px-3 py-3 ${
         strong
           ? 'font-semibold text-white'
-          : 'text-[#c9c0ad]'
+          : 'text-[#d4d4d8]'
       }`}
     >
       {value}

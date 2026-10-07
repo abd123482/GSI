@@ -110,8 +110,8 @@ export function EditSerialNumberModal({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-5 py-4">
+      <div className="w-full max-w-md overflow-hidden rounded-xl border border-[#3f3f46] bg-[#27272a] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3f46] bg-[#18181b] px-5 py-4">
           <div className="flex items-center gap-2">
             <Barcode className="h-4 w-4" />
             <span className="text-sm font-semibold">
@@ -141,7 +141,7 @@ export function EditSerialNumberModal({
             </div>
           )}
 
-          <div className="rounded-lg border border-[#3f3a36] bg-[#2b2622]/60 p-3">
+          <div className="rounded-lg border border-[#3f3f46] bg-[#18181b]/60 p-3">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-white/40">
               <LockKeyhole className="h-3.5 w-3.5" />
               Code immuable
@@ -167,7 +167,7 @@ export function EditSerialNumberModal({
               {...register(
                 'serialNumberStatus',
               )}
-              className="h-10 w-full rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs"
+              className="h-10 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs"
             >
               <option value="AVAILABLE">
                 AVAILABLE
@@ -187,12 +187,12 @@ export function EditSerialNumberModal({
             </select>
           </label>
 
-          <footer className="flex justify-end gap-2 border-t border-[#3f3a36] pt-4">
+          <footer className="flex justify-end gap-2 border-t border-[#3f3f46] pt-4">
             <button
               type="button"
               onClick={onClose}
               disabled={isUpdating}
-              className="rounded border border-[#3f3a36] px-4 py-2 text-xs"
+              className="rounded border border-[#3f3f46] px-4 py-2 text-xs"
             >
               Annuler
             </button>
@@ -203,7 +203,7 @@ export function EditSerialNumberModal({
                 isUpdating ||
                 !canUpdateSerialNumber
               }
-              className="rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622] disabled:opacity-40"
+              className="rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b] disabled:opacity-40"
             >
               {isUpdating
                 ? 'Enregistrement...'

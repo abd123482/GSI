@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-export const stockStatusSchema = z.boolean();
+export const stockStatusSchema = z.preprocess(
+  (val) => (val === 'true' ? true : val === 'false' ? false : val),
+  z.boolean(),
+) as z.ZodType<boolean, z.ZodTypeDef, boolean>;
 
 export const createStockSchema = z.object({
   stockName: z
@@ -18,7 +21,7 @@ export const updateStockSchema = z
     stockName: z
       .string()
       .trim()
-      .min(5, 'Le nom du stock doit comporter au moins 5 caractères')
+      .min(1, 'Le nom du stock est requis')
       .max(50, 'Le nom du stock ne peut pas dépasser 50 caractères')
       .optional(),
     stockStatus: stockStatusSchema.optional(),

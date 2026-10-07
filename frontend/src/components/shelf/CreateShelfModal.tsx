@@ -96,8 +96,8 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-[#3f3a36] bg-[#383330] text-white shadow-2xl">
-        <header className="flex items-center justify-between border-b border-[#3f3a36] bg-[#2b2622] px-5 py-4">
+      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-[#3f3f46] bg-[#27272a] text-white shadow-2xl">
+        <header className="flex items-center justify-between border-b border-[#3f3f46] bg-[#18181b] px-5 py-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <Layers className="h-4 w-4" />
             Nouvel emplacement
@@ -120,7 +120,7 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
             <input
               {...register('shelfName')}
               placeholder="Ex: Rayon A-01"
-              className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50"
+              className="h-10 w-full rounded-lg border border-[#3f3f46] bg-[#18181b] px-3 text-xs outline-none focus:border-white/50"
             />
             {errors.shelfName && <p className="text-[11px] text-rose-300">{errors.shelfName.message}</p>}
           </label>
@@ -132,7 +132,7 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
                 setValueAs: (v) => v === 'true',
               })}
               disabled={busy}
-              className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50"
+              className="h-10 w-full rounded-lg border border-[#3f3f46] bg-[#18181b] px-3 text-xs outline-none focus:border-white/50"
             >
               <option value="true">Actif (ACTIVE)</option>
               <option value="false">Inactif (INACTIVE)</option>
@@ -148,7 +148,7 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
             <select
               {...register('stockId')}
               disabled={busy || loadingStocks}
-              className="h-10 w-full rounded-lg border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/50"
+              className="h-10 w-full rounded-lg border border-[#3f3f46] bg-[#18181b] px-3 text-xs outline-none focus:border-white/50"
             >
               <option value="">Sélectionnez un stock actif</option>
               {stocks.map((stock) => (
@@ -171,12 +171,12 @@ export function CreateShelfModal({ isOpen, onClose, onSuccess }: CreateShelfModa
             <p>Un emplacement doit toujours appartenir à un stock ACTIVE.</p>
           </div>
 
-          <footer className="flex justify-end gap-2 border-t border-[#3f3a36] pt-4">
-            <button type="button" onClick={onClose} disabled={busy} className="rounded border border-[#3f3a36] px-4 py-2 text-xs">Annuler</button>
+          <footer className="flex justify-end gap-2 border-t border-[#3f3f46] pt-4">
+            <button type="button" onClick={onClose} disabled={busy} className="rounded border border-[#3f3f46] px-4 py-2 text-xs">Annuler</button>
             <button
               type="submit"
               disabled={busy || !canCreateShelf || stocks.length === 0}
-              className="inline-flex items-center gap-1.5 rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622] disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b] disabled:opacity-40"
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
               Créer

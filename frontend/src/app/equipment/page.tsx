@@ -25,24 +25,17 @@ import {
   useUpdateSerialNumber,
 } from '@/hooks/use-serial-numbers';
 
+import dynamic from 'next/dynamic';
+
 import {
   EquipmentListTable,
 } from '@/components/equipment/EquipmentListTable';
-import {
-  CreateEquipmentModal,
-} from '@/components/equipment/CreateEquipmentModal';
-import {
-  EquipmentDetailModal,
-} from '@/components/equipment/EquipmentDetailModal';
-import {
-  EditEquipmentModal,
-} from '@/components/equipment/EditEquipmentModal';
-import {
-  DeleteEquipmentModal,
-} from '@/components/equipment/DeleteEquipmentModal';
-import {
-  EditSerialNumberModal,
-} from '@/components/equipment/EditSerialNumberModal';
+
+const CreateEquipmentModal = dynamic(() => import('@/components/equipment/CreateEquipmentModal').then(m => m.CreateEquipmentModal));
+const EquipmentDetailModal = dynamic(() => import('@/components/equipment/EquipmentDetailModal').then(m => m.EquipmentDetailModal));
+const EditEquipmentModal = dynamic(() => import('@/components/equipment/EditEquipmentModal').then(m => m.EditEquipmentModal));
+const DeleteEquipmentModal = dynamic(() => import('@/components/equipment/DeleteEquipmentModal').then(m => m.DeleteEquipmentModal));
+const EditSerialNumberModal = dynamic(() => import('@/components/equipment/EditSerialNumberModal').then(m => m.EditSerialNumberModal));
 
 import type {
   Equipment,
@@ -134,8 +127,8 @@ export default function EquipmentPage() {
 
   if (!isLoaded || permissionsLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#2b2622] text-[#f7f5f0]">
-        <div className="flex items-center gap-2 text-xs text-[#aea69c]">
+      <main className="flex min-h-screen items-center justify-center bg-[#18181b] text-[#fafafa]">
+        <div className="flex items-center gap-2 text-xs text-[#a1a1aa]">
           <Loader2 className="h-4 w-4 animate-spin" />
           Chargement...
         </div>
@@ -145,8 +138,8 @@ export default function EquipmentPage() {
 
   if (!isSignedIn) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
-        <div className="w-full max-w-md space-y-4 rounded-lg border border-[#3f3a36] bg-[#383330] p-8 text-center">
+      <main className="flex min-h-screen items-center justify-center bg-[#18181b] p-6 text-[#fafafa]">
+        <div className="w-full max-w-md space-y-4 rounded-lg border border-[#3f3f46] bg-[#27272a] p-8 text-center">
           <Cpu className="mx-auto h-8 w-8" />
 
           <h1 className="text-base font-semibold">
@@ -156,7 +149,7 @@ export default function EquipmentPage() {
           <SignInButton mode="modal">
             <button
               type="button"
-              className="w-full rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622]"
+              className="w-full rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b]"
             >
               Se connecter
             </button>
@@ -168,11 +161,11 @@ export default function EquipmentPage() {
 
   if (!canReadEquipment) {
     return (
-      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
-        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#2f2a26] p-7 text-center">
+      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#18181b] p-6 text-[#fafafa]">
+        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#27272a] p-7 text-center">
           <ShieldAlert className="mx-auto h-6 w-6 text-amber-400" />
           <h1 className="mt-3 text-sm font-semibold">Accès non autorisé</h1>
-          <p className="mt-2 text-xs text-[#aea69c]">La permission equipment.read est requise.</p>
+          <p className="mt-2 text-xs text-[#a1a1aa]">La permission equipment.read est requise.</p>
         </div>
       </main>
     );
@@ -200,11 +193,11 @@ export default function EquipmentPage() {
   }
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-[#f7f5f0]">
+    <main className="min-h-[calc(100vh-3.5rem)] bg-[#18181b] text-[#fafafa]">
       <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6">
-        <div className="flex flex-col justify-between gap-4 border-b border-[#3f3a36] pb-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col justify-between gap-4 border-b border-[#3f3f46] pb-4 sm:flex-row sm:items-center">
           <div>
-            <div className="mb-1 flex items-center gap-2 font-mono text-xs text-[#aea69c]">
+            <div className="mb-1 flex items-center gap-2 font-mono text-xs text-[#a1a1aa]">
               <Link
                 href="/"
                 className="hover:text-white"
@@ -232,7 +225,7 @@ export default function EquipmentPage() {
                   true,
                 )
               }
-              className="inline-flex items-center justify-center gap-2 rounded bg-[#f7f5f0] px-3.5 py-2 text-xs font-semibold text-[#2b2622]"
+              className="inline-flex items-center justify-center gap-2 rounded bg-[#fafafa] px-3.5 py-2 text-xs font-semibold text-[#18181b]"
             >
               <PackagePlus className="h-3.5 w-3.5" />
               Nouvel article

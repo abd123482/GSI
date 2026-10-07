@@ -53,17 +53,17 @@ export function UserAutocomplete({ value, onChange, placeholder = "Rechercher un
           onChange={handleInputChange}
           onFocus={() => setIsOpen(true)}
           placeholder={placeholder}
-          className={`w-full h-9 bg-[#2b2622] border ${error ? 'border-red-500' : 'border-[#3f3a36]'} rounded-[3px] pl-8 pr-3 text-sm focus:outline-none focus:border-[#aea69c] transition-colors text-[#f7f5f0] placeholder:text-[#5c544d]`}
+          className={`w-full h-9 bg-[#18181b] border ${error ? 'border-red-500' : 'border-[#3f3f46]'} rounded-[3px] pl-8 pr-3 text-sm focus:outline-none focus:border-[#a1a1aa] transition-colors text-[#fafafa] placeholder:text-[#5c544d]`}
         />
         {isUsersLoading && (
-          <Loader2 className="absolute right-2.5 w-3.5 h-3.5 animate-spin text-[#aea69c]" />
+          <Loader2 className="absolute right-2.5 w-3.5 h-3.5 animate-spin text-[#a1a1aa]" />
         )}
       </div>
       
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-[#2f2a26] border border-[#3f3a36] rounded-[3px] shadow-lg max-h-60 overflow-y-auto">
+        <div className="absolute z-50 w-full mt-1 bg-[#27272a] border border-[#3f3f46] rounded-[3px] shadow-lg max-h-60 overflow-y-auto">
           {users.length === 0 && !isUsersLoading ? (
-            <div className="px-3 py-2 text-xs text-[#aea69c] text-center">Aucun utilisateur trouvé</div>
+            <div className="px-3 py-2 text-xs text-[#a1a1aa] text-center">Aucun utilisateur trouvé</div>
           ) : (
             <div className="p-1 space-y-0.5">
               {users.map((user) => (
@@ -75,10 +75,10 @@ export function UserAutocomplete({ value, onChange, placeholder = "Rechercher un
                     setSearchTerm('');
                     setIsOpen(false);
                   }}
-                  className="w-full text-left px-2.5 py-1.5 rounded-[2px] text-xs transition-colors hover:bg-[#383330] flex flex-col items-start gap-0.5"
+                  className="w-full text-left px-2.5 py-1.5 rounded-[2px] text-xs transition-colors hover:bg-[#27272a] flex flex-col items-start gap-0.5"
                 >
-                  <span className="font-medium text-[#f7f5f0]">{user.userName || 'Sans nom'}</span>
-                  <span className="text-[10px] text-[#aea69c]">{user.userEmail}</span>
+                  <span className="font-medium text-[#fafafa]">{user.userName || 'Sans nom'}</span>
+                  <span className="text-[10px] text-[#a1a1aa]">{user.userEmail}</span>
                 </button>
               ))}
             </div>

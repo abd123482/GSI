@@ -25,7 +25,7 @@ export interface MovementFilter {
   sourceShelfId?: string;
   destinationShelfId?: string;
   equipmentQuantity?: number;
-  mouvementStatus?: string;
+  mouvementStatus?: boolean;
 }
 
 export function movementHeaderWhere(

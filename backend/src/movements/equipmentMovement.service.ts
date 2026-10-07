@@ -100,7 +100,7 @@ export class EquipmentMovementService {
 
   private async create(dto: unknown, userId: string | undefined, audit: Audit) {
     return this.run(async () => {
-      const { movementType, items } = createEquipmentMovementSchema.parse(dto);
+      const { movementType, items, happenedAt } = createEquipmentMovementSchema.parse(dto);
       const createdByUserId = userId ? uuid.parse(userId) : null;
 
       const equipmentIds = unique(items.map(i => i.equipmentId));
@@ -256,10 +256,42 @@ export class EquipmentMovementService {
             throw new ConflictException('Serial number creation was incomplete');
         }
 
+        if (movementType === 'TRANSFER') {
+          await tx.mouvement.create({
+            data: {
+              mouvementStatus: true,
+              createdByUserId, happenedAt: happenedAt ? new Date(happenedAt) : undefined, origin: audit.origin === 'USER', inventoryId: audit.inventoryId, reason: audit.reason,
+              items: {
+                createMany: {
+                  data: resolved.map(i => ({
+                    equipmentId: i.equipmentId, sourceShelfId: i.sourceShelfId ?? null, destinationShelfId: null, serialNumberId: i.serialNumberId, equipmentQuantity: i.movementQuantity, equipmentTypeSnapshot: equipmentById.get(i.equipmentId)!.hasSerialNumber ? 'SERIALIZED' : 'STANDARD',
+                  })),
+                },
+              },
+            },
+            include: movementInclude,
+          });
+          return tx.mouvement.create({
+            data: {
+              mouvementStatus: false,
+              createdByUserId, happenedAt: happenedAt ? new Date(happenedAt) : undefined, origin: audit.origin === 'USER', inventoryId: audit.inventoryId, reason: audit.reason,
+              items: {
+                createMany: {
+                  data: resolved.map(i => ({
+                    equipmentId: i.equipmentId, sourceShelfId: null, destinationShelfId: i.destinationShelfId ?? null, serialNumberId: i.serialNumberId, equipmentQuantity: i.movementQuantity, equipmentTypeSnapshot: equipmentById.get(i.equipmentId)!.hasSerialNumber ? 'SERIALIZED' : 'STANDARD',
+                  })),
+                },
+              },
+            },
+            include: movementInclude,
+          });
+        }
+
         return tx.mouvement.create({
           data: {
-            mouvementStatus: movementType,
+            mouvementStatus: movementType === 'OUT',
             createdByUserId,
+            happenedAt: happenedAt ? new Date(happenedAt) : undefined,
             origin: audit.origin === 'USER',
             inventoryId: audit.inventoryId,
             reason: audit.reason,
@@ -303,7 +335,7 @@ export class EquipmentMovementService {
       };
 
       const where: Prisma.MouvementWhereInput = {
-        ...(f.movementType && { mouvementStatus: f.movementType }),
+        ...(f.movementType && f.movementType !== 'TRANSFER' && { mouvementStatus: f.movementType === 'OUT' }),
         ...(f.origin && { origin: f.origin === 'USER' }),
         ...(f.inventoryId && { inventoryId: f.inventoryId }),
         ...(Object.keys(itemWhere).length && { items: { some: itemWhere } }),

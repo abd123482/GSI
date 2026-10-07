@@ -7,11 +7,13 @@ import { Layers, Loader2, Plus, ShieldAlert, ShieldCheck } from 'lucide-react';
 
 import { useShelves } from '@/hooks/use-shelves';
 import { usePermissions } from '@/hooks/use-permissions';
-import { CreateShelfModal } from '@/components/shelf/CreateShelfModal';
-import { DeleteShelfModal } from '@/components/shelf/DeleteShelfModal';
-import { ShelfDetailModal } from '@/components/shelf/ShelfDetailModal';
+import dynamic from 'next/dynamic';
 import { ShelfListTable } from '@/components/shelf/ShelfListTable';
-import { UpdateShelfModal } from '@/components/shelf/UpdateShelfModal';
+
+const CreateShelfModal = dynamic(() => import('@/components/shelf/CreateShelfModal').then(m => m.CreateShelfModal));
+const DeleteShelfModal = dynamic(() => import('@/components/shelf/DeleteShelfModal').then(m => m.DeleteShelfModal));
+const ShelfDetailModal = dynamic(() => import('@/components/shelf/ShelfDetailModal').then(m => m.ShelfDetailModal));
+const UpdateShelfModal = dynamic(() => import('@/components/shelf/UpdateShelfModal').then(m => m.UpdateShelfModal));
 import type { Shelf } from '@/types/shelf';
 
 export default function ShelvesPage() {
@@ -41,16 +43,16 @@ export default function ShelvesPage() {
   const { canUpdateShelf, canDeleteShelf, canReadShelf, isLoading: permissionsLoading } = usePermissions();
 
   if (!isLoaded || permissionsLoading) {
-    return <main className="flex min-h-screen items-center justify-center bg-[#2b2622] text-[#f7f5f0]"><div className="flex items-center gap-2 text-xs text-[#aea69c]"><Loader2 className="h-4 w-4 animate-spin" />Chargement des emplacements...</div></main>;
+    return <main className="flex min-h-screen items-center justify-center bg-[#18181b] text-[#fafafa]"><div className="flex items-center gap-2 text-xs text-[#a1a1aa]"><Loader2 className="h-4 w-4 animate-spin" />Chargement des emplacements...</div></main>;
   }
 
   if (!isSignedIn) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
-        <div className="w-full max-w-md space-y-4 rounded-lg border border-[#3f3a36] bg-[#383330] p-8 text-center">
+      <main className="flex min-h-screen items-center justify-center bg-[#18181b] p-6 text-[#fafafa]">
+        <div className="w-full max-w-md space-y-4 rounded-lg border border-[#3f3f46] bg-[#27272a] p-8 text-center">
           <Layers className="mx-auto h-8 w-8" />
-          <div><h1 className="text-base font-semibold">Connexion requise</h1><p className="mt-1 text-xs text-[#c9c0ad]">Connectez-vous pour accéder aux emplacements.</p></div>
-          <SignInButton mode="modal"><button type="button" className="w-full rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622]">Se connecter</button></SignInButton>
+          <div><h1 className="text-base font-semibold">Connexion requise</h1><p className="mt-1 text-xs text-[#d4d4d8]">Connectez-vous pour accéder aux emplacements.</p></div>
+          <SignInButton mode="modal"><button type="button" className="w-full rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b]">Se connecter</button></SignInButton>
         </div>
       </main>
     );
@@ -58,25 +60,25 @@ export default function ShelvesPage() {
 
   if (!canReadShelf) {
     return (
-      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
-        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#2f2a26] p-7 text-center">
+      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#18181b] p-6 text-[#fafafa]">
+        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#27272a] p-7 text-center">
           <ShieldAlert className="mx-auto h-6 w-6 text-amber-400" />
           <h1 className="mt-3 text-sm font-semibold">Accès non autorisé</h1>
-          <p className="mt-2 text-xs text-[#aea69c]">La permission shelf.read est requise.</p>
+          <p className="mt-2 text-xs text-[#a1a1aa]">La permission shelf.read est requise.</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-[#f7f5f0]">
+    <main className="min-h-[calc(100vh-3.5rem)] bg-[#18181b] text-[#fafafa]">
       <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6">
-        <div className="flex flex-col justify-between gap-4 border-b border-[#3f3a36] pb-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col justify-between gap-4 border-b border-[#3f3f46] pb-4 sm:flex-row sm:items-center">
           <div>
-            <div className="mb-1 flex items-center gap-2 font-mono text-xs text-[#aea69c]"><Link href="/" className="hover:text-white">somepharm</Link><span>/</span><span className="text-white">emplacements</span></div>
+            <div className="mb-1 flex items-center gap-2 font-mono text-xs text-[#a1a1aa]"><Link href="/" className="hover:text-white">somepharm</Link><span>/</span><span className="text-white">emplacements</span></div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-normal tracking-tight">Gestion des Emplacements</h1>
-              <span className="inline-flex items-center gap-1.5 rounded border border-[#3f3a36] bg-[#383330] px-2 py-1 text-[10px] text-[#c9c0ad]">
+              <span className="inline-flex items-center gap-1.5 rounded border border-[#3f3f46] bg-[#27272a] px-2 py-1 text-[10px] text-[#d4d4d8]">
                 {canCreateShelf ? <><ShieldCheck className="h-3 w-3 text-emerald-300" />Création autorisée</> : <><ShieldAlert className="h-3 w-3 text-amber-300" />Lecture seule</>}
               </span>
             </div>

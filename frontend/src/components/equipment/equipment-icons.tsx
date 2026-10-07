@@ -76,11 +76,11 @@ const EQUIPMENT_THEMES: EquipmentVisualTheme[] = [
   },
   {
     icon: Wrench,
-    bg: 'bg-[#2b2622]',
-    text: 'text-[#dad2c1]',
-    border: 'border-[#3f3a36]',
-    badgeBg: 'bg-[#2b2622]',
-    badgeText: 'text-[#dad2c1]',
+    bg: 'bg-[#18181b]',
+    text: 'text-[#f4f4f5]',
+    border: 'border-[#3f3f46]',
+    badgeBg: 'bg-[#18181b]',
+    badgeText: 'text-[#f4f4f5]',
     label: 'Outillage & Maintenance',
   },
 ];

@@ -154,7 +154,7 @@ export default function CreateInventoryPage() {
 
   if (permissions.isLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#2b2622] text-white">
+      <main className="flex min-h-screen items-center justify-center bg-[#18181b] text-white">
         <Loader2 className="h-5 w-5 animate-spin" />
       </main>
     );
@@ -162,11 +162,11 @@ export default function CreateInventoryPage() {
 
   if (!permissions.canCreateInventory) {
     return (
-      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#2b2622] p-6 text-[#f7f5f0]">
-        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#2f2a26] p-7 text-center">
+      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-[#18181b] p-6 text-[#fafafa]">
+        <div className="w-full max-w-lg rounded border border-amber-500/25 bg-[#27272a] p-7 text-center">
           <ShieldAlert className="mx-auto h-6 w-6 text-amber-400" />
           <h1 className="mt-3 text-sm font-semibold">Accès non autorisé</h1>
-          <p className="mt-2 text-xs text-[#aea69c]">La permission inventory.create est requise.</p>
+          <p className="mt-2 text-xs text-[#a1a1aa]">La permission inventory.create est requise.</p>
         </div>
       </main>
     );
@@ -326,12 +326,12 @@ export default function CreateInventoryPage() {
       : selectedShelfIds.length;
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] bg-[#2b2622] text-white">
+    <main className="min-h-[calc(100vh-3.5rem)] bg-[#18181b] text-white">
       <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-6">
-        <div className="flex items-center gap-3 border-b border-[#3f3a36] pb-4">
+        <div className="flex items-center gap-3 border-b border-[#3f3f46] pb-4">
           <Link
             href="/inventory"
-            className="rounded border border-[#3f3a36] p-2 text-[#aea69c] hover:text-white"
+            className="rounded border border-[#3f3f46] p-2 text-[#a1a1aa] hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
@@ -341,7 +341,7 @@ export default function CreateInventoryPage() {
               Nouvel inventaire
             </h1>
 
-            <p className="mt-1 text-xs text-[#aea69c]">
+            <p className="mt-1 text-xs text-[#a1a1aa]">
               3 contrôleurs sont préassignés. C3 ne reçoit une tâche que si C1 et C2 diffèrent sur une unité.
             </p>
           </div>
@@ -353,7 +353,7 @@ export default function CreateInventoryPage() {
           </div>
         )}
 
-        <section className="space-y-4 rounded-lg border border-[#3f3a36] bg-[#2f2a26] p-5">
+        <section className="space-y-4 rounded-lg border border-[#3f3f46] bg-[#27272a] p-5">
           <label className="block space-y-1.5">
             <span className="text-xs font-semibold">
               Titre *
@@ -370,7 +370,7 @@ export default function CreateInventoryPage() {
                 )
               }
               placeholder="Ex: Inventaire trimestriel atelier"
-              className="h-10 w-full rounded border border-[#3f3a36] bg-[#2b2622] px-3 text-xs outline-none focus:border-white/40"
+              className="h-10 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs outline-none focus:border-white/40"
             />
           </label>
 
@@ -386,8 +386,8 @@ export default function CreateInventoryPage() {
               className={`rounded border p-4 text-left ${
                 typeInventory ===
                 'ByEquipment'
-                  ? 'border-[#dad2c1] bg-[#f7f5f0] text-[#2b2622]'
-                  : 'border-[#3f3a36] bg-[#2b2622]'
+                  ? 'border-[#f4f4f5] bg-[#fafafa] text-[#18181b]'
+                  : 'border-[#3f3f46] bg-[#18181b]'
               }`}
             >
               <p className="text-xs font-semibold">
@@ -410,8 +410,8 @@ export default function CreateInventoryPage() {
               className={`rounded border p-4 text-left ${
                 typeInventory ===
                 'ByShelf'
-                  ? 'border-[#dad2c1] bg-[#f7f5f0] text-[#2b2622]'
-                  : 'border-[#3f3a36] bg-[#2b2622]'
+                  ? 'border-[#f4f4f5] bg-[#fafafa] text-[#18181b]'
+                  : 'border-[#3f3f46] bg-[#18181b]'
               }`}
             >
               <p className="text-xs font-semibold">
@@ -425,13 +425,13 @@ export default function CreateInventoryPage() {
           </div>
         </section>
 
-        <section className="space-y-4 rounded-lg border border-[#3f3a36] bg-[#2f2a26] p-5">
+        <section className="space-y-4 rounded-lg border border-[#3f3f46] bg-[#27272a] p-5">
           <div>
             <h2 className="text-sm font-semibold">
               Contrôleurs
             </h2>
 
-            <p className="mt-1 text-[10px] text-[#aea69c]">
+            <p className="mt-1 text-[10px] text-[#a1a1aa]">
               Ils doivent être trois utilisateurs distincts.
             </p>
           </div>
@@ -481,20 +481,20 @@ export default function CreateInventoryPage() {
           )}
         </section>
 
-        <section className="space-y-4 rounded-lg border border-[#3f3a36] bg-[#2f2a26] p-5">
+        <section className="space-y-4 rounded-lg border border-[#3f3f46] bg-[#27272a] p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-sm font-semibold">
                 Périmètre
               </h2>
 
-              <p className="mt-1 text-[10px] text-[#aea69c]">
+              <p className="mt-1 text-[10px] text-[#a1a1aa]">
                 {selectedCount} sélection(s)
               </p>
             </div>
 
             <div className="relative w-full max-w-sm">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8c827a]" />
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717a]" />
 
               <input
                 value={search}
@@ -507,16 +507,16 @@ export default function CreateInventoryPage() {
                   )
                 }
                 placeholder="Rechercher..."
-                className="h-9 w-full rounded border border-[#3f3a36] bg-[#2b2622] pl-9 pr-3 text-xs"
+                className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] pl-9 pr-3 text-xs"
               />
             </div>
           </div>
 
-          <div className="max-h-80 overflow-y-auto rounded border border-[#3f3a36]">
+          <div className="max-h-80 overflow-y-auto rounded border border-[#3f3f46]">
             {typeInventory ===
             'ByEquipment' ? (
               filteredEquipments.length ? (
-                <div className="divide-y divide-[#3f3a36]">
+                <div className="divide-y divide-[#3f3f46]">
                   {filteredEquipments.map(
                     (
                       equipment,
@@ -537,7 +537,7 @@ export default function CreateInventoryPage() {
                               equipment.equipmentId,
                             )
                           }
-                          className="group flex w-full flex-col px-4 py-3 text-left hover:bg-[#383330]/45"
+                          className="group flex w-full flex-col px-4 py-3 text-left hover:bg-[#27272a]/45"
                         >
                           <div className="flex w-full items-center justify-between gap-3">
                             <div>
@@ -546,7 +546,7 @@ export default function CreateInventoryPage() {
                                   'Article'}
                               </p>
 
-                              <p className="mt-0.5 text-[9px] text-[#8c827a]">
+                              <p className="mt-0.5 text-[9px] text-[#71717a]">
                                 {equipment.hasSerialNumber
                                   ? 'Sérialisé'
                                   : 'Standard'}
@@ -565,7 +565,7 @@ export default function CreateInventoryPage() {
                           </div>
 
                           {equipment.hasSerialNumber && (
-                            <div className="hidden w-full mt-3 cursor-default rounded-md border border-[#3f3a36] bg-[#2f2a26] shadow-xl group-hover:block" onClick={(e) => e.stopPropagation()}>
+                            <div className="hidden w-full mt-3 cursor-default rounded-md border border-[#3f3f46] bg-[#27272a] shadow-xl group-hover:block" onClick={(e) => e.stopPropagation()}>
                               <SerialNumberTooltip equipmentId={equipment.equipmentId} />
                             </div>
                           )}
@@ -578,7 +578,7 @@ export default function CreateInventoryPage() {
                 <Empty />
               )
             ) : filteredShelves.length ? (
-              <div className="divide-y divide-[#3f3a36]">
+              <div className="divide-y divide-[#3f3f46]">
                 {filteredShelves.map(
                   (shelf) => {
                     const checked =
@@ -597,7 +597,7 @@ export default function CreateInventoryPage() {
                             shelf.shelfId,
                           )
                         }
-                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[#383330]/45"
+                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[#27272a]/45"
                       >
                         <div>
                           <div className="flex items-center gap-2">
@@ -616,7 +616,7 @@ export default function CreateInventoryPage() {
                             </span>
                           </div>
 
-                          <p className="mt-0.5 text-[9px] text-[#8c827a]">
+                          <p className="mt-0.5 text-[9px] text-[#71717a]">
                             {shelf.stock
                               ?.stockName ??
                               'Stock'}
@@ -647,7 +647,7 @@ export default function CreateInventoryPage() {
         <div className="flex justify-end gap-2">
           <Link
             href="/inventory"
-            className="rounded border border-[#3f3a36] px-4 py-2 text-xs"
+            className="rounded border border-[#3f3f46] px-4 py-2 text-xs"
           >
             Annuler
           </Link>
@@ -661,7 +661,7 @@ export default function CreateInventoryPage() {
               createMutation.isPending ||
               !permissions.canCreateInventory
             }
-            className="inline-flex items-center gap-2 rounded bg-[#f7f5f0] px-4 py-2 text-xs font-semibold text-[#2b2622] disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b] disabled:opacity-40"
           >
             {createMutation.isPending && (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -698,7 +698,7 @@ function SelectionBox({
 
 function Empty() {
   return (
-    <div className="px-4 py-10 text-center text-xs text-[#8c827a]">
+    <div className="px-4 py-10 text-center text-xs text-[#71717a]">
       Aucun élément disponible.
     </div>
   );

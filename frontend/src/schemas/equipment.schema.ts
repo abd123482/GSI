@@ -7,14 +7,14 @@ export const createDirectEquipmentSchema = z.object({
     .string()
     .trim()
     .min(1, "Le nom de l'article est requis")
-    .max(200, "Le nom ne peut pas dépasser 200 caractères"),
+    .max(200, "Le nom ne peut pas dÃ©passer 200 caractÃ¨res"),
 
   hasSerialNumber: z.boolean(),
 
   minEquipmentQuantity: z
     .number()
-    .int("La quantité minimale doit être un entier")
-    .min(0, "La quantité minimale ne peut pas être négative"),
+    .int("La quantitÃ© minimale doit Ãªtre un entier")
+    .min(0, "La quantitÃ© minimale ne peut pas Ãªtre nÃ©gative"),
 
   equipmentStatus: equipmentStatusSchema,
 });
@@ -29,13 +29,13 @@ export const updateEquipmentSchema = z
       .string()
       .trim()
       .min(1, "Le nom de l'article est requis")
-      .max(200, "Le nom ne peut pas dépasser 200 caractères")
+      .max(200, "Le nom ne peut pas dÃ©passer 200 caractÃ¨res")
       .optional(),
 
     minEquipmentQuantity: z
       .number()
-      .int("La quantité minimale doit être un entier")
-      .min(0, "La quantité minimale ne peut pas être négative")
+      .int("La quantitÃ© minimale doit Ãªtre un entier")
+      .min(0, "La quantitÃ© minimale ne peut pas Ãªtre nÃ©gative")
       .optional(),
 
     equipmentStatus: equipmentStatusSchema.optional(),
@@ -52,7 +52,7 @@ export const updateEquipmentSchema = z
     if (!editable) {
       ctx.addIssue({
         code: "custom",
-        message: "Aucune modification à enregistrer.",
+        message: "Aucune modification Ã  enregistrer.",
       });
     }
   });
@@ -66,10 +66,9 @@ export const updateSerialNumberSchema = z.object({
     .string()
     .trim()
     .min(1, "Le statut est requis")
-    .max(100, "Le statut ne peut pas dépasser 100 caractères"),
+    .max(100, "Le statut ne peut pas dÃ©passer 100 caractÃ¨res"),
 });
 
 export type UpdateSerialNumberFormValues = z.infer<
   typeof updateSerialNumberSchema
 >;
-
