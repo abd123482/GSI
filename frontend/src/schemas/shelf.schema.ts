@@ -6,6 +6,11 @@ const requiredStockIdSchema = z
   .min(1, 'Vous devez sélectionner un stock actif')
   .uuid('Identifiant de stock invalide');
 
+const shelfStatusSchema = z.preprocess(
+  (val) => (val === true || val === 'true' ? true : val === false || val === 'false' ? false : val),
+  z.boolean(),
+) as z.ZodType<boolean, z.ZodTypeDef, boolean>;
+
 export const createShelfSchema = z.object({
   shelfName: z
     .string()
@@ -13,7 +18,7 @@ export const createShelfSchema = z.object({
     .min(1, 'Le nom de l’emplacement est obligatoire')
     .max(100, 'Le nom ne peut pas dépasser 100 caractères'),
   stockId: requiredStockIdSchema,
-  status: z.boolean(),
+  status: shelfStatusSchema,
 });
 
 export type CreateShelfFormValues = z.infer<typeof createShelfSchema>;
@@ -27,7 +32,7 @@ export const updateShelfSchema = z
       .max(100, 'Le nom ne peut pas dépasser 100 caractères')
       .optional(),
     stockId: requiredStockIdSchema.optional(),
-    status: z.boolean().optional(),
+    status: shelfStatusSchema.optional(),
   })
   .refine(
     (data) => data.shelfName !== undefined || data.stockId !== undefined || data.status !== undefined,

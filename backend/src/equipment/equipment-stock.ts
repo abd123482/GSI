@@ -19,11 +19,11 @@ export function buildShelfMatchesCte(shelfId: string, filters: any) {
 
   return Prisma.sql`
     WITH ShelfStock AS (
-      SELECT [equipmentId], SUM(CASE WHEN [destinationShelfId] = ${shelfId} THEN [equipmentQuantity] ELSE 0 END) - SUM(CASE WHEN [sourceShelfId] = ${shelfId} THEN [equipmentQuantity] ELSE 0 END) as qty
+      SELECT [equipmentId], SUM(CASE WHEN [destinationShelfId] = CAST(${shelfId} AS uniqueidentifier) THEN [equipmentQuantity] ELSE 0 END) - SUM(CASE WHEN [sourceShelfId] = CAST(${shelfId} AS uniqueidentifier) THEN [equipmentQuantity] ELSE 0 END) as qty
       FROM [dbo].[MovementEquipment]
-      WHERE [destinationShelfId] = ${shelfId} OR [sourceShelfId] = ${shelfId}
+      WHERE [destinationShelfId] = CAST(${shelfId} AS uniqueidentifier) OR [sourceShelfId] = CAST(${shelfId} AS uniqueidentifier)
       GROUP BY [equipmentId]
-      HAVING SUM(CASE WHEN [destinationShelfId] = ${shelfId} THEN [equipmentQuantity] ELSE 0 END) - SUM(CASE WHEN [sourceShelfId] = ${shelfId} THEN [equipmentQuantity] ELSE 0 END) > 0
+      HAVING SUM(CASE WHEN [destinationShelfId] = CAST(${shelfId} AS uniqueidentifier) THEN [equipmentQuantity] ELSE 0 END) - SUM(CASE WHEN [sourceShelfId] = CAST(${shelfId} AS uniqueidentifier) THEN [equipmentQuantity] ELSE 0 END) > 0
     ),
     Matches AS (
       SELECT e.* 

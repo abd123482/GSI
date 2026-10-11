@@ -23,8 +23,12 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useCreateMovement } from "@/hooks/use-movements";
 
 import { MovementService } from "@/services/movement.service";
+import { StockService } from "@/services/stock.service";
 
 import { getErrorMessage } from "@/lib/error-message";
+
+import { CreateEquipmentModal } from "@/components/equipment/CreateEquipmentModal";
+import { StockShelfSelect, type StockShelfItem } from "./StockShelfSelect";
 
 import type { Equipment, SerialNumber } from "@/types/equipment";
 
@@ -59,7 +63,7 @@ export function CreateMovementModal({
 
   const [selectedSerialId, setSelectedSerialId] = useState("");
 
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState<number | "">(1);
 
   const [sourceShelfId, setSourceShelfId] = useState("");
 
@@ -68,6 +72,10 @@ export function CreateMovementModal({
   const [newSerialCode, setNewSerialCode] = useState("");
 
   const [serialEntryMode, setSerialEntryMode] = useState<"NEW" | "EXISTING">("NEW");
+
+  const [isCreateEquipmentOpen, setIsCreateEquipmentOpen] = useState(false);
+
+  const [draftEquipments, setDraftEquipments] = useState<Equipment[]>([]);
 
   const [lines, setLines] = useState<MovementDraftLine[]>([]);
 
@@ -93,12 +101,22 @@ export function CreateMovementModal({
     staleTime: 30_000,
   });
 
+  const stocksQuery = useQuery({
+    queryKey: ["movement-create", "active-stocks"],
+
+    queryFn: () => StockService.getActiveStocks(api, { page: 1, limit: 100 }),
+
+    enabled: isOpen,
+
+    staleTime: 30_000,
+  });
+
   const selectedEquipment = useMemo(
     () =>
-      (equipmentQuery.data ?? []).find(
+      [...(equipmentQuery.data ?? []), ...draftEquipments].find(
         (equipment) => equipment.equipmentId === selectedEquipmentId,
       ) ?? null,
-    [equipmentQuery.data, selectedEquipmentId],
+    [equipmentQuery.data, draftEquipments, selectedEquipmentId],
   );
 
   const allocationsQuery = useQuery({
@@ -149,7 +167,7 @@ export function CreateMovementModal({
       new Set(
         allocations
           .filter((allocation) => allocation.equipmentQuantity > 0)
-          .map((allocation) => allocation.shelfId),
+          .map((allocation) => allocation.shelfId.toLowerCase().trim()),
       ),
     [allocations],
   );
@@ -164,9 +182,9 @@ export function CreateMovementModal({
     }
 
     return allocations.filter(
-      (allocation) => allocation.equipmentQuantity >= quantity,
+      (allocation) => allocation.equipmentQuantity >= Number(quantity),
     );
-  }, [allocations, movementType, quantity, selectedEquipment, sourceShelfId]);
+  }, [allocations, movementType, quantity, selectedEquipment]);
 
   const serialCandidates = useMemo(() => {
     if (!selectedEquipment?.hasSerialNumber) {
@@ -178,7 +196,7 @@ export function CreateMovementModal({
     }
 
     return serials.filter((serial) => Boolean(serial.shelfId));
-  }, [movementType, selectedEquipment, serials, sourceShelfId]);
+  }, [movementType, selectedEquipment, serials]);
 
   const destinationCandidates = useMemo(() => {
     if (movementType === "OUT") {
@@ -189,17 +207,58 @@ export function CreateMovementModal({
       return activeShelves;
     }
 
+    const normSource = (sourceShelfId ?? "").toLowerCase().trim();
     return activeShelves.filter(
       (shelf) =>
-        shelf.shelfId !== sourceShelfId &&
-        !allocatedShelfIds.has(shelf.shelfId),
+        shelf.shelfId.toLowerCase().trim() !== normSource &&
+        !allocatedShelfIds.has(shelf.shelfId.toLowerCase().trim()),
     );
   }, [activeShelves, allocatedShelfIds, movementType, sourceShelfId]);
+
+  const sourceShelfItems = useMemo<StockShelfItem[]>(() => {
+    return sourceCandidates.map((allocation) => {
+      const normAllocShelfId = allocation.shelfId.toLowerCase().trim();
+      const shelfDetail = activeShelves.find(
+        (s) => s.shelfId.toLowerCase().trim() === normAllocShelfId,
+      );
+      const stockId =
+        shelfDetail?.stock?.stockId ??
+        shelfDetail?.stockId ??
+        allocation.shelf?.stockId ??
+        "default-stock";
+      const stockName =
+        shelfDetail?.stock?.stockName ??
+        stocksQuery.data?.stocks?.find(
+          (st) =>
+            st.stockId.toLowerCase().trim() ===
+            (shelfDetail?.stockId ?? allocation.shelf?.stockId ?? '').toLowerCase().trim(),
+        )?.stockName ??
+        "Stock non spécifié";
+      const shelfName =
+        allocation.shelf?.shelfName ?? shelfDetail?.shelfName ?? "Emplacement";
+      return {
+        shelfId: allocation.shelfId,
+        shelfName,
+        stockId,
+        stockName,
+        availableQuantity: allocation.equipmentQuantity,
+      };
+    });
+  }, [sourceCandidates, activeShelves]);
+
+  const destinationShelfItems = useMemo<StockShelfItem[]>(() => {
+    return destinationCandidates.map((shelf) => ({
+      shelfId: shelf.shelfId,
+      shelfName: shelf.shelfName ?? "Emplacement",
+      stockId: shelf.stock?.stockId ?? shelf.stockId ?? "default-stock",
+      stockName: shelf.stock?.stockName ?? "Stock",
+    }));
+  }, [destinationCandidates]);
 
   const routeDestinationAllowedForCurrentEquipment =
     movementType !== "TRANSFER" ||
     !destinationShelfId ||
-    destinationShelfId !== sourceShelfId;
+    destinationShelfId.toLowerCase().trim() !== (sourceShelfId ?? "").toLowerCase().trim();
 
   useEffect(() => {
     if (!isOpen) {
@@ -421,6 +480,23 @@ export function CreateMovementModal({
       return;
     }
 
+    let draftNewEquipment: {
+      equipmentName: string;
+      hasSerialNumber: boolean;
+      minEquipmentQuantity: number;
+      equipmentStatus: boolean;
+    } | undefined;
+    let eqId: string | undefined = selectedEquipment.equipmentId;
+    if (eqId.startsWith("draft-")) {
+      draftNewEquipment = {
+        equipmentName: selectedEquipment.equipmentName!,
+        hasSerialNumber: selectedEquipment.hasSerialNumber,
+        minEquipmentQuantity: selectedEquipment.minequipmentQuantity,
+        equipmentStatus: selectedEquipment.equipmentStatus
+      };
+      eqId = undefined;
+    }
+
     setLines((current) => [
       ...current,
       {
@@ -429,11 +505,12 @@ export function CreateMovementModal({
         sourceShelfId: movementType === "IN" ? null : sourceShelfId,
         destinationShelfId: movementType === "OUT" ? null : destinationShelfId,
         clientId: clientId(),
-        equipmentId: selectedEquipment.equipmentId,
+        equipmentId: eqId,
+        newEquipment: draftNewEquipment,
         equipmentName: selectedEquipment.equipmentName ?? "Article",
         hasSerialNumber: serialized,
-        serialNumberId: serialEntryMode === "NEW" && movementType === "IN" ? null : (selectedSerial?.serialNumberId ?? null),
-        serialNumberCode: serialEntryMode === "NEW" && movementType === "IN" ? newSerialCode.trim() : (selectedSerial?.serialNumberCode ?? null),
+        serialNumberId: serialized ? (serialEntryMode === "NEW" && movementType === "IN" ? null : (selectedSerial?.serialNumberId ?? null)) : null,
+        serialNumberCode: serialized ? (serialEntryMode === "NEW" && movementType === "IN" ? newSerialCode.trim() : (selectedSerial?.serialNumberCode ?? null)) : null,
         movementQuantity: lineQuantity,
       },
     ]);
@@ -467,8 +544,9 @@ export function CreateMovementModal({
 
     let payloadItems: CreateMovementItemInput[] = lines.map((line) => ({
       equipmentId: line.equipmentId,
-      serialNumberId: line.serialNumberId,
-      serialNumberCode: line.serialNumberId ? undefined : (line.serialNumberCode ?? undefined),
+      newEquipment: line.newEquipment,
+      serialNumberId: line.hasSerialNumber ? line.serialNumberId : undefined,
+      serialNumberCode: line.hasSerialNumber ? (line.serialNumberId ? undefined : (line.serialNumberCode ?? undefined)) : undefined,
       movementQuantity: line.movementQuantity,
       sourceShelfId: movementType === "IN" ? null : line.sourceShelfId,
       destinationShelfId:
@@ -551,11 +629,29 @@ export function CreateMovementModal({
           }
         }
 
+        let singleEqId: string | undefined = selectedEquipment.equipmentId;
+        let singleNewEq: {
+          equipmentName: string;
+          hasSerialNumber: boolean;
+          minEquipmentQuantity: number;
+          equipmentStatus: boolean;
+        } | undefined;
+        if (singleEqId.startsWith("draft-")) {
+          singleNewEq = {
+            equipmentName: selectedEquipment.equipmentName!,
+            hasSerialNumber: selectedEquipment.hasSerialNumber,
+            minEquipmentQuantity: selectedEquipment.minequipmentQuantity,
+            equipmentStatus: selectedEquipment.equipmentStatus
+          };
+          singleEqId = undefined;
+        }
+
         payloadItems = [
           {
-            equipmentId: selectedEquipment.equipmentId,
-            serialNumberId: serialEntryMode === "NEW" && movementType === "IN" ? null : (selectedSerial?.serialNumberId ?? null),
-            serialNumberCode: serialEntryMode === "NEW" && movementType === "IN" ? newSerialCode.trim() : undefined,
+            equipmentId: singleEqId,
+            newEquipment: singleNewEq,
+            serialNumberId: serialized ? (serialEntryMode === "NEW" && movementType === "IN" ? null : (selectedSerial?.serialNumberId ?? null)) : null,
+            serialNumberCode: serialized ? (serialEntryMode === "NEW" && movementType === "IN" ? newSerialCode.trim() : undefined) : undefined,
             movementQuantity: lineQuantity,
             sourceShelfId: movementType === "IN" ? null : sourceShelfId,
             destinationShelfId:
@@ -671,10 +767,21 @@ export function CreateMovementModal({
             </div>
 
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              <label className="space-y-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
-                  Article ACTIVE
-                </span>
+              <label className="space-y-1.5 flex flex-col justify-end">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
+                    Article ACTIVE
+                  </span>
+                  {movementType === "IN" && (
+                    <button
+                      type="button"
+                      onClick={() => setIsCreateEquipmentOpen(true)}
+                      className="text-[10px] font-semibold text-emerald-400 hover:text-emerald-300"
+                    >
+                      + Nouvel article
+                    </button>
+                  )}
+                </div>
 
                 <select
                   value={selectedEquipmentId}
@@ -686,7 +793,7 @@ export function CreateMovementModal({
                 >
                   <option value="">Sélectionnez un article</option>
 
-                  {(equipmentQuery.data ?? []).map((equipment) => (
+                  {[...(equipmentQuery.data ?? []), ...draftEquipments].map((equipment) => (
                     <option
                       key={equipment.equipmentId}
                       value={equipment.equipmentId}
@@ -722,9 +829,14 @@ export function CreateMovementModal({
                     min={1}
                     step={1}
                     value={quantity}
-                    onChange={(event) =>
-                      setQuantity(Math.max(1, Number(event.target.value) || 1))
-                    }
+                    onChange={(event) => {
+                      const val = event.target.value;
+                      if (val === "") {
+                        setQuantity("");
+                      } else {
+                        setQuantity(Math.max(1, Number(val)));
+                      }
+                    }}
                     disabled={busy}
                     className="h-10 w-full rounded border border-[#3f3f46] bg-[#1f1b18] px-3 font-mono text-xs"
                   />
@@ -817,8 +929,8 @@ export function CreateMovementModal({
             )}
 
             {movementType !== "IN" && (
-              <label className="block space-y-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
+              <div className="space-y-1.5">
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-white/45">
                   Source
                 </span>
 
@@ -827,35 +939,24 @@ export function CreateMovementModal({
                     {sourceName || "Sélectionnez d’abord un numéro de série"}
                   </div>
                 ) : (
-                  <select
+                  <StockShelfSelect
                     value={sourceShelfId}
-                    onChange={(event) => setSourceShelfId(event.target.value)}
+                    onChange={(shelfId) => setSourceShelfId(shelfId)}
+                    items={sourceShelfItems}
+                    allStocks={stocksQuery.data?.stocks}
                     disabled={
                       busy || !selectedEquipment || allocationsQuery.isLoading
                     }
-                    className="h-10 w-full rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-xs"
-                  >
-                    <option value="">
-                      Sélectionnez une source avec quantité suffisante
-                    </option>
-
-                    {sourceCandidates.map((allocation) => (
-                      <option
-                        key={allocation.equipmentShelfId}
-                        value={allocation.shelfId}
-                      >
-                        {allocation.shelf?.shelfName ?? "Emplacement"} —
-                        disponible: {allocation.equipmentQuantity}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Sélectionnez une source avec quantité suffisante"
+                    emptyMessage="Aucun emplacement source disponible avec quantité suffisante."
+                  />
                 )}
-              </label>
+              </div>
             )}
 
             {movementType !== "OUT" && (
-              <label className="block space-y-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
+              <div className="space-y-1.5">
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-white/45">
                   Destination ACTIVE
                 </span>
 
@@ -870,27 +971,21 @@ export function CreateMovementModal({
                     {destinationName || "Destination du trajet"}
                   </div>
                 ) : (
-                  <select
+                  <StockShelfSelect
                     value={destinationShelfId}
-                    onChange={(event) =>
-                      setDestinationShelfId(event.target.value)
+                    onChange={(shelfId) =>
+                      setDestinationShelfId(shelfId)
                     }
+                    items={destinationShelfItems}
+                    allStocks={stocksQuery.data?.stocks}
                     disabled={
                       busy ||
                       !selectedEquipment ||
                       (movementType === "TRANSFER" && !sourceShelfId)
                     }
-                    className="h-10 w-full rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-xs"
-                  >
-                    <option value="">Sélectionnez une destination</option>
-
-                    {destinationCandidates.map((shelf) => (
-                      <option key={shelf.shelfId} value={shelf.shelfId}>
-                        {shelf.shelfName ?? "Emplacement"} —{" "}
-                        {shelf.stock?.stockName ?? "Stock"}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Sélectionnez une destination"
+                    emptyMessage="Aucun emplacement destination éligible."
+                  />
                 )}
 
                 {movementType === "TRANSFER" && selectedEquipment && !false && (
@@ -909,7 +1004,7 @@ export function CreateMovementModal({
                       transfert.
                     </p>
                   )}
-              </label>
+              </div>
             )}
 
             <div className="flex justify-end">
@@ -1059,6 +1154,30 @@ export function CreateMovementModal({
           </div>
         </footer>
       </div>
+
+      {isCreateEquipmentOpen ? (
+        <CreateEquipmentModal
+          isOpen={isCreateEquipmentOpen}
+          onClose={() => setIsCreateEquipmentOpen(false)}
+          onSubmitClient={(newEq) => {
+            setIsCreateEquipmentOpen(false);
+            if (movementType !== "IN") return;
+            
+            const draftId = "draft-" + Math.random().toString(36).slice(2);
+            setDraftEquipments((prev) => [
+              ...prev,
+              {
+                equipmentId: draftId,
+                equipmentName: newEq.equipmentName,
+                hasSerialNumber: newEq.hasSerialNumber,
+                minequipmentQuantity: newEq.minEquipmentQuantity,
+                equipmentStatus: newEq.equipmentStatus,
+              } as Equipment,
+            ]);
+            setSelectedEquipmentId(draftId);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

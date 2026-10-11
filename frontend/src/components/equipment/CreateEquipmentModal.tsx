@@ -40,12 +40,14 @@ interface CreateEquipmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  onSubmitClient?: (data: CreateDirectEquipmentFormValues) => void;
 }
 
 export function CreateEquipmentModal({
   isOpen,
   onClose,
   onSuccess,
+  onSubmitClient,
 }: CreateEquipmentModalProps) {
   const {
     createEquipment,
@@ -124,6 +126,12 @@ export function CreateEquipmentModal({
   async function submit(
     values: CreateDirectEquipmentFormValues,
   ) {
+    if (onSubmitClient) {
+      onSubmitClient(values);
+      close();
+      return;
+    }
+
     setServerError(null);
 
     if (!canCreateEquipment) {
@@ -131,11 +139,7 @@ export function CreateEquipmentModal({
         "Permission 'equipment.create' requise.",
       );
       return;
-    }
-
-
-
-    try {
+    }    try {
       await createEquipment({
         equipmentName:
           values.equipmentName.trim(),

@@ -132,7 +132,7 @@ function UpdateShelfContent({ shelf, onClose, onSuccess }: UpdateShelfModalProps
 
           <label className="block space-y-1.5">
             <span className="text-xs font-semibold">Statut de l'emplacement</span>
-            <select {...register('status', { setValueAs: (v) => v === 'true' })} disabled={busy} className="h-10 w-full rounded-lg border border-[#3f3f46] bg-[#18181b] px-3 text-xs outline-none focus:border-white/50">
+            <select {...register('status', { setValueAs: (v) => v === true || v === 'true' })} disabled={busy} className="h-10 w-full rounded-lg border border-[#3f3f46] bg-[#18181b] px-3 text-xs outline-none focus:border-white/50">
               <option value="true">Actif (ACTIVE)</option>
               <option value="false">Inactif (INACTIVE)</option>
             </select>

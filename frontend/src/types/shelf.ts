@@ -50,3 +50,28 @@ export interface PaginatedShelfSerialNumbersResponse {
   currentPage: number;
   limit: number;
 }
+
+export interface ShelfEquipmentSerial {
+  serialNumberId: string;
+  serialNumberCode: string;
+  serialNumberStatus: string;
+}
+
+export interface ShelfEquipmentItem {
+  equipmentId: string;
+  equipmentName: string;
+  hasSerialNumber: boolean;
+  equipmentStatus: string;
+  quantity: number;
+  serials: ShelfEquipmentSerial[];
+}
+
+export interface PaginatedShelfEquipmentsResponse {
+  equipments: ShelfEquipmentItem[];
+  totalEquipments: number;
+  totalQuantity: number;
+  totalPages: number;
+  currentPage: number;
+  limit: number;
+}
+

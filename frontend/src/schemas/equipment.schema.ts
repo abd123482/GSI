@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-export const equipmentStatusSchema = z.boolean();
+export const equipmentStatusSchema = z.any().transform(
+  (val) => val === "true" || val === true
+) as unknown as z.ZodType<boolean, z.ZodTypeDef, boolean>;
 
 export const createDirectEquipmentSchema = z.object({
   equipmentName: z

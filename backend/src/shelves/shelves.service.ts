@@ -159,6 +159,106 @@ export class ShelfService {
     };
   }
 
+  async getShelfEquipments(shelfId: string, pagination: PaginationDTO) {
+    const { page, limit, skip } = pageArgs(pagination);
+    const [rows, totals] = await Promise.all([
+      this.prisma.$queryRaw<Array<{
+        equipmentId: string;
+        quantity: bigint | number;
+        equipmentName: string;
+        hasSerialNumber: boolean;
+        equipmentStatus: string;
+      }>>(Prisma.sql`
+        WITH ShelfEquipmentStock AS (
+          SELECT 
+            m.equipmentId,
+            SUM(CASE WHEN m.destinationShelfId = CAST(${shelfId} AS uniqueidentifier) THEN m.equipmentQuantity ELSE 0 END) -
+            SUM(CASE WHEN m.sourceShelfId = CAST(${shelfId} AS uniqueidentifier) THEN m.equipmentQuantity ELSE 0 END) AS quantity
+          FROM dbo.MovementEquipment m
+          WHERE m.destinationShelfId = CAST(${shelfId} AS uniqueidentifier) OR m.sourceShelfId = CAST(${shelfId} AS uniqueidentifier)
+          GROUP BY m.equipmentId
+          HAVING SUM(CASE WHEN m.destinationShelfId = CAST(${shelfId} AS uniqueidentifier) THEN m.equipmentQuantity ELSE 0 END) -
+                 SUM(CASE WHEN m.sourceShelfId = CAST(${shelfId} AS uniqueidentifier) THEN m.equipmentQuantity ELSE 0 END) > 0
+        )
+        SELECT 
+          s.equipmentId,
+          s.quantity,
+          e.equipmentName,
+          e.hasSerialNumber,
+          e.equipmentStatus
+        FROM ShelfEquipmentStock s
+        JOIN dbo.Equipment e ON e.equipmentId = s.equipmentId
+        ORDER BY e.equipmentName ASC, s.equipmentId ASC
+        OFFSET ${skip} ROWS FETCH NEXT ${limit} ROWS ONLY`),
+      this.prisma.$queryRaw<Array<{ total: bigint | number; totalQuantity: bigint | number }>>(Prisma.sql`
+        WITH ShelfEquipmentStock AS (
+          SELECT 
+            m.equipmentId,
+            SUM(CASE WHEN m.destinationShelfId = CAST(${shelfId} AS uniqueidentifier) THEN m.equipmentQuantity ELSE 0 END) -
+            SUM(CASE WHEN m.sourceShelfId = CAST(${shelfId} AS uniqueidentifier) THEN m.equipmentQuantity ELSE 0 END) AS quantity
+          FROM dbo.MovementEquipment m
+          WHERE m.destinationShelfId = CAST(${shelfId} AS uniqueidentifier) OR m.sourceShelfId = CAST(${shelfId} AS uniqueidentifier)
+          GROUP BY m.equipmentId
+          HAVING SUM(CASE WHEN m.destinationShelfId = CAST(${shelfId} AS uniqueidentifier) THEN m.equipmentQuantity ELSE 0 END) -
+                 SUM(CASE WHEN m.sourceShelfId = CAST(${shelfId} AS uniqueidentifier) THEN m.equipmentQuantity ELSE 0 END) > 0
+        )
+        SELECT 
+          (SELECT COUNT_BIG(*) FROM ShelfEquipmentStock) AS total,
+          (SELECT COALESCE(SUM(CONVERT(bigint, quantity)), 0) FROM ShelfEquipmentStock) AS totalQuantity
+        FROM dbo.Shelf WHERE shelfId = CAST(${shelfId} AS uniqueidentifier)`),
+    ]).catch(dbError);
+
+    if (!totals[0]) throw new NotFoundException('Shelf not found');
+    const totalEquipments = Number(totals[0].total);
+    const totalQuantity = Number(totals[0].totalQuantity);
+    if (!Number.isSafeInteger(totalEquipments)) throw new RangeError('Equipment count exceeds the safe integer range');
+
+    const serializedIds = rows.filter(r => r.hasSerialNumber).map(r => r.equipmentId);
+    const serialsMap = new Map<string, Array<{ serialNumberId: string; serialNumberCode: string; serialNumberStatus: string }>>();
+
+    if (serializedIds.length > 0) {
+      const serialRows = await this.prisma.$queryRaw<Array<{
+        serialNumberId: string;
+        serialNumberCode: string;
+        serialNumberStatus: string;
+        equipmentId: string;
+      }>>(Prisma.sql`
+        ${serialsOnShelf(shelfId)}
+        SELECT sn.serialNumberId, sn.serialNumberCode, sn.serialNumberStatus, sn.equipmentId
+        FROM CurrentSerials c
+        JOIN dbo.SerialNumber sn ON sn.serialNumberId = c.serialNumberId
+        WHERE sn.equipmentId IN (${Prisma.join(serializedIds.map(id => Prisma.sql`CAST(${id} AS uniqueidentifier)`))})
+        ORDER BY sn.serialNumberCode ASC
+      `).catch(dbError);
+
+      for (const s of serialRows) {
+        const list = serialsMap.get(s.equipmentId) ?? [];
+        list.push({
+          serialNumberId: s.serialNumberId,
+          serialNumberCode: s.serialNumberCode,
+          serialNumberStatus: s.serialNumberStatus,
+        });
+        serialsMap.set(s.equipmentId, list);
+      }
+    }
+
+    return {
+      equipments: rows.map(r => ({
+        equipmentId: r.equipmentId,
+        equipmentName: r.equipmentName,
+        hasSerialNumber: Boolean(r.hasSerialNumber),
+        equipmentStatus: r.equipmentStatus,
+        quantity: Number(r.quantity),
+        serials: serialsMap.get(r.equipmentId) ?? [],
+      })),
+      totalEquipments,
+      totalQuantity,
+      totalPages: Math.max(1, Math.ceil(totalEquipments / limit)),
+      currentPage: page,
+      limit,
+    };
+  }
+
   private async list(where: Prisma.ShelfWhereInput, pagination: PaginationDTO) {
     const { page, limit, skip } = pageArgs(pagination);
     const [shelves, totalShelves] = await Promise.all([

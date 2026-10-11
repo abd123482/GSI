@@ -145,30 +145,16 @@ export function useCreateMovement() {
 
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: [
-            'movements', userId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: [
-            'equipments', userId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: [
-            'serial-numbers', userId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: [
-            'shelves', userId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: [
-            'shelf-contents', userId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: [
-            'dashboard', userId],
-        }),
+        queryClient.invalidateQueries({ queryKey: ['movements'] }),
+        queryClient.invalidateQueries({ queryKey: ['equipments'] }),
+        queryClient.invalidateQueries({ queryKey: ['equipment'] }),
+        queryClient.invalidateQueries({ queryKey: ['serial-numbers'] }),
+        queryClient.invalidateQueries({ queryKey: ['shelves'] }),
+        queryClient.invalidateQueries({ queryKey: ['shelf'] }),
+        queryClient.invalidateQueries({ queryKey: ['shelf-equipments'] }),
+        queryClient.invalidateQueries({ queryKey: ['shelf-serial-numbers'] }),
+        queryClient.invalidateQueries({ queryKey: ['equipment-allocations'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
       ]);
 
       toast.success(

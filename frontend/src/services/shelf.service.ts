@@ -3,6 +3,7 @@ import { isAxiosError } from 'axios';
 import { createShelfSchema, updateShelfSchema } from '@/schemas/shelf.schema';
 import type {
   CreateShelfInput,
+  PaginatedShelfEquipmentsResponse,
   PaginatedShelfSerialNumbersResponse,
   PaginatedShelvesResponse,
   SearchShelfQuery,
@@ -121,6 +122,22 @@ export class ShelfService {
       return response.data;
     } catch (error: unknown) {
       throwError(error, 'Impossible de charger les numéros de série de cet emplacement.');
+    }
+  }
+
+  static async getShelfEquipments(
+    client: AxiosInstance,
+    id: string,
+    pagination: ShelfPaginationQuery = {},
+  ): Promise<PaginatedShelfEquipmentsResponse> {
+    try {
+      const response = await client.get<PaginatedShelfEquipmentsResponse>(
+        `/shelves/${id}/equipments`,
+        { params: { page: pagination.page ?? 1, limit: pagination.limit ?? 20 } },
+      );
+      return response.data;
+    } catch (error: unknown) {
+      throwError(error, 'Impossible de charger les articles de cet emplacement.');
     }
   }
 }

@@ -108,11 +108,6 @@ export function ShelfListTable({
             <option value={50}>50 / page</option>
           </select>
 
-          <button type="button" onClick={onRefresh} disabled={isLoading} className="inline-flex h-9 items-center gap-1.5 rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs text-[#f4f4f5] disabled:opacity-40">
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            Actualiser
-          </button>
-
           {canCreateShelf && (
             <button type="button" onClick={onOpenCreateModal} className="inline-flex h-9 items-center gap-1.5 rounded bg-[#fafafa] px-3 text-xs font-semibold text-[#18181b]">
               <Plus className="h-3.5 w-3.5" />Nouvel emplacement
@@ -169,11 +164,10 @@ export function ShelfListTable({
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium border ${
-                          shelfStatus === 'ACTIVE' 
-                            ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' 
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium border ${shelfStatus === 'ACTIVE'
+                            ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
                             : 'border-amber-500/20 bg-amber-500/10 text-amber-400'
-                        }`}>
+                          }`}>
                           <span className={`h-1 w-1 rounded-full ${shelfStatus === 'ACTIVE' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                           {shelfStatus === 'ACTIVE' ? 'Actif' : 'Inactif'}
                         </span>

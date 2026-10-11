@@ -136,7 +136,7 @@ export function Navbar() {
                       icon={
                         <Warehouse className="h-3.5 w-3.5" />
                       }
-                      text="Vue d'ensemble"
+                      text="Stocks"
                     />
                   )}
 

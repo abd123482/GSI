@@ -67,7 +67,13 @@ export interface Movement {
 }
 
 export interface CreateMovementItemInput {
-  equipmentId: string;
+  equipmentId?: string;
+  newEquipment?: {
+    equipmentName: string;
+    hasSerialNumber: boolean;
+    minEquipmentQuantity?: number;
+    equipmentStatus?: boolean;
+  };
   movementQuantity: number;
   serialNumberId?: string | null;
   serialNumberCode?: string;
@@ -104,7 +110,13 @@ export interface PaginatedMovementsResponse {
 
 export interface MovementDraftLine {
   clientId: string;
-  equipmentId: string;
+  equipmentId?: string;
+  newEquipment?: {
+    equipmentName: string;
+    hasSerialNumber: boolean;
+    minEquipmentQuantity: number;
+    equipmentStatus: boolean;
+  };
   equipmentName: string;
   hasSerialNumber: boolean;
   serialNumberId: string | null;

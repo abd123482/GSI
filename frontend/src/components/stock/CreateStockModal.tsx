@@ -5,6 +5,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, Loader2, Plus, ShieldAlert, Warehouse, X } from 'lucide-react';
 
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+
 import { createStockSchema, type CreateStockFormValues } from '@/schemas/stock.schema';
 import { StockService } from '@/services/stock.service';
 import { useApi } from '@/hooks/use-api';
@@ -19,6 +22,7 @@ interface CreateStockModalProps {
 
 export function CreateStockModal({ isOpen, onClose, onSuccess }: CreateStockModalProps) {
   const api = useApi();
+  const queryClient = useQueryClient();
   const { canCreateStock, roleName } = usePermissions();
   const [serverError, setServerError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -50,6 +54,11 @@ export function CreateStockModal({ isOpen, onClose, onSuccess }: CreateStockModa
         status: values.stockStatus,
       });
       reset({ stockName: '', stockStatus: true });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['stocks'] }),
+        queryClient.invalidateQueries({ queryKey: ['movement-create'] }),
+      ]);
+      toast.success('Stock créé avec succès');
       onSuccess?.();
       onClose();
     } catch (cause: unknown) {

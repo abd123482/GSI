@@ -100,8 +100,21 @@ export class EquipmentMovementService {
 
   private async create(dto: unknown, userId: string | undefined, audit: Audit) {
     return this.run(async () => {
-      const { movementType, items, happenedAt } = createEquipmentMovementSchema.parse(dto);
+      const parsed = createEquipmentMovementSchema.parse(dto);
+      const movementType = parsed.movementType;
+      const happenedAt = parsed.happenedAt;
       const createdByUserId = userId ? uuid.parse(userId) : null;
+
+      const items = parsed.items.map(i => {
+        const { equipmentId, ...rest } = i;
+        const finalEquipmentId = equipmentId || randomUUID();
+        return {
+          ...rest,
+          equipmentId: finalEquipmentId,
+          serialNumberId:
+            i.serialNumberId ?? (i.serialNumberCode ? randomUUID() : null),
+        };
+      });
 
       const equipmentIds = unique(items.map(i => i.equipmentId));
       const shelfIds = unique(
@@ -115,13 +128,21 @@ export class EquipmentMovementService {
         items.flatMap(i => (i.serialNumberId ? [i.serialNumberId] : [])),
       );
 
-      const resolved = items.map(i => ({
-        ...i,
-        serialNumberId:
-          i.serialNumberId ?? (i.serialNumberCode ? randomUUID() : null),
-      }));
-
       return this.write(async tx => {
+        const newEquipments = items.filter(r => r.newEquipment).map(r => ({
+          equipmentId: r.equipmentId,
+          equipmentName: r.newEquipment!.equipmentName,
+          hasSerialNumber: r.newEquipment!.hasSerialNumber,
+          minequipmentQuantity: r.newEquipment!.minEquipmentQuantity,
+          equipmentStatus: r.newEquipment!.equipmentStatus ? 'ACTIVE' : 'INACTIVE',
+        }));
+
+        if (newEquipments.length > 0) {
+          // unique by equipmentId just in case
+          const uniqueNewEquipments = Array.from(new Map(newEquipments.map(e => [e.equipmentId, e])).values());
+          await tx.equipment.createMany({ data: uniqueNewEquipments });
+        }
+
         await this.lock(tx, [
           ...equipmentIds.map(id => `SOMIPHARM:EQUIPMENT:${id}`),
           ...shelfIds.map(id => `SOMIPHARM:SHELF:${id}`),
@@ -238,7 +259,7 @@ export class EquipmentMovementService {
           );
         }
 
-        const newSerials = resolved.filter(
+        const newSerials = items.filter(
           i => i.serialNumberCode !== undefined,
         );
 
@@ -263,7 +284,7 @@ export class EquipmentMovementService {
               createdByUserId, happenedAt: happenedAt ? new Date(happenedAt) : undefined, origin: audit.origin === 'USER', inventoryId: audit.inventoryId, reason: audit.reason,
               items: {
                 createMany: {
-                  data: resolved.map(i => ({
+                  data: items.map(i => ({
                     equipmentId: i.equipmentId, sourceShelfId: i.sourceShelfId ?? null, destinationShelfId: null, serialNumberId: i.serialNumberId, equipmentQuantity: i.movementQuantity, equipmentTypeSnapshot: equipmentById.get(i.equipmentId)!.hasSerialNumber ? 'SERIALIZED' : 'STANDARD',
                   })),
                 },
@@ -277,7 +298,7 @@ export class EquipmentMovementService {
               createdByUserId, happenedAt: happenedAt ? new Date(happenedAt) : undefined, origin: audit.origin === 'USER', inventoryId: audit.inventoryId, reason: audit.reason,
               items: {
                 createMany: {
-                  data: resolved.map(i => ({
+                  data: items.map(i => ({
                     equipmentId: i.equipmentId, sourceShelfId: null, destinationShelfId: i.destinationShelfId ?? null, serialNumberId: i.serialNumberId, equipmentQuantity: i.movementQuantity, equipmentTypeSnapshot: equipmentById.get(i.equipmentId)!.hasSerialNumber ? 'SERIALIZED' : 'STANDARD',
                   })),
                 },
@@ -297,7 +318,7 @@ export class EquipmentMovementService {
             reason: audit.reason,
             items: {
               createMany: {
-                data: resolved.map(i => ({
+                data: items.map(i => ({
                   equipmentId: i.equipmentId,
                   sourceShelfId: i.sourceShelfId ?? null,
                   destinationShelfId: i.destinationShelfId ?? null,

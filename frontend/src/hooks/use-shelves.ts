@@ -66,6 +66,7 @@ export function useShelves(options?: UseShelvesOptions) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['shelves'] }),
         queryClient.invalidateQueries({ queryKey: ['stocks'] }),
+        queryClient.invalidateQueries({ queryKey: ['movement-create'] }),
       ]);
       toast.success('Emplacement créé', {
         description: shelf.shelfName ?? 'Nouvel emplacement',
@@ -81,6 +82,7 @@ export function useShelves(options?: UseShelvesOptions) {
         queryClient.invalidateQueries({ queryKey: ['shelves'] }),
         queryClient.invalidateQueries({ queryKey: ['shelf', shelf.shelfId] }),
         queryClient.invalidateQueries({ queryKey: ['stocks'] }),
+        queryClient.invalidateQueries({ queryKey: ['movement-create'] }),
       ]);
       toast.success('Emplacement modifié');
     },
@@ -92,6 +94,7 @@ export function useShelves(options?: UseShelvesOptions) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['shelves'] }),
         queryClient.invalidateQueries({ queryKey: ['stocks'] }),
+        queryClient.invalidateQueries({ queryKey: ['movement-create'] }),
       ]);
       toast.success('Emplacement supprimé');
     },
@@ -157,3 +160,21 @@ export function useShelfSerialNumbers(
     placeholderData: keepPreviousData,
   });
 }
+
+export function useShelfEquipments(
+  shelfId?: string | null,
+  page = 1,
+  limit = 20,
+  enabled = true,
+) {
+  const api = useApi();
+  const { userId, authReady } = useAuthQueryContext();
+  return useQuery({
+    queryKey: ['shelf-equipments', shelfId, page, limit, userId],
+    queryFn: () =>
+      ShelfService.getShelfEquipments(api, shelfId!, { page, limit }),
+    enabled: authReady && Boolean(userId) && enabled && Boolean(shelfId),
+    placeholderData: keepPreviousData,
+  });
+}
+

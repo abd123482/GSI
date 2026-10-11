@@ -31,7 +31,7 @@ export class StockController {
     return this.stockService.createStock(dto);
   }
 
-  @RequirePermissions('stock.search')
+  @RequirePermissions('stock.read')
   @Get('search')
   async searchStocks(
     @Query() searchStockDTO: SearchStockDTO,

@@ -199,20 +199,6 @@ export function EquipmentListTable({
             </option>
           </select>
 
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={isLoading}
-            className="inline-flex h-9 items-center gap-1.5 rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs disabled:opacity-40"
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 ${isLoading
-                  ? 'animate-spin'
-                  : ''
-                }`}
-            />
-            Actualiser
-          </button>
 
 
         </div>
@@ -300,8 +286,8 @@ export function EquipmentListTable({
                     <td className="px-4 py-3">
                       <span
                         className={`rounded border px-2 py-1 text-[10px] font-semibold ${equipment.equipmentStatus
-                            ? 'border-emerald-400/25 bg-emerald-950/25 text-emerald-300'
-                            : 'border-amber-400/25 bg-amber-950/25 text-amber-300'
+                          ? 'border-emerald-400/25 bg-emerald-950/25 text-emerald-300'
+                          : 'border-amber-400/25 bg-amber-950/25 text-amber-300'
                           }`}
                       >
                         {

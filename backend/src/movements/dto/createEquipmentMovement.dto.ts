@@ -1,15 +1,25 @@
 import { z } from 'zod';
 
+import { createEquipmentSchema } from '../../equipment/dto/createEquipment.dto.js';
+
 const uuid = z.string().trim().uuid().transform((id) => id.toLowerCase());
 export const movementTypeSchema = z.enum(['IN', 'OUT', 'TRANSFER']);
 export const movementItemSchema = z.object({
-  equipmentId: uuid,
+  equipmentId: uuid.optional(),
+  newEquipment: createEquipmentSchema.optional(),
   movementQuantity: z.number().int().positive().max(2_147_483_647),
   serialNumberId: uuid.nullish(),
   serialNumberCode: z.string().trim().min(1).max(200).optional(),
   sourceShelfId: uuid.nullish(),
   destinationShelfId: uuid.nullish(),
-}).strict();
+}).strict().superRefine((data, ctx) => {
+  if (!data.equipmentId && !data.newEquipment) {
+    ctx.addIssue({ code: 'custom', message: 'Either equipmentId or newEquipment must be provided' });
+  }
+  if (data.equipmentId && data.newEquipment) {
+    ctx.addIssue({ code: 'custom', message: 'Provide either equipmentId or newEquipment, not both' });
+  }
+});
 
 export const createEquipmentMovementSchema = z.object({
   movementType: movementTypeSchema,

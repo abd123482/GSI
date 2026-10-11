@@ -93,5 +93,7 @@ export interface EquipmentPaginationQuery {
   equipmentName?: string;
   hasSerialNumber?: boolean;
   equipmentStatus?: EquipmentStatus;
+  shelfId?: string;
+  equipmentShelfId?: string;
 }
 

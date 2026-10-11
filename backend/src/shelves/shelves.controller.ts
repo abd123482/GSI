@@ -75,6 +75,20 @@ export class ShelfController {
   }
 
   @RequirePermissions('shelf.read')
+  @Get(':id/equipments')
+  getShelfEquipments(
+    @Param('id', new ParseUUIDPipe())
+    id: string,
+
+    @Query() pagination: PaginationDTO,
+  ) {
+    return this.shelfService.getShelfEquipments(
+      id,
+      pagination,
+    );
+  }
+
+  @RequirePermissions('shelf.read')
   @Get(':id')
   getShelfById(
     @Param(

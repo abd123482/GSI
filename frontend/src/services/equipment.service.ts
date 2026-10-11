@@ -142,6 +142,10 @@ export class EquipmentService {
                 query.hasSerialNumber,
               equipmentStatus:
                 query.equipmentStatus,
+              shelfId:
+                query.shelfId,
+              equipmentShelfId:
+                query.equipmentShelfId,
             },
           },
         );

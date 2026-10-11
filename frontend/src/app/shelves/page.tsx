@@ -79,7 +79,6 @@ export default function ShelvesPage() {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-normal tracking-tight">Gestion des Emplacements</h1>
               <span className="inline-flex items-center gap-1.5 rounded border border-[#3f3f46] bg-[#27272a] px-2 py-1 text-[10px] text-[#d4d4d8]">
-                {canCreateShelf ? <><ShieldCheck className="h-3 w-3 text-emerald-300" />Création autorisée</> : <><ShieldAlert className="h-3 w-3 text-amber-300" />Lecture seule</>}
               </span>
             </div>
           </div>

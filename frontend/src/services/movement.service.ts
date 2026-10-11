@@ -124,7 +124,7 @@ function validateMovement(
     input.items
   ) {
     if (
-      !item.equipmentId
+      !item.equipmentId && !item.newEquipment
     ) {
       throw new Error(
         'Article manquant dans une ligne.',
@@ -184,6 +184,8 @@ export class MovementService {
                 (item) => ({
                   equipmentId:
                     item.equipmentId,
+                  newEquipment:
+                    item.newEquipment,
                   serialNumberId:
                     item.serialNumberId ??
                     null,
