@@ -33,7 +33,7 @@ export function useInventories(
 
   return useQuery<PaginatedInventoriesResponse>({
     queryKey: ['inventories', page, limit, userId],
-    enabled: authReady && authReady,
+    enabled: Boolean(authReady && userId),
     queryFn: async () => {
       const response =
         await api.get<PaginatedInventoriesResponse>(
@@ -76,7 +76,7 @@ export function useMyTasks() {
 
   return useQuery<InventoryTask[]>({
     queryKey: ['inventory', 'my-tasks', userId],
-    enabled: authReady && authReady,
+    enabled: Boolean(authReady && userId),
     queryFn: async () => {
       const response =
         await api.get<InventoryTask[]>(

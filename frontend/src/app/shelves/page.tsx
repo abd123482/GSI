@@ -78,8 +78,7 @@ export default function ShelvesPage() {
             <div className="mb-1 flex items-center gap-2 font-mono text-xs text-[#a1a1aa]"><Link href="/" className="hover:text-white">somepharm</Link><span>/</span><span className="text-white">emplacements</span></div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-normal tracking-tight">Gestion des Emplacements</h1>
-              <span className="inline-flex items-center gap-1.5 rounded border border-[#3f3f46] bg-[#27272a] px-2 py-1 text-[10px] text-[#d4d4d8]">
-              </span>
+
             </div>
           </div>
         </div>

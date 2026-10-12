@@ -191,7 +191,7 @@ export class DashboardService {
           typeInventory: true,
           status: true,
           createdAt: true,
-          workUnits: {
+          units: {
             select: { status: true },
           },
         },
@@ -251,8 +251,9 @@ export class DashboardService {
 
     // Compute Inventory Stats
     const activeInventoriesList = inventories.map((inv: any) => {
-      const totalWorkUnits = inv.workUnits.length;
-      const completedWorkUnits = inv.workUnits.filter((u: any) =>
+      const unitsList = inv.units ?? inv.workUnits ?? [];
+      const totalWorkUnits = unitsList.length;
+      const completedWorkUnits = unitsList.filter((u: any) =>
         ['COUNTED', 'ADJUDICATED', 'FINALIZED'].includes(u.status.toUpperCase()),
       ).length;
       const progressPercent = totalWorkUnits > 0 ? Math.round((completedWorkUnits / totalWorkUnits) * 100) : 0;
