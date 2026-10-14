@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -27,6 +28,7 @@ import type {
   ResolveIssueDTO,
   SaveDraftDTO,
   SubmitTaskDTO,
+  UpdateRosterDTO,
 } from './dto/index.js';
 
 import { InventoryService } from './inventory.service.js';
@@ -217,6 +219,32 @@ export class InventoryController {
     @Param('id') id: string,
   ) {
     return this.inventory.getInventoryById(id);
+  }
+
+  @RequirePermissions('inventory.create', 'inventory.launch')
+  @Put(':id/roster')
+  updateDraftRoster(
+    @Param('id') inventoryId: string,
+    @Body() data: UpdateRosterDTO,
+  ) {
+    return this.inventory.updateDraftRoster(inventoryId, data);
+  }
+
+  @RequirePermissions('inventory.read')
+  @Get(':id/rounds')
+  getInventoryRounds(
+    @Param('id') inventoryId: string,
+  ) {
+    return this.inventory.getInventoryRounds(inventoryId);
+  }
+
+  @RequirePermissions('inventory.launch', 'inventory.finalize')
+  @Post(':id/cancel')
+  cancelInventory(
+    @Param('id') inventoryId: string,
+    @Body() body: { reason?: string },
+  ) {
+    return this.inventory.cancelInventory(inventoryId, body?.reason);
   }
 
   @RequirePermissions('inventory.delete')

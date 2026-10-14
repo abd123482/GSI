@@ -12,18 +12,8 @@ import {
   useMyTasks,
 } from '@/hooks/use-inventory';
 
-function purposeLabel(
-  purpose: string,
-) {
-  if (purpose === 'PRIMARY_1') {
-    return 'Contrôleur 1';
-  }
-
-  if (purpose === 'PRIMARY_2') {
-    return 'Contrôleur 2';
-  }
-
-  return 'Contrôleur 3';
+function purposeLabel(sequence?: number) {
+  return `Contrôleur ${(sequence ?? 0) + 1}`;
 }
 
 export default function MyInventoryTasksPage() {
@@ -50,14 +40,14 @@ export default function MyInventoryTasksPage() {
             </h1>
 
             <p className="mt-1 text-xs text-[#a1a1aa]">
-              C3 apparaît uniquement sur les unités où C1 et C2 diffèrent.
+              Tous les contrôleurs assignés effectuent un comptage complet et indépendant.
             </p>
           </div>
         </div>
 
         {tasksQuery.isLoading ? (
           <div className="flex min-h-56 items-center justify-center gap-2 text-xs text-[#a1a1aa]">
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin text-[#d8a868]" />
             Chargement des tâches...
           </div>
         ) : tasks.length === 0 ? (
@@ -69,7 +59,7 @@ export default function MyInventoryTasksPage() {
             </p>
 
             <p className="mt-1 text-xs text-[#71717a]">
-              Les prochaines unités apparaîtront lorsqu’elles seront débloquées.
+              Les tâches apparaîtront lorsque les inventaires seront lancés.
             </p>
           </div>
         ) : (
@@ -82,14 +72,8 @@ export default function MyInventoryTasksPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <span
-                        className={`rounded border px-2 py-1 text-[10px] font-semibold ${
-                          task.purpose === 'FINAL_RECOUNT'
-                            ? 'border-violet-400/30 bg-violet-950/20 text-violet-200'
-                            : 'border-sky-400/25 bg-sky-950/20 text-sky-200'
-                        }`}
-                      >
-                        {purposeLabel(task.purpose)}
+                      <span className="rounded border border-sky-400/25 bg-sky-950/20 px-2 py-1 text-[10px] font-semibold text-sky-200">
+                        {purposeLabel(task.sequence)}
                       </span>
 
                       <h2 className="mt-3 text-sm font-semibold">
@@ -105,12 +89,6 @@ export default function MyInventoryTasksPage() {
                       {task.status}
                     </span>
                   </div>
-
-                  {task.purpose === 'FINAL_RECOUNT' && (
-                    <p className="mt-3 rounded border border-violet-400/20 bg-violet-950/10 p-2.5 text-[10px] text-violet-100">
-                      C1 et C2 ont produit des résultats différents sur cette unité. Votre comptage C3 devient le résultat accepté.
-                    </p>
-                  )}
 
                   <Link
                     href={`/inventory/tasks/${task.attemptId}`}

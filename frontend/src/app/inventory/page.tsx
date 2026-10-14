@@ -41,12 +41,18 @@ function statusClass(
       return 'border-slate-400/25 bg-slate-500/10 text-slate-200';
     case 'IN_PROGRESS':
       return 'border-sky-400/25 bg-sky-500/10 text-sky-200';
+    case 'CONVERGED':
+      return 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200';
+    case 'RECOUNT_REQUIRED':
+      return 'border-orange-400/25 bg-orange-500/10 text-orange-200';
     case 'COMPLETED':
       return 'border-amber-400/25 bg-amber-500/10 text-amber-200';
     case 'FINALIZED':
       return 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200';
-    default:
+    case 'CANCELLED':
       return 'border-rose-400/25 bg-rose-500/10 text-rose-200';
+    default:
+      return 'border-slate-400/25 bg-slate-500/10 text-slate-200';
   }
 }
 
@@ -264,10 +270,8 @@ export default function InventoryPage() {
                               }
                             </p>
 
-                            <p className="mt-0.5 text-[9px] text-white/35">
-                              Politique v
-                              {inventory.policyVersion ??
-                                3}
+                            <p className="mt-0.5 text-[9px] text-[#a1a1aa]">
+                              Tour {inventory.roundNumber ?? 1} • v{inventory.policyVersion ?? 4}
                             </p>
                           </div>
                         </td>

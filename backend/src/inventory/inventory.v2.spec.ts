@@ -1,218 +1,178 @@
-// @ts-nocheck
+import { describe, expect, it } from 'vitest';
 import {
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+  calculateStockVariances,
+  compareUnitSubmissions,
+  parseCountSubmission,
+} from './inventory-engine.js';
 
-import { InventoryService } from './inventory.service.js';
+describe('Inventory Acceptance Example - 4 Controllers across 3 Rounds', () => {
+  const unitId = 'unit-1';
+  const equipmentId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const shelfId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
 
-describe('InventoryService - synchronized C1/C2/C3 pipeline', () => {
-  const inventoryId =
-    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const controllers = [
+    { controllerId: 'c1', userId: 'u1', sequence: 0 },
+    { controllerId: 'c2', userId: 'u2', sequence: 1 },
+    { controllerId: 'c3', userId: 'u3', sequence: 2 },
+    { controllerId: 'c4', userId: 'u4', sequence: 3 },
+  ];
 
-  const equipmentId =
-    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-
-  const shelfId =
-    'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
-
-  it('launch creates only C1 and C2 attempts and no C3 attempt', async () => {
-    const tx: any = {
-      $queryRaw:
-        vi.fn().mockResolvedValue([
-          { lockResult: 0 },
-        ]),
-
-      inventory: {
-        findUnique:
-          vi.fn().mockResolvedValue({
-            inventoryId,
-            title: 'Inventaire',
-            status: 'DRAFT',
-            typeInventory:
-              'ByEquipment',
-            equipmentScopeIds:
-              JSON.stringify([
-                equipmentId,
-              ]),
-            shelfScopeIds: null,
-            Inventory_User: [
-              {
-                userId:
-                  '11111111-1111-4111-8111-111111111111',
-                sequence: 0,
-              },
-              {
-                userId:
-                  '22222222-2222-4222-8222-222222222222',
-                sequence: 1,
-              },
-              {
-                userId:
-                  '33333333-3333-4333-8333-333333333333',
-                sequence: 2,
-              },
-            ],
-          }),
-        update:
-          vi.fn().mockResolvedValue({}),
-      },
-
-      inventoryWorkUnit: {
-        findFirst:
-          vi.fn().mockResolvedValue(
-            null,
-          ),
-        create:
-          vi.fn().mockResolvedValue({
-            unitId:
-              'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-            unitOrder: 0,
-            equipmentId,
-            shelfId: null,
-          }),
-      },
-
-      equipment: {
-        findMany:
-          vi.fn().mockResolvedValue([
-            { equipmentId },
-          ]),
-      },
-
-      equipmentShelfs: {
-        findMany:
-          vi.fn().mockResolvedValue(
-            [],
-          ),
-      },
-
-      serialNumber: {
-        findMany:
-          vi.fn().mockResolvedValue(
-            [],
-          ),
-      },
-
-      inventory_Equipment_Shelf_Snapshot:
-        {
-          createMany: vi.fn(),
-        },
-
-      inventory_SerialNumber_Snapshot:
-        {
-          createMany: vi.fn(),
-        },
-
-      inventoryCountAttempt: {
-        create:
-          vi.fn()
-            .mockResolvedValueOnce({
-              attemptId:
-                'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
-            })
-            .mockResolvedValueOnce({
-              attemptId:
-                'ffffffff-ffff-4fff-8fff-ffffffffffff',
-            }),
-      },
-
-      notification: {
-        create: vi.fn(),
-      },
-    };
-
-    const prisma: any = {
-      $transaction: vi.fn(
-        async (
-          callback: (
-            client: typeof tx,
-          ) => unknown,
-          _options?: unknown,
-        ) => callback(tx),
-      ),
-    };
-
-    const service =
-      new InventoryService(prisma);
-
-    await service.launchInventory(
-      inventoryId,
-    );
-
-    expect(
-      tx.inventoryCountAttempt.create,
-    ).toHaveBeenCalledTimes(2);
-
-    const purposes =
-      tx.inventoryCountAttempt.create.mock.calls.map(
-        (call: any[]) =>
-          call[0].data.purpose,
-      );
-
-    expect(purposes).toEqual([
-      'PRIMARY_1',
-      'PRIMARY_2',
+  it('Round 1: 10, 10, 12, 10 -> disagreement requires recount child', () => {
+    const submissions = new Map([
+      [
+        'c1',
+        parseCountSubmission(
+          JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }),
+          'c1',
+          'u1',
+          new Date(),
+        ),
+      ],
+      [
+        'c2',
+        parseCountSubmission(
+          JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }),
+          'c2',
+          'u2',
+          new Date(),
+        ),
+      ],
+      [
+        'c3',
+        parseCountSubmission(
+          JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 12 }] }),
+          'c3',
+          'u3',
+          new Date(),
+        ),
+      ],
+      [
+        'c4',
+        parseCountSubmission(
+          JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }),
+          'c4',
+          'u4',
+          new Date(),
+        ),
+      ],
     ]);
 
-    expect(tx.$queryRaw).toHaveBeenCalled();
+    const res = compareUnitSubmissions(unitId, controllers, submissions);
+    expect(res.isComplete).toBe(true);
+    expect(res.isMatch).toBe(false);
+    expect(res.status).toBe('RECOUNT_REQUIRED');
+    expect(res.disagreements.length).toBeGreaterThan(0);
   });
 
-  it('report marks a lower standard count as MANQUE', () => {
-    const service =
-      new InventoryService(
-        {} as any,
-      );
+  it('Round 2: 11, 11, 10, 11 -> disagreement requires recount child', () => {
+    const submissions = new Map([
+      [
+        'c1',
+        parseCountSubmission(
+          JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 11 }] }),
+          'c1',
+          'u1',
+          new Date(),
+        ),
+      ],
+      [
+        'c2',
+        parseCountSubmission(
+          JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 11 }] }),
+          'c2',
+          'u2',
+          new Date(),
+        ),
+      ],
+      [
+        'c3',
+        parseCountSubmission(
+          JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }),
+          'c3',
+          'u3',
+          new Date(),
+        ),
+      ],
+      [
+        'c4',
+        parseCountSubmission(
+          JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 11 }] }),
+          'c4',
+          'u4',
+          new Date(),
+        ),
+      ],
+    ]);
 
-    const compare =
-      (
-        service as any
-      ).compareReportCells(
-        'STANDARD',
-        {
-          quantity: 7,
-        },
-        {
-          quantity: 10,
-        },
-      );
-
-    expect(compare).toEqual({
-      status: 'MANQUE',
-      delta: -3,
-      missing: 3,
-      surplus: 0,
-    });
+    const res = compareUnitSubmissions(unitId, controllers, submissions);
+    expect(res.isComplete).toBe(true);
+    expect(res.isMatch).toBe(false);
+    expect(res.status).toBe('RECOUNT_REQUIRED');
   });
 
-  it('report detects serialized wrong location', () => {
-    const service =
-      new InventoryService(
-        {} as any,
-      );
+  it('Round 3: 11, 11, 11, 11 -> unanimous convergence achieved', () => {
+    const submissions = new Map([
+      [
+        'c1',
+        parseCountSubmission(
+          JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 11 }] }),
+          'c1',
+          'u1',
+          new Date(),
+        ),
+      ],
+      [
+        'c2',
+        parseCountSubmission(
+          JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 11 }] }),
+          'c2',
+          'u2',
+          new Date(),
+        ),
+      ],
+      [
+        'c3',
+        parseCountSubmission(
+          JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 11 }] }),
+          'c3',
+          'u3',
+          new Date(),
+        ),
+      ],
+      [
+        'c4',
+        parseCountSubmission(
+          JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 11 }] }),
+          'c4',
+          'u4',
+          new Date(),
+        ),
+      ],
+    ]);
 
-    const compare =
-      (
-        service as any
-      ).compareReportCells(
-        'SERIALIZED',
-        {
-          quantity: 1,
-          equipmentId,
-          shelfId,
-        },
-        {
-          quantity: 1,
-          equipmentId,
-          shelfId:
-            'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-        },
-      );
+    const res = compareUnitSubmissions(unitId, controllers, submissions);
+    expect(res.isComplete).toBe(true);
+    expect(res.isMatch).toBe(true);
+    expect(res.status).toBe('CONVERGED');
+    expect(res.disagreements).toHaveLength(0);
+  });
 
-    expect(compare.status).toBe(
-      'MAUVAISE_POSITION',
-    );
+  it('Unanimous count differing from book stock creates shortage variance without forcing endless recount', () => {
+    // Every controller counts 11, baseline book stock is 12
+    const acceptedByUnit = new Map([
+      [unitId, [{ kind: 'STANDARD' as const, equipmentId, shelfId, quantity: 11 }]],
+    ]);
+    const baseline = {
+      standardItems: [{ equipmentId, shelfId, expectedQuantity: 12 }],
+      serializedItems: [],
+    };
+
+    const variances = calculateStockVariances(acceptedByUnit, baseline);
+
+    expect(variances).toHaveLength(1);
+    expect(variances[0].varianceType).toBe('SHORTAGE');
+    expect(variances[0].deltaQuantity).toBe(-1); // 11 - 12 = -1 shortage
+    expect(variances[0].observedQuantity).toBe(11);
+    expect(variances[0].expectedQuantity).toBe(12);
   });
 });

@@ -11,10 +11,15 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   Check,
+  ChevronDown,
+  ChevronUp,
   ClipboardList,
   Loader2,
+  Plus,
   Search,
   ShieldAlert,
+  Trash2,
+  Users,
 } from 'lucide-react';
 
 import {
@@ -152,6 +157,37 @@ export default function CreateInventoryPage() {
       ],
     );
 
+  const duplicateUserIds = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const id of users) {
+      if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    const dupes = new Set<string>();
+    for (const [id, count] of counts.entries()) {
+      if (count > 1) dupes.add(id);
+    }
+    return dupes;
+  }, [users]);
+
+  function addController() {
+    setUsers((cur) => [...cur, '']);
+  }
+
+  function removeController(index: number) {
+    if (users.length <= 3) return;
+    setUsers((cur) => cur.filter((_, idx) => idx !== index));
+  }
+
+  function moveController(from: number, to: number) {
+    if (to < 0 || to >= users.length) return;
+    setUsers((cur) => {
+      const next = [...cur];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  }
+
   if (permissions.isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#18181b] text-white">
@@ -228,34 +264,11 @@ export default function CreateInventoryPage() {
               parsed.data.title,
             typeInventory:
               parsed.data.typeInventory,
-            policyVersion: 3,
+            policyVersion: 4,
 
-            users: [
-              {
-                userId:
-                  parsed.data
-                    .users[0]
-                    .userId,
-                responsibility:
-                  'PRIMARY_COUNTER_1',
-              },
-              {
-                userId:
-                  parsed.data
-                    .users[1]
-                    .userId,
-                responsibility:
-                  'PRIMARY_COUNTER_2',
-              },
-              {
-                userId:
-                  parsed.data
-                    .users[2]
-                    .userId,
-                responsibility:
-                  'FINAL_CONTROLLER',
-              },
-            ],
+            users: parsed.data.users.map((u) => ({
+              userId: u.userId,
+            })),
 
             equipmentIds:
               parsed.data
@@ -342,7 +355,7 @@ export default function CreateInventoryPage() {
             </h1>
 
             <p className="mt-1 text-xs text-[#a1a1aa]">
-              3 contrôleurs sont préassignés. C3 ne reçoit une tâche que si C1 et C2 diffèrent sur une unité.
+              Minimum 3 contrôleurs distincts requis. Tous les contrôleurs effectuent un comptage complet et indépendant.
             </p>
           </div>
         </div>
@@ -426,59 +439,101 @@ export default function CreateInventoryPage() {
         </section>
 
         <section className="space-y-4 rounded-lg border border-[#3f3f46] bg-[#27272a] p-5">
-          <div>
-            <h2 className="text-sm font-semibold">
-              Contrôleurs
-            </h2>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-[#d8a868]" />
+                <h2 className="text-sm font-semibold">
+                  Contrôleurs ({users.length})
+                </h2>
+              </div>
+              <p className="mt-1 text-[10px] text-[#a1a1aa]">
+                Minimum 3 contrôleurs distincts requis. Tous les contrôleurs sont égaux et comptent l’intégralité du périmètre.
+              </p>
+            </div>
 
-            <p className="mt-1 text-[10px] text-[#a1a1aa]">
-              Ils doivent être trois utilisateurs distincts.
-            </p>
+            <button
+              type="button"
+              onClick={addController}
+              className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded border border-[#3f3f46] bg-[#18181b] px-3 py-1.5 text-xs font-medium text-white hover:border-[#71717a] transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Ajouter un contrôleur
+            </button>
           </div>
 
-          {[
-            'Contrôleur 1 — C1',
-            'Contrôleur 2 — C2',
-            'Contrôleur 3 — C3 conditionnel',
-          ].map(
-            (
-              label,
-              index,
-            ) => (
-              <div
-                key={label}
-                className="space-y-1.5"
-              >
-                <span className="text-xs font-semibold">
-                  {label}
-                </span>
+          <div className="space-y-3">
+            {users.map((userId, index) => {
+              const isDupe = Boolean(userId && duplicateUserIds.has(userId));
+              return (
+                <div
+                  key={index}
+                  className={`flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded border ${
+                    isDupe
+                      ? 'border-rose-500/50 bg-rose-950/15'
+                      : 'border-[#3f3f46] bg-[#18181b]/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 sm:w-36 shrink-0">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#27272a] text-[11px] font-mono font-semibold text-[#a1a1aa]">
+                      {index + 1}
+                    </span>
+                    <span className="text-xs font-medium">
+                      Contrôleur {index + 1}
+                    </span>
+                  </div>
 
-                <UserAutocomplete
-                  value={
-                    users[index]
-                  }
-                  onChange={(
-                    userId,
-                  ) =>
-                    setUsers(
-                      (current) =>
-                        current.map(
-                          (
-                            value,
-                            currentIndex,
-                          ) =>
-                            currentIndex ===
-                            index
-                              ? userId
-                              : value,
-                        ),
-                    )
-                  }
-                  placeholder={`Sélectionner ${label.toLowerCase()}`}
-                />
-              </div>
-            ),
-          )}
+                  <div className="flex-1">
+                    <UserAutocomplete
+                      value={userId}
+                      onChange={(newUserId) =>
+                        setUsers((cur) =>
+                          cur.map((val, idx) => (idx === index ? newUserId : val)),
+                        )
+                      }
+                      placeholder={`Sélectionner le contrôleur ${index + 1}`}
+                      error={isDupe ? 'Contrôleur déjà sélectionné' : undefined}
+                    />
+                    {isDupe && (
+                      <p className="mt-1 text-[10px] text-rose-400">
+                        Ce contrôleur est sélectionné plusieurs fois.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1 self-end sm:self-center shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => moveController(index, index - 1)}
+                      disabled={index === 0}
+                      title="Monter"
+                      className="rounded border border-[#3f3f46] p-1.5 text-[#a1a1aa] hover:text-white disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveController(index, index + 1)}
+                      disabled={index === users.length - 1}
+                      title="Descendre"
+                      className="rounded border border-[#3f3f46] p-1.5 text-[#a1a1aa] hover:text-white disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeController(index)}
+                      disabled={users.length <= 3}
+                      title={users.length <= 3 ? 'Minimum 3 contrôleurs requis' : 'Supprimer'}
+                      className="rounded border border-[#3f3f46] p-1.5 text-rose-400 hover:bg-rose-950/20 disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </section>
 
         <section className="space-y-4 rounded-lg border border-[#3f3f46] bg-[#27272a] p-5">

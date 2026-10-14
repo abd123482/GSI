@@ -1,6 +1,8 @@
 export type InventoryStatus =
   | 'DRAFT'
   | 'IN_PROGRESS'
+  | 'RECOUNT_REQUIRED'
+  | 'CONVERGED'
   | 'THIRD_COUNT_REQUIRED' // legacy read compatibility only
   | 'COMPLETED'
   | 'FINALIZED'
@@ -12,6 +14,8 @@ export type InventoryType =
 
 export type ReconciliationStatus =
   | 'PENDING'
+  | 'CONVERGED'
+  | 'RECOUNT_REQUIRED'
   | 'PRIMARY_MATCH'
   | 'THIRD_REQUIRED'
   | 'THIRD_RESOLVED';
@@ -81,6 +85,12 @@ export interface Inventory {
   typeInventory: InventoryType;
   status: InventoryStatus;
   policyVersion?: number;
+  rootInventoryId?: string | null;
+  roundNumber?: number;
+  validatedInventoryId?: string | null;
+  parentInventoryId?: string | null;
+  snapshotData?: string | null;
+  cancellationReason?: string | null;
   createdAt?: string;
   launchedAt?: string | null;
   finalizedAt?: string | null;
@@ -88,9 +98,35 @@ export interface Inventory {
   thirdCountRequired?: boolean;
   finalResultSource?: string | null;
   Inventory_User?: InventoryParticipant[];
+  controllers?: Array<{
+    inventoryControllerId: string;
+    round: number;
+    userId: string;
+    user: InventoryUserSummary;
+  }>;
   workUnits?: InventoryWorkUnit[];
   _count?: {
     investigationIssues?: number;
+    units?: number;
+  };
+}
+
+export interface InventoryRoundSummary {
+  inventoryId: string;
+  roundNumber: number;
+  title: string;
+  status: InventoryStatus;
+  launchedAt: string | null;
+  finalizedAt: string | null;
+  controllers: Array<{
+    inventoryControllerId: string;
+    round: number;
+    userId: string;
+    user: InventoryUserSummary;
+  }>;
+  _count: {
+    units: number;
+    issues: number;
   };
 }
 
@@ -112,6 +148,12 @@ export interface CreateInventoryInput {
   }>;
   equipmentIds?: string[];
   shelfIds?: string[];
+}
+
+export interface UpdateRosterInput {
+  users: Array<{
+    userId: string;
+  }>;
 }
 
 export interface CountObservationInput {
@@ -206,18 +248,35 @@ export interface InventoryProgressWorkUnit {
   c3Status: AttemptStatus | 'NOT_REQUIRED';
 }
 
+export interface DynamicControllerProgress {
+  controllerId: string;
+  userId: string;
+  sequence: number;
+  round: number;
+  user: InventoryUserSummary | null;
+  responsibility: string;
+  completedUnits: number;
+  totalUnits: number;
+  isFinished: boolean;
+}
+
 export interface InventoryProgress {
   inventoryId: string;
+  rootInventoryId?: string | null;
+  roundNumber?: number;
+  validatedInventoryId?: string | null;
+  nextChildId?: string | null;
   title: string;
   typeInventory: InventoryType;
   status: InventoryStatus;
   policyVersion: number;
   totalUnits: number;
   reconciledUnits: number;
+  controllersList?: DynamicControllerProgress[];
   controllers: {
-    controller1: ControllerProgress;
-    controller2: ControllerProgress;
-    controller3: ControllerProgress;
+    controller1: ControllerProgress | null;
+    controller2: ControllerProgress | null;
+    controller3: ControllerProgress | null;
   };
   workUnits: InventoryProgressWorkUnit[];
 }
@@ -261,6 +320,7 @@ export interface InventoryReportRow {
   controller1: InventoryReportCell | null;
   controller2: InventoryReportCell | null;
   controller3: InventoryReportCell | null;
+  controllerValues?: Record<string, InventoryReportCell | null>;
   accepted: InventoryReportCell | null;
   controller1VsAccepted: InventoryComparisonResult;
   controller2VsAccepted: InventoryComparisonResult;

@@ -47,8 +47,7 @@ export function SerialCodeInput({ value, onChange, placeholder, className }: Ser
         <div className="flex items-center gap-1.5 px-1 pt-0.5 text-[10px] text-emerald-400">
           <Search className="h-3 w-3" />
           <span>
-            {matchedSerial.equipment?.equipmentName || 'Article inconnu'}
-            {matchedSerial.shelf ? ` • Attendu dans: ${matchedSerial.shelf.shelfName}` : ' • Aucun emplacement attendu'}
+            {matchedSerial.equipment?.equipmentName || 'Article identifié'}
           </span>
         </div>
       )}

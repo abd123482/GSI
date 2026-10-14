@@ -116,14 +116,26 @@ model Inventory {
   launchedAt           DateTime?
   creatorId            String?               @db.UniqueIdentifier
   adjustmentApproverId String?               @db.UniqueIdentifier
+  rootInventoryId      String?               @db.UniqueIdentifier
+  roundNumber          Int                   @default(1, map: "DF_Inventory_roundNumber")
+  validatedInventoryId String?               @db.UniqueIdentifier
+  snapshotData         String?               @db.NVarChar(Max)
+  version              Int                   @default(1, map: "DF_Inventory_version")
   parentInventory      Inventory?            @relation("InventoryHierarchy", fields: [parentInventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "FK__Inventory__paren__7CD98669")
   subInventories       Inventory[]           @relation("InventoryHierarchy")
+  rootInventory        Inventory?            @relation("InventoryRootRounds", fields: [rootInventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Inventory_RootInventory")
+  roundInventories     Inventory[]           @relation("InventoryRootRounds")
+  validatedInventory   Inventory?            @relation("InventoryValidatedRound", fields: [validatedInventoryId], references: [inventoryId], onDelete: NoAction, onUpdate: NoAction, map: "FK_Inventory_ValidatedInventory")
+  validatedForRoot     Inventory[]           @relation("InventoryValidatedRound")
   controllers          InventoryController[]
   issues               InventoryIssue[]
   units                InventoryUnit[]
   movements            Mouvement[]
 
   @@index([status], map: "IX_Inventory_Status")
+  @@index([rootInventoryId], map: "IX_Inventory_RootInventoryId")
+  @@index([parentInventoryId], map: "IX_Inventory_ParentInventoryId")
+  @@index([rootInventoryId, roundNumber], map: "IX_Inventory_Root_Round")
   @@map("Inventory")
 }
 
@@ -151,22 +163,29 @@ model InventoryCount {
   unit                  InventoryUnit       @relation("InventoryUnitCounts", fields: [unitId], references: [unitId], onUpdate: NoAction, map: "FK_InventoryCount_Unit")
   acceptedByUnits       InventoryUnit[]     @relation("InventoryAcceptedCount")
 
+  @@unique([unitId, inventoryControllerId], map: "UQ_InventoryCount_Unit_Controller")
   @@map("InventoryCount")
 }
 
 model InventoryIssue {
-  issueId          String         @id(map: "PK_InventoryIssue") @default(dbgenerated("newid()"), map: "DF_InventoryIssue_Id") @db.UniqueIdentifier
-  inventoryId      String         @db.UniqueIdentifier
-  unitId           String?        @db.UniqueIdentifier
-  type             String         @db.VarChar(100)
-  data             String         @db.NVarChar(Max)
-  resolvedByUserId String?        @db.UniqueIdentifier
-  resolvedAt       DateTime?
-  createdAt        DateTime       @default(dbgenerated("sysdatetime()"), map: "DF_InventoryIssue_CreatedAt")
-  inventory        Inventory      @relation(fields: [inventoryId], references: [inventoryId], onUpdate: NoAction, map: "FK_InventoryIssue_Inventory")
-  unit             InventoryUnit? @relation(fields: [unitId], references: [unitId], onDelete: NoAction, onUpdate: NoAction, map: "FK_InventoryIssue_Unit")
-  resolvedByUser   User?          @relation("InventoryIssueResolvedBy", fields: [resolvedByUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK_InventoryIssue_User")
+  issueId               String         @id(map: "PK_InventoryIssue") @default(dbgenerated("newid()"), map: "DF_InventoryIssue_Id") @db.UniqueIdentifier
+  inventoryId           String         @db.UniqueIdentifier
+  unitId                String?        @db.UniqueIdentifier
+  type                  String         @db.VarChar(100)
+  data                  String         @db.NVarChar(Max)
+  resolvedByUserId      String?        @db.UniqueIdentifier
+  resolvedAt            DateTime?
+  createdAt             DateTime       @default(dbgenerated("sysdatetime()"), map: "DF_InventoryIssue_CreatedAt")
+  originatingRound      Int?           @default(1, map: "DF_InventoryIssue_originatingRound")
+  issueCategory         String?        @db.VarChar(50)
+  status                String         @default("OPEN", map: "DF_InventoryIssue_status") @db.VarChar(50)
+  resolutionDisposition String?        @db.VarChar(100)
+  resolutionReason      String?        @db.VarChar(500)
+  inventory             Inventory      @relation(fields: [inventoryId], references: [inventoryId], onUpdate: NoAction, map: "FK_InventoryIssue_Inventory")
+  unit                  InventoryUnit? @relation(fields: [unitId], references: [unitId], onDelete: NoAction, onUpdate: NoAction, map: "FK_InventoryIssue_Unit")
+  resolvedByUser        User?          @relation("InventoryIssueResolvedBy", fields: [resolvedByUserId], references: [userId], onDelete: NoAction, onUpdate: NoAction, map: "FK_InventoryIssue_User")
 
+  @@index([status, inventoryId], map: "IX_InventoryIssue_Status")
   @@map("InventoryIssue")
 }
 
@@ -180,6 +199,7 @@ model InventoryUnit {
   acceptedCountId      String?          @db.UniqueIdentifier
   snapshotData         String?          @db.NVarChar(Max)
   reconciledAt         DateTime?
+  unitOrder            Int              @default(0, map: "DF_InventoryUnit_unitOrder")
   counts               InventoryCount[] @relation("InventoryUnitCounts")
   issues               InventoryIssue[]
   acceptedCount        InventoryCount?  @relation("InventoryAcceptedCount", fields: [acceptedCountId], references: [countId], onDelete: NoAction, onUpdate: NoAction, map: "FK_InventoryUnit_AcceptedCount")
@@ -187,6 +207,7 @@ model InventoryUnit {
   inventory            Inventory        @relation(fields: [inventoryId], references: [inventoryId], onUpdate: NoAction, map: "FK_InventoryUnit_Inventory")
   shelf                Shelf?           @relation(fields: [shelfId], references: [shelfId], onDelete: NoAction, onUpdate: NoAction, map: "FK_InventoryUnit_Shelf")
 
+  @@index([inventoryId, unitOrder], map: "IX_InventoryUnit_Inventory_Order")
   @@map("InventoryUnit")
 }
 

@@ -22,12 +22,12 @@ export const createInventorySchema = z
             .min(1, 'Sélectionnez un contrôleur'),
         }),
       )
-      .length(3, 'Sélectionnez exactement 3 contrôleurs distincts')
+      .min(3, 'Sélectionnez au moins 3 contrôleurs distincts')
       .refine(
         (users) =>
-          new Set(users.map((user) => user.userId)).size === 3,
+          new Set(users.map((user) => user.userId)).size === users.length,
         {
-          message: 'Les 3 contrôleurs doivent être différents',
+          message: 'Tous les contrôleurs doivent être différents',
         },
       ),
 
@@ -60,3 +60,25 @@ export const createInventorySchema = z
 
 export type CreateInventoryFormValues =
   z.infer<typeof createInventorySchema>;
+
+export const updateRosterSchema = z.object({
+  users: z
+    .array(
+      z.object({
+        userId: z
+          .string()
+          .trim()
+          .min(1, 'Sélectionnez un contrôleur'),
+      }),
+    )
+    .min(3, 'Sélectionnez au moins 3 contrôleurs distincts')
+    .refine(
+      (users) =>
+        new Set(users.map((user) => user.userId)).size === users.length,
+      {
+        message: 'Tous les contrôleurs doivent être différents',
+      },
+    ),
+});
+
+export type UpdateRosterFormValues = z.infer<typeof updateRosterSchema>;

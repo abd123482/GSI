@@ -1,36 +1,32 @@
-/* eslint-disable react-hooks/set-state-in-effect */
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
-  Barcode,
+  CheckCircle2,
+  Clock,
   Loader2,
   Package,
   Plus,
   Save,
   Send,
+  ShieldCheck,
   Trash2,
   Warehouse,
-} from "lucide-react";
+} from 'lucide-react';
 
 import {
   useInventoryTask,
   useSaveInventoryTaskDraft,
   useSubmitInventoryTask,
-} from "@/hooks/use-inventory";
-
-import { useEquipments, useEquipmentAllocations } from "@/hooks/use-equipments";
-
-import { useShelves } from "@/hooks/use-shelves";
-
-import { SerialCodeInput } from "@/components/inventory/SerialCodeInput";
-
-import type { CountObservationInput } from "@/types/inventory";
-
-import { getErrorMessage } from "@/lib/error-message";
+} from '@/hooks/use-inventory';
+import { useEquipments } from '@/hooks/use-equipments';
+import { useShelves } from '@/hooks/use-shelves';
+import { SerialCodeInput } from '@/components/inventory/SerialCodeInput';
+import type { CountObservationInput } from '@/types/inventory';
+import { getErrorMessage } from '@/lib/error-message';
 
 interface StandardRow {
   id: string;
@@ -47,19 +43,7 @@ interface SerialRow {
 }
 
 function newId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function purposeText(purpose?: string) {
-  if (purpose === "PRIMARY_1") {
-    return "C1";
-  }
-
-  if (purpose === "PRIMARY_2") {
-    return "C2";
-  }
-
-  return "C3";
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 export default function InventoryTaskPage() {
@@ -71,83 +55,29 @@ export default function InventoryTaskPage() {
   const saveDraft = useSaveInventoryTaskDraft();
   const submitTask = useSubmitInventoryTask();
 
-  const equipments = useEquipments({
-    page: 1,
-    limit: 100,
-  });
-
-  const shelves = useShelves({
-    page: 1,
-    limit: 100,
-  });
-
-  const allocations = useEquipmentAllocations(
-    taskQuery.data?.unit.equipmentId ?? "",
-    taskQuery.data?.unit.inventory.typeInventory === "ByEquipment",
-  );
+  const equipmentsQuery = useEquipments({ page: 1, limit: 100 });
+  const shelvesQuery = useShelves({ page: 1, limit: 100 });
 
   const task = taskQuery.data;
+  const isSubmitted = Boolean(task?.status === 'SUBMITTED' || task?.submittedAt);
 
-  const byEquipment = task?.unit.inventory.typeInventory === "ByEquipment";
-
-  const byShelf = task?.unit.inventory.typeInventory === "ByShelf";
-
-  const expectedShelves = useMemo(() => {
-    const fromStandard =
-      task?.expected?.standardItems.map((i: any) => ({
-        shelfId: i.shelfId,
-        shelfName: i.shelfName,
-        quantity: i.expectedQuantity,
-      })) || [];
-    const fromSerialized =
-      task?.expected?.serializedItems
-        .map((i: any) => ({
-          shelfId: i.expectedShelfId ?? "",
-          shelfName: i.expectedShelfName ?? "",
-          quantity: 1,
-        }))
-        .filter((i: any) => i.shelfId) || [];
-    const combined = [...fromStandard, ...fromSerialized];
-    if (combined.length > 0) {
-      const map = new Map();
-      for (const item of combined) {
-        if (!map.has(item.shelfId)) {
-          map.set(item.shelfId, { ...item });
-        } else {
-          map.get(item.shelfId).quantity += item.quantity;
-        }
-      }
-      return Array.from(map.values());
-    }
-    return (
-      allocations.data?.equipmentShelfs?.map((a: any) => ({
-        shelfId: a.shelfId,
-        shelfName: a.shelf?.shelfName ?? "Emplacement",
-        quantity: a.equipmentQuantity,
-      })) ?? []
-    );
-  }, [task?.expected, allocations.data?.equipmentShelfs]);
-
-  const expectedEquipments = useMemo(() => {
-    return task?.expectedEquipments ?? [];
-  }, [task]);
+  const byEquipment = task?.unit?.inventory?.typeInventory === 'ByEquipment';
+  const byShelf = task?.unit?.inventory?.typeInventory === 'ByShelf';
 
   const [standardRows, setStandardRows] = useState<StandardRow[]>([]);
   const [serialRows, setSerialRows] = useState<SerialRow[]>([]);
-  const [selectedAdditionalShelves, setSelectedAdditionalShelves] = useState<
-    string[]
-  >([]);
-  const [isAddingShelf, setIsAddingShelf] = useState(false);
-  const [shelfToAdd, setShelfToAdd] = useState("");
-  const [isAddingEquipment, setIsAddingEquipment] = useState(false);
-  const [equipmentToAdd, setEquipmentToAdd] = useState("");
+  const [selectedAdditionalShelves, setSelectedAdditionalShelves] = useState<string[]>([]);
   const [selectedAdditionalEquipments, setSelectedAdditionalEquipments] = useState<string[]>([]);
+  const [shelfToAdd, setShelfToAdd] = useState('');
+  const [equipmentToAdd, setEquipmentToAdd] = useState('');
+  const [isAddingShelf, setIsAddingShelf] = useState(false);
+  const [isAddingEquipment, setIsAddingEquipment] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSaved, setIsSaved] = useState(true);
 
+  // Load from draftData on initial load
   useEffect(() => {
-    if (!task) {
-      return;
-    }
+    if (!task) return;
 
     if (task.draftData) {
       try {
@@ -160,152 +90,89 @@ export default function InventoryTaskPage() {
         const extraShelves: string[] = [];
         const extraEquipments: string[] = [];
 
-        for (const observation of parsed.observations ?? []) {
-          const sId = observation.observedShelfId ?? observation.shelfId ?? "";
-          if (sId && !expectedShelves.some((e) => e.shelfId === sId)) {
-            extraShelves.push(sId);
-          }
+        for (const obs of parsed.observations ?? []) {
+          const sId = obs.observedShelfId ?? obs.shelfId ?? '';
+          const eId = obs.observedEquipmentId ?? obs.equipmentId ?? '';
 
-          const eId = observation.observedEquipmentId ?? observation.equipmentId ?? "";
-          if (byShelf && eId && !expectedEquipments.some((e: any) => e.equipmentId === eId)) {
-            extraEquipments.push(eId);
-          }
+          if (sId) extraShelves.push(sId);
+          if (eId) extraEquipments.push(eId);
 
-          if (observation.scannedSerialCode) {
+          if (obs.scannedSerialCode) {
             serial.push({
               id: newId(),
-              code: observation.scannedSerialCode,
+              code: obs.scannedSerialCode,
               shelfId: sId,
               equipmentId: eId,
             });
           } else {
             standard.push({
               id: newId(),
-              equipmentId: eId,
-              shelfId: sId,
-              quantity: observation.quantityCalculated ?? 0,
+              equipmentId: eId || (task.unit.equipmentId ?? ''),
+              shelfId: sId || (task.unit.shelfId ?? ''),
+              quantity: obs.quantityCalculated ?? 0,
             });
           }
         }
 
         setStandardRows(standard);
         setSerialRows(serial);
-        if (extraShelves.length > 0) {
-          setSelectedAdditionalShelves((cur) =>
-            Array.from(new Set([...cur, ...extraShelves])),
-          );
-        }
-        if (extraEquipments.length > 0) {
-          setSelectedAdditionalEquipments((cur) =>
-            Array.from(new Set([...cur, ...extraEquipments])),
-          );
-        }
+        setSelectedAdditionalShelves(Array.from(new Set(extraShelves)));
+        setSelectedAdditionalEquipments(Array.from(new Set(extraEquipments)));
+        setIsSaved(true);
         return;
       } catch {
         // Fall back to clean state
       }
     }
 
-    if (byEquipment) {
+    // Default row if none exists
+    if (byEquipment && task.unit.equipmentId) {
       if (task.isSerialized) {
-        setSerialRows((current) => {
-          if (current.length > 0) return current;
-          if (expectedShelves.length > 0) {
-            return expectedShelves.map((s) => ({ id: newId(), code: "", shelfId: s.shelfId }));
-          }
-          return [];
-        });
+        setSerialRows([{ id: newId(), code: '', shelfId: '' }]);
       } else {
-        setStandardRows((current) => {
-          if (current.length > 0) return current;
-          if (expectedShelves.length > 0) {
-            return expectedShelves.map((s) => ({ id: newId(), equipmentId: task.unit.equipmentId ?? "", shelfId: s.shelfId, quantity: 0 }));
-          }
-          return [];
-        });
+        setStandardRows([{
+          id: newId(),
+          equipmentId: task.unit.equipmentId,
+          shelfId: '',
+          quantity: 0,
+        }]);
       }
-    } else {
-      // ByShelf
-      setStandardRows((current) => {
-        if (current.length > 0) return current;
-        return expectedEquipments.filter(e => !e.hasSerialNumber).map((e) => ({
-          id: newId(), equipmentId: e.equipmentId, shelfId: task.unit.shelfId ?? "", quantity: 0
-        }));
-      });
-      setSerialRows((current) => {
-        if (current.length > 0) return current;
-        return expectedEquipments.filter(e => e.hasSerialNumber).map((e) => ({
-          id: newId(), equipmentId: e.equipmentId, code: "", shelfId: task.unit.shelfId ?? ""
-        }));
-      });
+    } else if (byShelf && task.unit.shelfId) {
+      setStandardRows([]);
+      setSerialRows([]);
     }
-  }, [task, byEquipment, expectedShelves]);
-
-  if (taskQuery.isLoading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-[#18181b] text-white">
-        <Loader2 className="h-5 w-5 animate-spin" />
-      </main>
-    );
-  }
-  if (taskQuery.isError || !task) {
-    return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-[#18181b] text-white space-y-4">
-        <p className="text-rose-400">
-          Erreur lors du chargement de la tâche ou accès refusé.
-        </p>
-        <Link href="/inventory/tasks" className="text-sm underline">
-          Retour aux tâches
-        </Link>
-      </main>
-    );
-  }
+  }, [task, byEquipment, byShelf]);
 
   const busy = saveDraft.isPending || submitTask.isPending;
 
-  const scopeShelf = shelves.shelves.find(
-    (shelf) => shelf.shelfId === task.unit.shelfId,
+  const scopeEquipment = equipmentsQuery.equipments.find(
+    (e) => e.equipmentId === task?.unit.equipmentId,
   );
-
-  const scopeEquipment = equipments.equipments.find(
-    (equipment) => equipment.equipmentId === task.unit.equipmentId,
+  const scopeShelf = shelvesQuery.shelves.find(
+    (s) => s.shelfId === task?.unit.shelfId,
   );
 
   function buildObservations(): CountObservationInput[] {
-    if (!task) {
-      return [];
-    }
+    if (!task) return [];
 
-    const standard = standardRows
+    const standard: CountObservationInput[] = standardRows
       .filter((row) => (byEquipment ? row.shelfId : row.equipmentId))
       .map((row) => ({
-        equipmentId: byEquipment
-          ? (task.unit.equipmentId ?? row.equipmentId)
-          : row.equipmentId,
+        equipmentId: byEquipment ? (task.unit.equipmentId ?? row.equipmentId) : row.equipmentId,
         observedEquipmentId: byShelf ? row.equipmentId : undefined,
-        shelfId: byShelf
-          ? (task.unit.shelfId ?? undefined)
-          : row.shelfId || undefined,
-        observedShelfId: byEquipment
-          ? row.shelfId || undefined
-          : (task.unit.shelfId ?? undefined),
-        quantityCalculated: row.quantity,
+        shelfId: byShelf ? (task.unit.shelfId ?? undefined) : row.shelfId || undefined,
+        observedShelfId: byEquipment ? row.shelfId || undefined : (task.unit.shelfId ?? undefined),
+        quantityCalculated: Math.max(0, Math.floor(row.quantity)),
         isExplicitZero: row.quantity === 0,
       }));
 
-    const serial = serialRows
+    const serial: CountObservationInput[] = serialRows
       .filter((row) => row.code.trim())
       .map((row) => ({
-        equipmentId: byEquipment
-          ? (task.unit.equipmentId ?? undefined)
-          : row.equipmentId,
+        equipmentId: byEquipment ? (task.unit.equipmentId ?? undefined) : row.equipmentId,
         observedEquipmentId: byShelf ? row.equipmentId : undefined,
-        shelfId: byShelf
-          ? (task.unit.shelfId ?? undefined)
-          : row.shelfId || undefined,
-        observedShelfId: byEquipment
-          ? row.shelfId || undefined
-          : (task.unit.shelfId ?? undefined),
+        shelfId: byShelf ? (task.unit.shelfId ?? undefined) : row.shelfId || undefined,
+        observedShelfId: byEquipment ? row.shelfId || undefined : (task.unit.shelfId ?? undefined),
         scannedSerialCode: row.code.trim(),
         quantityCalculated: 1,
       }));
@@ -313,12 +180,14 @@ export default function InventoryTaskPage() {
     return [...standard, ...serial];
   }
 
-  async function persist(submit: boolean) {
+  async function persist(submit: boolean, confirmEmpty: boolean = false) {
     setError(null);
-    const observations = buildObservations();
+    const observations = confirmEmpty ? [] : buildObservations();
 
-    if (submit && observations.length === 0) {
-      setError("Ajoutez au moins une observation ou vérification.");
+    if (submit && observations.length === 0 && !confirmEmpty) {
+      setError(
+        'Veuillez saisir au moins une observation ou confirmer explicitement un comptage vide (0 article).'
+      );
       return;
     }
 
@@ -328,139 +197,104 @@ export default function InventoryTaskPage() {
           taskId,
           data: {
             observations,
+            isDraft: false,
           },
         });
-
-        router.push("/inventory/tasks");
+        router.push('/inventory/tasks');
       } else {
         await saveDraft.mutateAsync({
           taskId,
           data: {
-            isDraft: true,
             observations,
+            isDraft: true,
           },
         });
+        setIsSaved(true);
       }
     } catch (cause: unknown) {
-      setError(getErrorMessage(cause, "Impossible d’enregistrer cette tâche."));
+      setError(getErrorMessage(cause, 'Impossible d’enregistrer cette tâche.'));
     }
   }
 
-  const renderedEquipmentIds = Array.from(
-    new Set([
-      ...expectedEquipments.map((a: any) => a.equipmentId),
-      ...standardRows.map((r) => r.equipmentId).filter(Boolean),
-      ...serialRows.map((r) => r.equipmentId).filter(Boolean),
-      ...selectedAdditionalEquipments,
-    ])
-  );
-
-  const renderedShelfIds = Array.from(
-    new Set([
-      ...expectedShelves.map((a: any) => a.shelfId),
-      ...standardRows.map((r) => r.shelfId).filter(Boolean),
-      ...serialRows.map((r) => r.shelfId).filter(Boolean),
-      ...selectedAdditionalShelves,
-    ]),
-  );
-
-  function addSerialRow(shelfId: string = "") {
-    setSerialRows((current) => [
-      ...current,
-      {
-        id: newId(),
-        code: "",
-        shelfId,
-      },
-    ]);
-  }
-
-  function addStandardRow(shelfId: string = "") {
-    setStandardRows((current) => [
-      ...current,
-      {
-        id: newId(),
-        equipmentId: task?.unit.equipmentId ?? "",
-        shelfId,
-        quantity: 0,
-      },
-    ]);
-  }
-
-  function removeAdditionalShelf(shelfId: string) {
-    setSelectedAdditionalShelves((cur) => cur.filter((id) => id !== shelfId));
-    setStandardRows((cur) => cur.filter((r) => r.shelfId !== shelfId));
-    setSerialRows((cur) => cur.filter((r) => r.shelfId !== shelfId));
-  }
-
-  function confirmAddShelf() {
-    if (!shelfToAdd) return;
-    setSelectedAdditionalShelves((cur) =>
-      Array.from(new Set([...cur, shelfToAdd])),
+  if (taskQuery.isLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#18181b] text-white">
+        <Loader2 className="h-5 w-5 animate-spin text-[#d8a868]" />
+      </main>
     );
-    if (task?.isSerialized) {
-      setSerialRows((cur) => [
-        ...cur,
-        { id: newId(), code: "", shelfId: shelfToAdd },
-      ]);
-    } else {
-      setStandardRows((cur) => {
-        if (cur.some((r) => r.shelfId === shelfToAdd)) return cur;
-        return [
-          ...cur,
-          {
-            id: newId(),
-            equipmentId: task?.unit.equipmentId ?? "",
-            shelfId: shelfToAdd,
-            quantity: 0,
-          },
-        ];
-      });
-    }
-    setShelfToAdd("");
-    setIsAddingShelf(false);
   }
+
+  if (taskQuery.isError || !task) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-[#18181b] p-6 text-white space-y-4">
+        <p className="text-rose-400">Erreur lors du chargement de la tâche ou accès refusé.</p>
+        <Link href="/inventory/tasks" className="text-sm underline text-[#a1a1aa] hover:text-white">
+          Retour aux tâches
+        </Link>
+      </main>
+    );
+  }
+
+  const controllerSequence = (task.sequence ?? 0) + 1;
 
   return (
     <main className="min-h-[calc(100vh-3.5rem)] bg-[#18181b] text-white">
       <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-6">
-        <header className="flex items-start gap-3 border-b border-[#3f3f46] pb-4">
-          <Link
-            href="/inventory/tasks"
-            className="rounded border border-[#3f3f46] p-2 text-[#a1a1aa] hover:text-white"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
+        {/* En-tête */}
+        <header className="flex flex-col gap-4 border-b border-[#3f3f46] pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Link
+              href="/inventory/tasks"
+              className="rounded border border-[#3f3f46] p-2 text-[#a1a1aa] hover:text-white transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
 
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold">
-                {task.scopeLabel ?? `Unité #${task.unit.unitOrder + 1}`}
-              </h1>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-semibold">
+                  {task.scopeLabel ?? `Unité #${task.unit.unitOrder + 1}`}
+                </h1>
 
-              <span
-                className={`rounded border px-2 py-1 text-[10px] font-semibold ${
-                  task.purpose === "FINAL_RECOUNT"
-                    ? "border-violet-400/30 bg-violet-950/20 text-violet-200"
-                    : "border-sky-400/30 bg-sky-950/20 text-sky-200"
-                }`}
-              >
-                {purposeText(task.purpose)}
-              </span>
+                <span className="rounded border border-sky-400/30 bg-sky-950/20 px-2 py-0.5 text-[10px] font-semibold text-sky-200">
+                  Contrôleur {controllerSequence}
+                </span>
+
+                {isSubmitted ? (
+                  <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-950/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Soumis
+                  </span>
+                ) : isSaved ? (
+                  <span className="inline-flex items-center gap-1 rounded border border-[#3f3f46] bg-[#27272a] px-2 py-0.5 text-[10px] text-[#a1a1aa]">
+                    <ShieldCheck className="h-3 w-3 text-emerald-400" />
+                    Brouillon à jour
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded border border-amber-500/30 bg-amber-950/20 px-2 py-0.5 text-[10px] text-amber-300">
+                    <Clock className="h-3 w-3" />
+                    Modifications non enregistrées
+                  </span>
+                )}
+              </div>
+
+              <p className="mt-1 text-xs text-[#a1a1aa]">
+                {task.unit.inventory.title} • Tour {task.unit.inventory.roundNumber ?? 1} • Unité #{task.unit.unitOrder + 1}
+              </p>
             </div>
+          </div>
 
-            <p className="mt-1 text-xs text-[#a1a1aa]">
-              {task.unit.inventory.title}
-              {" • "}
-              Unité #{task.unit.unitOrder + 1}
-            </p>
+          <div className="text-xs text-[#a1a1aa] bg-[#27272a] px-3 py-1.5 rounded border border-[#3f3f46]">
+            Comptage à l’aveugle strict • Comptez uniquement ce que vous observez physiquement
           </div>
         </header>
 
-        {task.purpose === "FINAL_RECOUNT" && (
-          <div className="rounded border border-violet-400/25 bg-violet-950/15 p-3 text-xs text-violet-100">
-            C1 et C2 ont donné des résultats différents pour cette unité. Votre
-            résultat C3 deviendra le résultat accepté.
+        {isSubmitted && (
+          <div className="rounded border border-emerald-500/30 bg-emerald-950/20 p-4 text-xs text-emerald-200 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+            <span>
+              Ce comptage a été validé et soumis définitivement. Les observations ci-dessous sont enregistrées et immuables.
+            </span>
           </div>
         )}
 
@@ -470,375 +304,205 @@ export default function InventoryTaskPage() {
           </div>
         )}
 
+        {/* Détails du périmètre */}
         {byEquipment && (
-          <div className="rounded border border-[#3f3f46] bg-[#27272a] p-4">
-            <p className="text-[10px] uppercase tracking-wider text-[#71717a]">
-              Article contrôlé
+          <div className="rounded-lg border border-[#3f3f46] bg-[#27272a] p-4">
+            <p className="text-[10px] uppercase tracking-wider text-[#71717a]">Article à inventorier</p>
+            <p className="mt-1 text-base font-semibold text-white">
+              {scopeEquipment?.equipmentName ?? task.scopeLabel ?? 'Article'}
             </p>
-
-            <p className="mt-1 text-sm font-semibold">
-              {scopeEquipment?.equipmentName ?? task.scopeLabel ?? "Article"}
+            <p className="mt-1 text-xs text-[#a1a1aa]">
+              {task.isSerialized
+                ? 'Cet article comporte des numéros de série. Scannez ou saisissez chaque numéro de série observé et son emplacement.'
+                : 'Article standard : indiquez la quantité observée pour chaque emplacement où cet article est présent.'}
             </p>
-
-            {expectedShelves.length > 0 && (
-              <div className="mt-3 border-t border-[#3f3f46] pt-3">
-                <p className="mb-1.5 text-[10px] uppercase tracking-wider text-[#71717a]">
-                  Emplacements attendus ({expectedShelves.length})
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {expectedShelves.map((allocation: any) => (
-                    <span
-                      key={allocation.shelfId}
-                      className="inline-flex items-center rounded border border-[#3f3f46] bg-[#1f1b18] px-2 py-0.5 text-[10px] text-emerald-100"
-                    >
-                      {allocation.shelfName} ({allocation.quantity ?? 0})
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 
         {byShelf && (
-          <div className="rounded border border-[#3f3f46] bg-[#27272a] p-4">
-            <p className="text-[10px] uppercase tracking-wider text-[#71717a]">
-              Emplacement contrôlé
+          <div className="rounded-lg border border-[#3f3f46] bg-[#27272a] p-4">
+            <p className="text-[10px] uppercase tracking-wider text-[#71717a]">Emplacement à inventorier</p>
+            <p className="mt-1 text-base font-semibold text-white">
+              {scopeShelf?.shelfName ?? task.scopeLabel ?? 'Emplacement'}
             </p>
-
-            <p className="mt-1 text-sm font-semibold">
-              {scopeShelf?.shelfName ?? task.scopeLabel ?? "Emplacement"}
+            <p className="mt-1 text-xs text-[#a1a1aa]">
+              Indiquez l’intégralité des articles et numéros de série physiquement observés dans cet emplacement.
             </p>
           </div>
         )}
 
-        {/* SECTION COMPTAGE QUANTITATIF (NON-SERIALISÉ) */}
+        {/* Formulaire Article Standard */}
         {!task.isSerialized && (
           <section className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#27272a]">
-            <div className="flex items-center justify-between border-b border-[#3f3f46] px-4 py-3">
+            <div className="flex items-center justify-between border-b border-[#3f3f46] px-4 py-3 bg-[#27272a]/70">
               <h2 className="flex items-center gap-1.5 text-xs font-semibold">
-                <Package className="h-3.5 w-3.5" />
+                <Package className="h-3.5 w-3.5 text-[#d8a868]" />
                 Comptage quantitatif par emplacement
               </h2>
 
+              {!isSubmitted && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingShelf(true)}
+                  className="inline-flex items-center gap-1 text-xs text-[#d8a868] hover:underline"
+                >
+                  <Plus className="h-3 w-3" />
+                  Ajouter un emplacement
+                </button>
+              )}
             </div>
 
-            <div className="divide-y divide-[#3f3f46]">
-              {byEquipment ? (
-                <div className="p-4 space-y-4">
-                  {renderedShelfIds.length === 0 ? (
-                    <div className="rounded border border-[#3f3f46] bg-[#26221f] p-4 text-center text-xs text-white/50">
-                      Aucun emplacement attendu pour cet article. Utilisez le
-                      bouton ci-dessous pour ajouter un emplacement.
-                    </div>
-                  ) : (
-                    renderedShelfIds.map((shelfId) => {
-                      const shelf = shelves.shelves.find(
-                        (s) => s.shelfId === shelfId,
-                      );
-                      const expected = expectedShelves.find(
-                        (a: any) => a.shelfId === shelfId,
-                      );
-                      const isAdditional = !expected;
-                      const row = standardRows.find(
-                        (r) => r.shelfId === shelfId,
-                      );
-
-                      return (
-                        <div
-                          key={shelfId}
-                          className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#26221f]"
-                        >
-                          <div className="flex items-center justify-between border-b border-[#3f3f46] bg-[#1f1b18] px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <Warehouse className="h-4 w-4 text-amber-400" />
-                              <h3 className="text-sm font-semibold text-white">
-                                {expected?.shelfName ??
-                                  shelf?.shelfName ??
-                                  "Emplacement"}
-                              </h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {expected ? (
-                                <span className="rounded border border-emerald-500/20 bg-emerald-950/40 px-2 py-0.5 text-xs font-medium text-emerald-300">
-                                  Attendu : {expected.quantity ?? 0}
-                                </span>
-                              ) : (
-                                <span className="rounded border border-amber-500/20 bg-amber-950/40 px-2 py-0.5 text-xs font-medium text-amber-300">
-                                  Emplacement supplémentaire
-                                </span>
-                              )}
-                              {isAdditional && (
-                                <button
-                                  type="button"
-                                  onClick={() => removeAdditionalShelf(shelfId)}
-                                  title="Retirer cet emplacement supplémentaire"
-                                  className="ml-1 rounded p-1 text-white/40 transition hover:bg-rose-950/30 hover:text-rose-300"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          <div className="p-4">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <label className="text-xs text-white/70">
-                                Quantité comptée dans cet emplacement :
-                              </label>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step={1}
-                                  value={row?.quantity ?? 0}
-                                  onChange={(event) => {
-                                    const val = Math.max(
-                                      0,
-                                      Number(event.target.value) || 0,
-                                    );
-                                    setStandardRows((current) => {
-                                      const exists = current.some(
-                                        (r) => r.shelfId === shelfId,
-                                      );
-                                      if (exists) {
-                                        return current.map((r) =>
-                                          r.shelfId === shelfId
-                                            ? { ...r, quantity: val }
-                                            : r,
-                                        );
-                                      }
-                                      return [
-                                        ...current,
-                                        {
-                                          id: newId(),
-                                          equipmentId:
-                                            task.unit.equipmentId ?? "",
-                                          shelfId,
-                                          quantity: val,
-                                        },
-                                      ];
-                                    });
-                                  }}
-                                  className="h-10 w-28 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 font-mono text-sm font-semibold text-white focus:border-amber-500 focus:outline-none"
-                                />
-                                <span className="text-xs text-white/50">
-                                  unités
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-
-                  {/* BOUTON EN BAS POUR AJOUTER UN EMPLACEMENT */}
-                  <div className="pt-2">
-                    {!isAddingShelf ? (
-                      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[#4a423a] bg-[#26221f]/50 p-6 text-center">
-                        <p className="mb-3 text-xs text-white/60">
-                          Vous avez trouvé cet article dans un autre emplacement
-                          ?
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setIsAddingShelf(true)}
-                          className="inline-flex items-center gap-2 rounded-lg border border-[#4a423a] bg-[#1f1b18] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:border-amber-500/50 hover:bg-[#2c2724] hover:text-amber-300"
-                        >
-                          <Plus className="h-4 w-4 text-amber-400" />
-                          Ajouter un autre emplacement
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="rounded-lg border border-[#4a423a] bg-[#26221f] p-5 shadow-lg">
-                        <h4 className="mb-1 text-xs font-semibold text-white">
-                          Ajouter un autre emplacement
-                        </h4>
-                        <p className="mb-3 text-[11px] text-white/50">
-                          Sélectionnez l&apos;emplacement supplémentaire où vous
-                          observez cet article.
-                        </p>
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                          <select
-                            value={shelfToAdd}
-                            onChange={(e) => setShelfToAdd(e.target.value)}
-                            className="h-10 flex-1 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-xs text-white focus:border-amber-500 focus:outline-none"
-                          >
-                            <option value="">
-                              Sélectionnez l&apos;emplacement...
-                            </option>
-                            {shelves.shelves
-                              .filter(
-                                (s) => !renderedShelfIds.includes(s.shelfId),
-                              )
-                              .map((s) => (
-                                <option key={s.shelfId} value={s.shelfId}>
-                                  {s.shelfName}
-                                </option>
-                              ))}
-                          </select>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              disabled={!shelfToAdd}
-                              onClick={confirmAddShelf}
-                              className="h-10 rounded bg-amber-600 px-4 text-xs font-semibold text-white transition hover:bg-amber-500 disabled:opacity-40"
-                            >
-                              Ajouter
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsAddingShelf(false);
-                                setShelfToAdd("");
-                              }}
-                              className="h-10 rounded border border-[#3f3f46] px-3 text-xs text-white/70 hover:bg-white/5"
-                            >
-                              Annuler
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+            <div className="p-4 space-y-3">
+              {standardRows.length === 0 ? (
+                <div className="rounded border border-dashed border-[#3f3f46] p-6 text-center text-xs text-[#71717a]">
+                  Aucune ligne de comptage enregistrée. Cliquez sur &quot;Ajouter un emplacement&quot; pour consigner les quantités observées.
                 </div>
               ) : (
-                <div className="p-4 space-y-4">
-                  {renderedEquipmentIds.filter(id => {
-                    const eq = expectedEquipments.find((e: any) => e.equipmentId === id) ?? equipments.equipments.find((e) => e.equipmentId === id);
-                    return eq && !eq.hasSerialNumber;
-                  }).length === 0 ? (
-                    <div className="rounded border border-[#3f3f46] bg-[#26221f] p-4 text-center text-xs text-white/50">
-                      Aucun article standard attendu dans cet emplacement.
-                    </div>
-                  ) : (
-                    renderedEquipmentIds.filter(id => {
-                      const eq = expectedEquipments.find((e: any) => e.equipmentId === id) ?? equipments.equipments.find((e) => e.equipmentId === id);
-                      return eq && !eq.hasSerialNumber;
-                    }).map((equipmentId) => {
-                      const equipment = equipments.equipments.find((e) => e.equipmentId === equipmentId);
-                      const expected = expectedEquipments.find((a: any) => a.equipmentId === equipmentId);
-                      const isAdditional = !expected;
-                      const row = standardRows.find((r) => r.equipmentId === equipmentId);
+                standardRows.map((row, idx) => {
+                  const shelf = shelvesQuery.shelves.find((s) => s.shelfId === row.shelfId);
+                  const equip = equipmentsQuery.equipments.find((e) => e.equipmentId === row.equipmentId);
 
-                      return (
-                        <div
-                          key={equipmentId}
-                          className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#26221f]"
-                        >
-                          <div className="flex items-center justify-between border-b border-[#3f3f46] bg-[#1f1b18] px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <Package className="h-4 w-4 text-amber-400" />
-                              <h3 className="text-sm font-semibold text-white">
-                                {expected?.equipmentName ?? equipment?.equipmentName ?? "Article"}
-                              </h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {expected ? (
-                                <span className="rounded border border-emerald-500/20 bg-emerald-950/40 px-2 py-0.5 text-xs font-medium text-emerald-300">
-                                  Attendu : {expected.quantity ?? 0}
-                                </span>
-                              ) : (
-                                <span className="rounded border border-amber-500/20 bg-amber-950/40 px-2 py-0.5 text-xs font-medium text-amber-300">
-                                  Article supplémentaire
-                                </span>
-                              )}
-                              {isAdditional && (
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedAdditionalEquipments(c => c.filter(x => x !== equipmentId))}
-                                  title="Retirer cet article supplémentaire"
-                                  className="ml-1 rounded p-1 text-white/40 transition hover:bg-rose-950/30 hover:text-rose-300"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          <div className="p-4">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <label className="text-xs text-white/70">
-                                Quantité comptée pour cet article :
-                              </label>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step={1}
-                                  value={row?.quantity ?? 0}
-                                  onChange={(event) => {
-                                    const val = Math.max(0, Number(event.target.value) || 0);
-                                    setStandardRows((current) => {
-                                      const existing = current.find((r) => r.equipmentId === equipmentId);
-                                      if (existing) {
-                                        return current.map((r) => r.equipmentId === equipmentId ? { ...r, quantity: val } : r);
-                                      }
-                                      return [...current, { id: newId(), equipmentId, shelfId: task.unit.shelfId ?? "", quantity: val }];
-                                    });
-                                  }}
-                                  className="h-10 w-24 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-center font-mono text-sm font-semibold text-amber-100 focus:border-amber-500 focus:outline-none"
-                                />
-                                <span className="text-xs text-white/40">unités</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-
-                  <div className="pt-2">
-                    {isAddingEquipment ? (
-                      <div className="rounded-lg border border-[#4a423a] bg-[#26221f] p-5 shadow-lg">
-                        <h4 className="mb-1 text-xs font-semibold text-white">Ajouter un autre article</h4>
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  return (
+                    <div
+                      key={row.id}
+                      className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded border border-[#3f3f46] bg-[#18181b]/50"
+                    >
+                      <div className="flex-1">
+                        <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
+                          {byEquipment ? 'Emplacement observé' : 'Article observé'}
+                        </label>
+                        {byEquipment ? (
                           <select
-                            value={equipmentToAdd}
-                            onChange={(e) => setEquipmentToAdd(e.target.value)}
-                            className="h-10 flex-1 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-xs text-white focus:border-amber-500 focus:outline-none"
+                            disabled={isSubmitted}
+                            value={row.shelfId}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setStandardRows((cur) =>
+                                cur.map((item) => (item.id === row.id ? { ...item, shelfId: val } : item))
+                              );
+                              setIsSaved(false);
+                            }}
+                            className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs text-white disabled:opacity-60"
+                          >
+                            <option value="">Sélectionnez un emplacement...</option>
+                            {shelvesQuery.shelves.map((s) => (
+                              <option key={s.shelfId} value={s.shelfId}>
+                                {s.shelfName}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <select
+                            disabled={isSubmitted}
+                            value={row.equipmentId}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setStandardRows((cur) =>
+                                cur.map((item) => (item.id === row.id ? { ...item, equipmentId: val } : item))
+                              );
+                              setIsSaved(false);
+                            }}
+                            className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs text-white disabled:opacity-60"
                           >
                             <option value="">Sélectionnez un article...</option>
-                            {equipments.equipments
-                              .filter((e) => !renderedEquipmentIds.includes(e.equipmentId) && !e.hasSerialNumber)
+                            {equipmentsQuery.equipments
+                              .filter((e) => !e.hasSerialNumber)
                               .map((e) => (
                                 <option key={e.equipmentId} value={e.equipmentId}>
                                   {e.equipmentName}
                                 </option>
                               ))}
                           </select>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              disabled={!equipmentToAdd}
-                              onClick={() => {
-                                setSelectedAdditionalEquipments(c => [...c, equipmentToAdd]);
-                                setIsAddingEquipment(false);
-                                setEquipmentToAdd("");
-                              }}
-                              className="h-10 rounded bg-amber-600 px-4 text-xs font-semibold text-white transition hover:bg-amber-500 disabled:opacity-40"
-                            >
-                              Ajouter
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => { setIsAddingEquipment(false); setEquipmentToAdd(""); }}
-                              className="h-10 rounded border border-[#3f3f46] px-3 text-xs text-white/70 hover:bg-white/5"
-                            >
-                              Annuler
-                            </button>
-                          </div>
-                        </div>
+                        )}
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setIsAddingEquipment(true)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-[#4a423a] bg-[#1f1b18] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:border-amber-500/50 hover:bg-[#2c2724] hover:text-amber-300"
-                      >
-                        <Plus className="h-4 w-4 text-amber-400" />
-                        Ajouter un autre article
-                      </button>
-                    )}
+
+                      <div className="w-full sm:w-44">
+                        <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
+                          Quantité observée
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          disabled={isSubmitted}
+                          value={row.quantity}
+                          onChange={(e) => {
+                            const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            setStandardRows((cur) =>
+                              cur.map((item) => (item.id === row.id ? { ...item, quantity: val } : item))
+                            );
+                            setIsSaved(false);
+                          }}
+                          className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs font-mono text-white disabled:opacity-60"
+                        />
+                      </div>
+
+                      {!isSubmitted && (
+                        <div className="self-end sm:self-center pt-2 sm:pt-4">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStandardRows((cur) => cur.filter((item) => item.id !== row.id));
+                              setIsSaved(false);
+                            }}
+                            className="rounded p-2 text-rose-400 hover:bg-rose-950/20"
+                            title="Supprimer cette ligne"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+
+              {isAddingShelf && !isSubmitted && (
+                <div className="p-3 rounded border border-[#d8a868]/40 bg-[#18181b] flex flex-col sm:flex-row sm:items-center gap-2">
+                  <select
+                    value={shelfToAdd}
+                    onChange={(e) => setShelfToAdd(e.target.value)}
+                    className="h-9 flex-1 rounded border border-[#3f3f46] bg-[#27272a] px-3 text-xs text-white"
+                  >
+                    <option value="">Sélectionnez l&apos;emplacement...</option>
+                    {shelvesQuery.shelves.map((s) => (
+                      <option key={s.shelfId} value={s.shelfId}>
+                        {s.shelfName}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={!shelfToAdd}
+                      onClick={() => {
+                        setStandardRows((cur) => [
+                          ...cur,
+                          {
+                            id: newId(),
+                            equipmentId: task.unit.equipmentId ?? '',
+                            shelfId: shelfToAdd,
+                            quantity: 0,
+                          },
+                        ]);
+                        setShelfToAdd('');
+                        setIsAddingShelf(false);
+                        setIsSaved(false);
+                      }}
+                      className="h-9 rounded bg-[#d8a868] px-3 text-xs font-medium text-[#18181b] disabled:opacity-40"
+                    >
+                      Ajouter
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingShelf(false);
+                        setShelfToAdd('');
+                      }}
+                      className="h-9 rounded border border-[#3f3f46] px-3 text-xs text-[#a1a1aa] hover:text-white"
+                    >
+                      Annuler
+                    </button>
                   </div>
                 </div>
               )}
@@ -846,269 +510,102 @@ export default function InventoryTaskPage() {
           </section>
         )}
 
-        {/* SECTION NUMÉROS DE SÉRIE (SERIALISÉ) */}
+        {/* Formulaire Article Sérialisé */}
         {task.isSerialized && (
           <section className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#27272a]">
-            <div className="flex items-center justify-between border-b border-[#3f3f46] px-4 py-3">
+            <div className="flex items-center justify-between border-b border-[#3f3f46] px-4 py-3 bg-[#27272a]/70">
               <h2 className="flex items-center gap-1.5 text-xs font-semibold">
-                <Barcode className="h-3.5 w-3.5" />
-                Numéros de série observés par emplacement
+                <Warehouse className="h-3.5 w-3.5 text-[#d8a868]" />
+                Numéros de série observés
               </h2>
 
+              {!isSubmitted && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSerialRows((cur) => [...cur, { id: newId(), code: '', shelfId: '' }]);
+                    setIsSaved(false);
+                  }}
+                  className="inline-flex items-center gap-1 text-xs text-[#d8a868] hover:underline"
+                >
+                  <Plus className="h-3 w-3" />
+                  Ajouter une série
+                </button>
+              )}
             </div>
 
-            <div className="divide-y divide-[#3f3f46]">
-              {byEquipment ? (
-                <div className="p-4 space-y-4">
-                  {renderedShelfIds.length === 0 ? (
-                    <div className="rounded border border-[#3f3f46] bg-[#26221f] p-4 text-center text-xs text-white/50">
-                      Aucun emplacement attendu pour cet article. Utilisez le
-                      bouton ci-dessous pour ajouter un emplacement.
-                    </div>
-                  ) : (
-                    renderedShelfIds.map((shelfId) => {
-                      const shelf = shelves.shelves.find(
-                        (s) => s.shelfId === shelfId,
-                      );
-                      const expected = expectedShelves.find(
-                        (a: any) => a.shelfId === shelfId,
-                      );
-                      const isAdditional = !expected;
-                      const rowsInShelf = serialRows.filter(
-                        (r) => r.shelfId === shelfId,
-                      );
-                      const scannedCount = rowsInShelf.filter((r) =>
-                        r.code.trim(),
-                      ).length;
-
-                      return (
-                        <div
-                          key={shelfId}
-                          className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#26221f]"
-                        >
-                          <div className="flex items-center justify-between border-b border-[#3f3f46] bg-[#1f1b18] px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <Warehouse className="h-4 w-4 text-amber-400" />
-                              <h3 className="text-sm font-semibold text-white">
-                                {expected?.shelfName ??
-                                  shelf?.shelfName ??
-                                  "Emplacement"}
-                              </h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {expected ? (
-                                <span className="rounded border border-emerald-500/20 bg-emerald-950/40 px-2 py-0.5 text-xs font-medium text-emerald-300">
-                                  Attendu : {expected.quantity ?? 0}
-                                </span>
-                              ) : (
-                                <span className="rounded border border-amber-500/20 bg-amber-950/40 px-2 py-0.5 text-xs font-medium text-amber-300">
-                                  Emplacement supplémentaire
-                                </span>
-                              )}
-                              <span
-                                className={`rounded border px-2 py-0.5 text-xs font-medium ${
-                                  expected && scannedCount === expected.quantity
-                                    ? "border-emerald-500/30 bg-emerald-950/20 text-emerald-200"
-                                    : "border-white/10 bg-white/5 text-white/70"
-                                }`}
-                              >
-                                Observé : {scannedCount}
-                              </span>
-                              {isAdditional && (
-                                <button
-                                  type="button"
-                                  onClick={() => removeAdditionalShelf(shelfId)}
-                                  title="Retirer cet emplacement supplémentaire"
-                                  className="ml-1 rounded p-1 text-white/40 transition hover:bg-rose-950/30 hover:text-rose-300"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="p-4 space-y-3">
-                            {rowsInShelf.length === 0 ? (
-                              <div className="flex flex-col items-center justify-center py-4 text-center">
-                                <p className="mb-2 text-xs text-white/40">
-                                  Aucun numéro de série saisi pour cet
-                                  emplacement.
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={() => addSerialRow(shelfId)}
-                                  className="inline-flex items-center gap-1.5 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 py-1.5 text-xs font-medium text-amber-300 transition hover:bg-white/5"
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                  Saisir un code série
-                                </button>
-                              </div>
-                            ) : (
-                              <>
-                                <div className="space-y-2">
-                                  {rowsInShelf.map((row, idx) => (
-                                    <div
-                                      key={row.id}
-                                      className="flex items-center gap-2"
-                                    >
-                                      <span className="w-6 text-right font-mono text-[11px] text-white/40">
-                                        {idx + 1}.
-                                      </span>
-                                      <SerialCodeInput
-                                        value={row.code}
-                                        onChange={(value) =>
-                                          setSerialRows((current) =>
-                                            current.map((item) =>
-                                              item.id === row.id
-                                                ? { ...item, code: value }
-                                                : item,
-                                            ),
-                                          )
-                                        }
-                                        placeholder="Code série observé (ex: SN-...)"
-                                        className="h-9 flex-1 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 font-mono text-xs text-white focus:border-amber-500 focus:outline-none"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setSerialRows((current) =>
-                                            current.filter(
-                                              (item) => item.id !== row.id,
-                                            ),
-                                          )
-                                        }
-                                        title="Supprimer ce numéro"
-                                        className="flex h-9 w-9 items-center justify-center rounded text-rose-400 transition hover:bg-rose-950/30"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="pt-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => addSerialRow(shelfId)}
-                                    className="inline-flex items-center gap-1.5 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/5 hover:text-white"
-                                  >
-                                    <Plus className="h-3.5 w-3.5 text-amber-400" />
-                                    Ajouter un autre numéro de série
-                                  </button>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-
-                  {/* BOUTON EN BAS POUR AJOUTER UN EMPLACEMENT */}
-                  <div className="pt-2">
-                    {!isAddingShelf ? (
-                      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[#4a423a] bg-[#26221f]/50 p-6 text-center">
-                        <p className="mb-3 text-xs text-white/60">
-                          Vous avez trouvé un numéro de série dans un autre
-                          emplacement ?
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setIsAddingShelf(true)}
-                          className="inline-flex items-center gap-2 rounded-lg border border-[#4a423a] bg-[#1f1b18] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:border-amber-500/50 hover:bg-[#2c2724] hover:text-amber-300"
-                        >
-                          <Plus className="h-4 w-4 text-amber-400" />
-                          Ajouter un autre emplacement
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="rounded-lg border border-[#4a423a] bg-[#26221f] p-5 shadow-lg">
-                        <h4 className="mb-1 text-xs font-semibold text-white">
-                          Ajouter un autre emplacement
-                        </h4>
-                        <p className="mb-3 text-[11px] text-white/50">
-                          Sélectionnez l&apos;emplacement supplémentaire où vous
-                          observez des numéros de série de cet article.
-                        </p>
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                          <select
-                            value={shelfToAdd}
-                            onChange={(e) => setShelfToAdd(e.target.value)}
-                            className="h-10 flex-1 rounded border border-[#3f3f46] bg-[#1f1b18] px-3 text-xs text-white focus:border-amber-500 focus:outline-none"
-                          >
-                            <option value="">
-                              Sélectionnez l&apos;emplacement...
-                            </option>
-                            {shelves.shelves
-                              .filter(
-                                (s) => !renderedShelfIds.includes(s.shelfId),
-                              )
-                              .map((s) => (
-                                <option key={s.shelfId} value={s.shelfId}>
-                                  {s.shelfName}
-                                </option>
-                              ))}
-                          </select>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              disabled={!shelfToAdd}
-                              onClick={confirmAddShelf}
-                              className="h-10 rounded bg-amber-600 px-4 text-xs font-semibold text-white transition hover:bg-amber-500 disabled:opacity-40"
-                            >
-                              Ajouter
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsAddingShelf(false);
-                                setShelfToAdd("");
-                              }}
-                              className="h-10 rounded border border-[#3f3f46] px-3 text-xs text-white/70 hover:bg-white/5"
-                            >
-                              Annuler
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+            <div className="p-4 space-y-3">
+              {serialRows.length === 0 ? (
+                <div className="rounded border border-dashed border-[#3f3f46] p-6 text-center text-xs text-[#71717a]">
+                  Aucun numéro de série saisi. Cliquez sur &quot;Ajouter une série&quot; ou scannez les codes-barres.
                 </div>
               ) : (
-                serialRows.map((row) => (
+                serialRows.map((row, idx) => (
                   <div
                     key={row.id}
-                    className="grid grid-cols-1 gap-2 px-4 py-3 sm:grid-cols-[1fr_1fr_38px]"
+                    className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded border border-[#3f3f46] bg-[#18181b]/50"
                   >
-                    <SerialCodeInput
-                      value={row.code}
-                      onChange={(value) =>
-                        setSerialRows((current) =>
-                          current.map((item) =>
-                            item.id === row.id
-                              ? { ...item, code: value }
-                              : item,
-                          ),
-                        )
-                      }
-                      placeholder="Code série observé"
-                      className="h-9 w-full rounded border border-[#3f3f46] bg-[#1f1b18] px-3 font-mono text-xs"
-                    />
+                    <span className="w-6 text-right font-mono text-[11px] text-[#71717a] hidden sm:block">
+                      {idx + 1}.
+                    </span>
 
-                    <div className="flex h-9 items-center rounded border border-[#3f3f46] bg-[#27272a]/50 px-3 text-xs">
-                      {scopeShelf?.shelfName ?? "Emplacement"}
+                    <div className="flex-1">
+                      <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
+                        Code série scanné / saisi
+                      </label>
+                      <SerialCodeInput
+                        value={row.code}
+                        onChange={(value) => {
+                          setSerialRows((cur) =>
+                            cur.map((item) => (item.id === row.id ? { ...item, code: value } : item))
+                          );
+                          setIsSaved(false);
+                        }}
+                        placeholder="Code série observé (ex: SN-...)"
+                        className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 font-mono text-xs text-white focus:border-[#d8a868] focus:outline-none"
+                      />
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSerialRows((current) =>
-                          current.filter((item) => item.id !== row.id),
-                        )
-                      }
-                      className="inline-flex h-9 w-9 items-center justify-center rounded text-rose-300 hover:bg-rose-950/20"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="w-full sm:w-56">
+                      <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
+                        Emplacement observé
+                      </label>
+                      <select
+                        disabled={isSubmitted}
+                        value={row.shelfId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSerialRows((cur) =>
+                            cur.map((item) => (item.id === row.id ? { ...item, shelfId: val } : item))
+                          );
+                          setIsSaved(false);
+                        }}
+                        className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs text-white disabled:opacity-60"
+                      >
+                        <option value="">Sélectionnez un emplacement...</option>
+                        {shelvesQuery.shelves.map((s) => (
+                          <option key={s.shelfId} value={s.shelfId}>
+                            {s.shelfName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {!isSubmitted && (
+                      <div className="self-end sm:self-center pt-2 sm:pt-4">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSerialRows((cur) => cur.filter((item) => item.id !== row.id));
+                            setIsSaved(false);
+                          }}
+                          className="rounded p-2 text-rose-400 hover:bg-rose-950/20"
+                          title="Supprimer cette série"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -1116,37 +613,66 @@ export default function InventoryTaskPage() {
           </section>
         )}
 
-        <div className="flex flex-col gap-2 border-t border-[#3f3f46] pt-4 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={() => {
-              void persist(false);
-            }}
-            disabled={busy}
-            className="inline-flex items-center justify-center gap-2 rounded border border-[#3f3f46] bg-[#27272a] px-4 py-2 text-xs disabled:opacity-40"
-          >
-            <Save className="h-3.5 w-3.5" />
-            Brouillon
-          </button>
+        {/* Barre d'action */}
+        {!isSubmitted ? (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-[#3f3f46] pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Confirmez-vous avoir inspecté cette unité et constaté qu’AUCUN article (0) n’est présent physiquement ?'
+                  )
+                ) {
+                  void persist(true, true);
+                }
+              }}
+              disabled={busy}
+              className="inline-flex items-center justify-center gap-1.5 rounded border border-rose-500/40 bg-rose-950/20 px-3.5 py-2 text-xs font-medium text-rose-300 hover:bg-rose-950/40 disabled:opacity-40 transition-colors"
+            >
+              Confirmer 0 article (comptage vide)
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm("Soumettre définitivement ce comptage ?")) {
-                void persist(true);
-              }
-            }}
-            disabled={busy}
-            className="inline-flex items-center justify-center gap-2 rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b] disabled:opacity-40"
-          >
-            {submitTask.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Send className="h-3.5 w-3.5" />
-            )}
-            Soumettre
-          </button>
-        </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => void persist(false)}
+                disabled={busy}
+                className="inline-flex items-center justify-center gap-2 rounded border border-[#3f3f46] bg-[#27272a] px-4 py-2 text-xs text-white hover:border-[#71717a] disabled:opacity-40 transition-colors"
+              >
+                <Save className="h-3.5 w-3.5" />
+                Enregistrer brouillon
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Voulez-vous soumettre définitivement votre comptage pour cette unité ?')) {
+                    void persist(true, false);
+                  }
+                }}
+                disabled={busy}
+                className="inline-flex items-center justify-center gap-2 rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b] hover:bg-white disabled:opacity-40 transition-colors"
+              >
+                {submitTask.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+                Soumettre mon comptage
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-end border-t border-[#3f3f46] pt-4">
+            <Link
+              href="/inventory/tasks"
+              className="inline-flex items-center gap-2 rounded bg-[#fafafa] px-4 py-2 text-xs font-semibold text-[#18181b]"
+            >
+              Retour à la liste des tâches
+            </Link>
+          </div>
+        )}
       </div>
     </main>
   );

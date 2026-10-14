@@ -15,8 +15,8 @@ const participantSchema = z.object({
 export const createInventorySchema = z.object({
   title: z.string().trim().min(1, "Le titre de l'inventaire est requis").max(200),
   typeInventory: z.enum(['ByEquipment', 'ByShelf']),
-  policyVersion: z.number().int().positive().optional().default(3),
-  users: z.array(participantSchema).min(2).max(3),
+  policyVersion: z.number().int().positive().optional().default(4),
+  users: z.array(participantSchema).min(3, 'Au moins 3 contrôleurs distincts sont requis'),
   equipmentIds: z.array(z.string().trim().min(1)).optional(),
   shelfIds: z.array(z.string().trim().min(1)).optional(),
 }).superRefine((data, ctx) => {
@@ -26,14 +26,6 @@ export const createInventorySchema = z.object({
       code: 'custom',
       path: ['users'],
       message: 'Tous les contrôleurs assignés doivent être des utilisateurs distincts',
-    });
-  }
-
-  if ((data.policyVersion ?? 3) >= 2 && data.users.length !== 3) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['users'],
-      message: "L'inventaire requiert exactement 3 contrôleurs distincts. Le troisième reste inactif tant qu'aucun écart C1/C2 n'est détecté.",
     });
   }
 
@@ -83,3 +75,19 @@ export const createInventorySchema = z.object({
 });
 
 export type CreateInventoryDTO = z.input<typeof createInventorySchema>;
+
+export const updateRosterSchema = z.object({
+  users: z.array(participantSchema).min(3, 'Au moins 3 contrôleurs distincts sont requis'),
+}).superRefine((data, ctx) => {
+  const userIds = data.users.map((item) => item.userId);
+  if (new Set(userIds).size !== userIds.length) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['users'],
+      message: 'Tous les contrôleurs assignés doivent être des utilisateurs distincts',
+    });
+  }
+});
+
+export type UpdateRosterDTO = z.input<typeof updateRosterSchema>;
+

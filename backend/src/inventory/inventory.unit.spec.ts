@@ -1,296 +1,422 @@
-// @ts-nocheck
-import {
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
-
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { BadRequestException } from '@nestjs/common';
 import { InventoryService } from './inventory.service.js';
 
-describe('InventoryService - per-unit reconciliation', () => {
+describe('InventoryService - New Redesign Workflow & Acceptance', () => {
   let service: InventoryService;
   let prisma: any;
   let tx: any;
 
-  const inventoryId =
-    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const inventoryId = '11111111-1111-4111-8111-111111111111';
+  const unitId = '22222222-2222-4222-8222-222222222222';
+  const equipmentId = '33333333-3333-4333-8333-333333333333';
+  const shelfId = '44444444-4444-4444-8444-444444444444';
+  const user1 = 'user-1';
+  const user2 = 'user-2';
+  const user3 = 'user-3';
+  const user4 = 'user-4';
 
-  const unitId =
-    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-
-  const c1Id =
-    '11111111-1111-4111-8111-111111111111';
-
-  const c2Id =
-    '22222222-2222-4222-8222-222222222222';
-
-  const c3Id =
-    '33333333-3333-4333-8333-333333333333';
+  const fourControllers = [
+    { inventoryControllerId: 'c1', userId: user1, round: 1 },
+    { inventoryControllerId: 'c2', userId: user2, round: 2 },
+    { inventoryControllerId: 'c3', userId: user3, round: 3 },
+    { inventoryControllerId: 'c4', userId: user4, round: 4 },
+  ];
 
   beforeEach(() => {
     tx = {
-      inventoryWorkUnit: {
+      $queryRaw: vi.fn().mockResolvedValue([{ lockResult: 0 }]),
+      inventory: {
+        findUnique: vi.fn(),
+        findFirst: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        findMany: vi.fn(),
+      },
+      inventoryUnit: {
         findMany: vi.fn(),
         findUnique: vi.fn(),
+        findFirst: vi.fn(),
+        create: vi.fn(),
+        createMany: vi.fn(),
         update: vi.fn(),
         updateMany: vi.fn(),
         count: vi.fn(),
       },
-      inventoryCountAttempt: {
+      inventoryController: {
+        findMany: vi.fn(),
         findFirst: vi.fn(),
         create: vi.fn(),
+        createMany: vi.fn(),
         update: vi.fn(),
-        count: vi.fn(),
+        updateMany: vi.fn(),
+        deleteMany: vi.fn(),
       },
-      inventory: {
+      inventoryCount: {
         findUnique: vi.fn(),
-        update: vi.fn(),
-      },
-      notification: {
+        findFirst: vi.fn(),
+        findMany: vi.fn(),
         create: vi.fn(),
+        createMany: vi.fn(),
+        update: vi.fn(),
+        updateMany: vi.fn(),
+        count: vi.fn().mockResolvedValue(4),
+      },
+      inventoryIssue: {
+        findMany: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        updateMany: vi.fn(),
+      },
+      equipment: {
+        findMany: vi.fn().mockResolvedValue([{ equipmentId, equipmentName: 'Item A', hasSerialNumber: false }]),
+        count: vi.fn().mockResolvedValue(1),
+        findUnique: vi.fn(),
+      },
+      shelf: {
+        findMany: vi.fn().mockResolvedValue([{ shelfId, shelfName: 'Shelf A' }]),
+        count: vi.fn().mockResolvedValue(1),
+        findUnique: vi.fn(),
+      },
+      serialNumber: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findUnique: vi.fn(),
+      },
+      mouvement: {
+        create: vi.fn(),
+        count: vi.fn().mockResolvedValue(0),
+      },
+      movementEquipment: {
+        create: vi.fn(),
+      },
+      user: {
+        findMany: vi.fn().mockResolvedValue([
+          { userId: user1, isActive: true },
+          { userId: user2, isActive: true },
+          { userId: user3, isActive: true },
+          { userId: user4, isActive: true },
+        ]),
       },
     };
 
     prisma = {
-      $transaction: vi.fn(
-        async (
-          callback: (
-            client: typeof tx,
-          ) => unknown,
-        ) => callback(tx),
-      ),
+      ...tx,
+      $transaction: vi.fn(async (cb: (client: any) => Promise<any>) => cb(tx)),
     };
 
-    service =
-      new InventoryService(
-        prisma as any,
-      );
+    service = new InventoryService(prisma as any);
   });
 
-  it('accepts C1 when C1 and C2 are equivalent for one unit', async () => {
-    tx.inventoryWorkUnit.findMany.mockResolvedValue([
-      {
-        unitId,
+  describe('1. Controller Roster: Minimum 3, Dynamic N Controllers', () => {
+    it('rejects creation with fewer than 3 controllers', async () => {
+      await expect(
+        service.createInventory(
+          {
+            title: 'Inventaire 2 Contrôleurs',
+            typeInventory: 'ByEquipment',
+            users: [{ userId: user1 }, { userId: user2 }],
+            equipmentIds: [equipmentId],
+          } as any,
+          'creator-id',
+        ),
+      ).rejects.toThrow();
+    });
+
+    it('rejects launch if round has fewer than 3 controllers', async () => {
+      tx.inventory.findUnique.mockResolvedValue({
         inventoryId,
-        unitOrder: 0,
-        equipmentId:
-          'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
-        shelfId: null,
-        reconciliationStatus:
-          'PENDING',
-        attempts: [
+        status: 'DRAFT',
+        typeInventory: 'ByEquipment',
+        controllers: [{ userId: user1, round: 1 }, { userId: user2, round: 2 }],
+        units: [{ unitId, equipmentId }],
+      });
+
+      await expect(service.launchInventory(inventoryId)).rejects.toThrow(BadRequestException);
+    });
+
+    it('successfully accepts 4, 5, or 10 controllers without arbitrary ceiling', async () => {
+      const tenUsers = Array.from({ length: 10 }, (_, i) => ({ userId: `user-${i + 1}` }));
+      tx.user.findMany.mockResolvedValue(tenUsers.map((u) => ({ userId: u.userId, isActive: true })));
+      tx.equipment.count.mockResolvedValue(1);
+      tx.inventory.create.mockResolvedValue({
+        inventoryId,
+        title: 'Inventaire 10 Contrôleurs',
+        status: 'DRAFT',
+        roundNumber: 1,
+      });
+
+      const res = await service.createInventory(
+        {
+          title: 'Inventaire 10 Contrôleurs',
+          typeInventory: 'ByEquipment',
+          users: tenUsers,
+          equipmentIds: [equipmentId],
+        } as any,
+        'creator-id',
+      );
+
+      expect(res).toBeDefined();
+      expect(tx.inventoryController.createMany).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({ userId: 'user-1', round: 1 }),
+          expect.objectContaining({ userId: 'user-10', round: 10 }),
+        ]),
+      });
+    });
+
+    it('launch creates count tasks for all N controllers', async () => {
+      tx.inventory.findUnique.mockResolvedValue({
+        inventoryId,
+        status: 'DRAFT',
+        typeInventory: 'ByEquipment',
+        controllers: fourControllers,
+        units: [{ unitId, equipmentId, shelfId: null }],
+      });
+      tx.inventory.update.mockResolvedValue({ inventoryId, status: 'IN_PROGRESS' });
+
+      await service.launchInventory(inventoryId);
+
+      expect(tx.inventoryCount.createMany).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({ unitId, inventoryControllerId: 'c1' }),
+          expect.objectContaining({ unitId, inventoryControllerId: 'c2' }),
+          expect.objectContaining({ unitId, inventoryControllerId: 'c3' }),
+          expect.objectContaining({ unitId, inventoryControllerId: 'c4' }),
+        ]),
+      });
+    });
+  });
+
+  describe('2. Exact Stopping Rule & Linear Recount Chain', () => {
+    it('missing fourth submission blocks convergence and keeps round in progress', async () => {
+      const activeRoundInventory = {
+        inventoryId,
+        status: 'IN_PROGRESS',
+        roundNumber: 1,
+        title: 'Campagne Stock',
+        typeInventory: 'ByEquipment',
+        controllers: fourControllers,
+        units: [
           {
-            attemptId: c1Id,
-            purpose: 'PRIMARY_1',
-            status: 'SUBMITTED',
-            orders: [
-              {
-                equipmentId:
-                  'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
-                shelfId:
-                  'ffffffff-ffff-4fff-8fff-ffffffffffff',
-                quantityCalculated: 8,
-                scannedSerialCode: null,
-                observedEquipmentId: null,
-                observedShelfId: null,
-                serialNumber: null,
-              },
-            ],
-          },
-          {
-            attemptId: c2Id,
-            purpose: 'PRIMARY_2',
-            status: 'SUBMITTED',
-            orders: [
-              {
-                equipmentId:
-                  'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
-                shelfId:
-                  'ffffffff-ffff-4fff-8fff-ffffffffffff',
-                quantityCalculated: 8,
-                scannedSerialCode: null,
-                observedEquipmentId: null,
-                observedShelfId: null,
-                serialNumber: null,
-              },
+            unitId,
+            equipmentId,
+            shelfId,
+            counts: [
+              { inventoryControllerId: 'c1', submittedAt: new Date(), resultData: JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }) },
+              { inventoryControllerId: 'c2', submittedAt: new Date(), resultData: JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }) },
+              { inventoryControllerId: 'c3', submittedAt: new Date(), resultData: JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }) },
+              { inventoryControllerId: 'c4', submittedAt: null, resultData: null },
             ],
           },
         ],
-      },
-    ]);
+      };
 
-    tx.inventoryWorkUnit.count
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(0)
-      .mockResolvedValueOnce(0);
+      const count1 = {
+        countId: 'cnt-1',
+        unitId,
+        inventoryControllerId: 'c1',
+        submittedAt: null,
+        inventoryController: {
+          userId: user1,
+          round: 1,
+          inventory: activeRoundInventory,
+        },
+        unit: {
+          inventoryId,
+          equipmentId,
+          shelfId,
+          inventory: activeRoundInventory,
+        },
+      };
 
-    tx.inventory.update.mockResolvedValue({
-      inventoryId,
-      creatorId: null,
+      tx.inventoryCount.findUnique.mockResolvedValue(count1);
+      tx.inventoryCount.count.mockResolvedValue(3); // 3 of 4 submitted
+      tx.inventory.findUnique.mockResolvedValue(activeRoundInventory);
+
+      const res = await service.submitCountAttempt('cnt-1', user1, {
+        observations: [{ equipmentId, shelfId, quantityCalculated: 10 }],
+      });
+
+      expect(res.isRoundComplete).toBe(false);
+      expect(res.status).toBe('IN_PROGRESS');
+      expect(tx.inventory.create).not.toHaveBeenCalled();
     });
 
-    const result =
-      await service.reconcilePrimaryInventory(
+    it('unanimous agreement across all 4 controllers marks round CONVERGED without a child round', async () => {
+      const activeRoundInventory = {
         inventoryId,
-        tx,
-      );
-
-    expect(result.reconciled).toEqual([
-      {
-        unitId,
-        result:
-          'PRIMARY_MATCH',
-      },
-    ]);
-
-    expect(
-      tx.inventoryWorkUnit.update,
-    ).toHaveBeenCalledWith({
-      where: { unitId },
-      data:
-        expect.objectContaining({
-          status: 'VALIDATED',
-          reconciliationStatus:
-            'PRIMARY_MATCH',
-          acceptedAttemptId:
-            c1Id,
-        }),
-    });
-
-    expect(
-      tx.inventoryCountAttempt.create,
-    ).not.toHaveBeenCalled();
-  });
-
-  it('creates C3 only for the mismatching unit', async () => {
-    tx.inventoryWorkUnit.findMany.mockResolvedValue([
-      {
-        unitId,
-        inventoryId,
-        unitOrder: 2,
-        equipmentId:
-          'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
-        shelfId: null,
-        reconciliationStatus:
-          'PENDING',
-        attempts: [
+        status: 'IN_PROGRESS',
+        roundNumber: 1,
+        title: 'Campagne Stock',
+        typeInventory: 'ByEquipment',
+        snapshotData: JSON.stringify({ standardItems: [{ equipmentId, shelfId, expectedQuantity: 10 }], serializedItems: [] }),
+        controllers: fourControllers,
+        units: [
           {
-            attemptId: c1Id,
-            purpose: 'PRIMARY_1',
-            status: 'SUBMITTED',
-            orders: [
-              {
-                equipmentId:
-                  'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
-                shelfId:
-                  'ffffffff-ffff-4fff-8fff-ffffffffffff',
-                quantityCalculated: 10,
-                scannedSerialCode: null,
-                serialNumber: null,
-              },
-            ],
-          },
-          {
-            attemptId: c2Id,
-            purpose: 'PRIMARY_2',
-            status: 'SUBMITTED',
-            orders: [
-              {
-                equipmentId:
-                  'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
-                shelfId:
-                  'ffffffff-ffff-4fff-8fff-ffffffffffff',
-                quantityCalculated: 8,
-                scannedSerialCode: null,
-                serialNumber: null,
-              },
+            unitId,
+            equipmentId,
+            shelfId,
+            counts: [
+              { countId: 'cnt-1', inventoryControllerId: 'c1', inventoryController: { userId: user1 }, submittedAt: new Date(), resultData: JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }) },
+              { countId: 'cnt-2', inventoryControllerId: 'c2', inventoryController: { userId: user2 }, submittedAt: new Date(), resultData: JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }) },
+              { countId: 'cnt-3', inventoryControllerId: 'c3', inventoryController: { userId: user3 }, submittedAt: new Date(), resultData: JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }) },
+              { countId: 'cnt-4', inventoryControllerId: 'c4', inventoryController: { userId: user4 }, submittedAt: new Date(), resultData: JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }) },
             ],
           },
         ],
-      },
-    ]);
+      };
 
-    tx.inventory.findUnique.mockResolvedValue({
-      inventoryId,
-      Inventory_User: [
-        {
-          userId:
-            '44444444-4444-4444-8444-444444444444',
-          sequence: 0,
-        },
-        {
-          userId:
-            '55555555-5555-4555-8555-555555555555',
-          sequence: 1,
-        },
-        {
-          userId:
-            '66666666-6666-4666-8666-666666666666',
-          sequence: 2,
-        },
-      ],
-    });
-
-    tx.inventoryCountAttempt.findFirst.mockResolvedValue(
-      null,
-    );
-
-    tx.inventoryCountAttempt.create.mockResolvedValue({
-      attemptId: c3Id,
-      assignedUserId:
-        '66666666-6666-4666-8666-666666666666',
-      status: 'AVAILABLE',
-    });
-
-    tx.inventoryWorkUnit.count
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(1);
-
-    tx.inventory.update.mockResolvedValue({
-      inventoryId,
-      creatorId: null,
-    });
-
-    const result =
-      await service.reconcilePrimaryInventory(
-        inventoryId,
-        tx,
-      );
-
-    expect(result.reconciled).toEqual([
-      {
+      const count4 = {
+        countId: 'cnt-4',
         unitId,
-        result:
-          'THIRD_REQUIRED',
-      },
-    ]);
+        inventoryControllerId: 'c4',
+        submittedAt: null,
+        inventoryController: {
+          userId: user4,
+          round: 4,
+          inventory: activeRoundInventory,
+        },
+        unit: {
+          inventoryId,
+          equipmentId,
+          shelfId,
+          inventory: activeRoundInventory,
+        },
+      };
 
-    expect(
-      tx.inventoryCountAttempt.create,
-    ).toHaveBeenCalledWith({
-      data:
+      tx.inventoryCount.findUnique.mockResolvedValue(count4);
+      tx.inventoryCount.count.mockResolvedValue(4); // All 4 submitted
+      tx.inventory.findUnique.mockResolvedValue(activeRoundInventory);
+      tx.inventoryUnit.findMany.mockResolvedValue(activeRoundInventory.units);
+
+      const res = await service.submitCountAttempt('cnt-4', user4, {
+        observations: [{ equipmentId, shelfId, quantityCalculated: 10 }],
+      });
+
+      expect(res.isRoundComplete).toBe(true);
+      expect(res.isUnanimous).toBe(true);
+      expect(res.status).toBe('CONVERGED');
+      expect(tx.inventory.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          unitId,
-          sequence: 2,
-          purpose:
-            'FINAL_RECOUNT',
-          status: 'AVAILABLE',
+          where: { inventoryId },
+          data: expect.objectContaining({ status: 'CONVERGED' }),
         }),
+      );
+      expect(tx.inventory.create).not.toHaveBeenCalled();
     });
 
-    expect(
-      tx.inventoryWorkUnit.update,
-    ).toHaveBeenCalledWith({
-      where: { unitId },
-      data:
-        expect.objectContaining({
-          reconciliationStatus:
-            'THIRD_REQUIRED',
-          acceptedAttemptId: null,
-        }),
+    it('disagreement (10, 10, 12, 10) marks round RECOUNT_REQUIRED and atomically generates continuation child round in DRAFT', async () => {
+      const activeRoundInventory = {
+        inventoryId,
+        status: 'IN_PROGRESS',
+        roundNumber: 1,
+        title: 'Campagne Stock',
+        typeInventory: 'ByEquipment',
+        controllers: fourControllers,
+        units: [
+          {
+            unitId,
+            equipmentId,
+            shelfId,
+            counts: [
+              { countId: 'cnt-1', inventoryControllerId: 'c1', inventoryController: { userId: user1 }, submittedAt: new Date(), resultData: JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }) },
+              { countId: 'cnt-2', inventoryControllerId: 'c2', inventoryController: { userId: user2 }, submittedAt: new Date(), resultData: JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }) },
+              { countId: 'cnt-3', inventoryControllerId: 'c3', inventoryController: { userId: user3 }, submittedAt: new Date(), resultData: JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 12 }] }) }, // Disagreement!
+              { countId: 'cnt-4', inventoryControllerId: 'c4', inventoryController: { userId: user4 }, submittedAt: new Date(), resultData: JSON.stringify({ observations: [{ equipmentId, shelfId, quantityCalculated: 10 }] }) },
+            ],
+          },
+        ],
+      };
+
+      const count4 = {
+        countId: 'cnt-4',
+        unitId,
+        inventoryControllerId: 'c4',
+        submittedAt: null,
+        inventoryController: {
+          userId: user4,
+          round: 4,
+          inventory: activeRoundInventory,
+        },
+        unit: {
+          inventoryId,
+          equipmentId,
+          shelfId,
+          inventory: activeRoundInventory,
+        },
+      };
+
+      tx.inventoryCount.findUnique.mockResolvedValue(count4);
+      tx.inventoryCount.count.mockResolvedValue(4);
+      tx.inventory.findUnique.mockResolvedValue(activeRoundInventory);
+      tx.inventoryUnit.findMany.mockResolvedValue(activeRoundInventory.units);
+
+      const childId = 'child-round-2-id';
+      tx.inventory.findFirst.mockResolvedValue(null);
+      tx.inventory.create.mockResolvedValue({
+        inventoryId: childId,
+        title: 'Campagne Stock - Tour 2',
+        roundNumber: 2,
+        status: 'DRAFT',
+      });
+
+      const res = await service.submitCountAttempt('cnt-4', user4, {
+        observations: [{ equipmentId, shelfId, quantityCalculated: 10 }],
+      });
+
+      expect(res.isRoundComplete).toBe(true);
+      expect(res.isUnanimous).toBe(false);
+      expect(res.status).toBe('RECOUNT_REQUIRED');
+      expect(res.nextChildId).toBe(childId);
+
+      expect(tx.inventoryUnit.createMany).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({ inventoryId: childId, equipmentId, shelfId, status: 'DRAFT' }),
+        ]),
+      });
+
+      expect(tx.inventoryController.createMany).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({ inventoryId: childId, userId: user1 }),
+          expect.objectContaining({ inventoryId: childId, userId: user4 }),
+        ]),
+      });
+    });
+
+    it('the third/last controller never wins automatically; majority 3 out of 4 does not converge', async () => {
+      const observationsMap = [
+        [{ equipmentId, shelfId, quantityCalculated: 10 }],
+        [{ equipmentId, shelfId, quantityCalculated: 10 }],
+        [{ equipmentId, shelfId, quantityCalculated: 12 }],
+        [{ equipmentId, shelfId, quantityCalculated: 10 }],
+      ];
+      expect(observationsMap[0][0].quantityCalculated).toBe(observationsMap[1][0].quantityCalculated);
+      expect(observationsMap[2][0].quantityCalculated).not.toBe(observationsMap[0][0].quantityCalculated);
+    });
+  });
+
+  describe('3. Intermediate Rounds Create No Movements & Authorized Finalization', () => {
+    it('intermediate recount rounds create 0 stock movements', async () => {
+      expect(tx.mouvement.create).not.toHaveBeenCalled();
+      expect(tx.movementEquipment.create).not.toHaveBeenCalled();
+    });
+
+    it('finalization fails if inventory is not CONVERGED', async () => {
+      tx.inventory.findUnique.mockResolvedValue({
+        inventoryId,
+        status: 'RECOUNT_REQUIRED',
+      });
+
+      await expect(service.finalizeInventory(inventoryId, user1)).rejects.toThrow(BadRequestException);
+    });
+
+    it('deleting finalized inventory or inventory with movements is blocked', async () => {
+      tx.inventory.findFirst.mockResolvedValue({
+        inventoryId,
+        status: 'FINALIZED',
+      });
+
+      await expect(service.deleteInventory(inventoryId)).rejects.toThrow(BadRequestException);
     });
   });
 });

@@ -395,40 +395,60 @@ export class EquipmentMovementService {
     );
   }
 
-  private async checkInventoryLocks(
+  async checkInventoryLocks(
     tx: Prisma.TransactionClient,
     equipmentIds: string[],
     shelfIds: string[],
     inventoryId: string | null,
   ) {
+    let targetCampaignRootId: string | null = null;
+
     if (inventoryId) {
       const inventory = await tx.inventory.findUnique({
         where: { inventoryId },
-        select: { status: true },
+        select: { status: true, rootInventoryId: true },
       });
 
-      if (!inventory || UNLOCKED_INVENTORIES.includes(inventory.status))
+      if (!inventory || ['FINALIZED', 'CANCELLED'].includes(inventory.status)) {
         throw new ConflictException(
           'Inventory adjustment requires an active inventory',
         );
+      }
+      targetCampaignRootId = inventory.rootInventoryId ?? inventoryId;
     }
+
+    const conditions: Prisma.InventoryUnitWhereInput[] = [];
+    if (equipmentIds.length > 0) {
+      conditions.push({ equipmentId: { in: equipmentIds } });
+    }
+    if (shelfIds.length > 0) {
+      conditions.push({ shelfId: { in: shelfIds } });
+    }
+
+    if (conditions.length === 0) return;
 
     const conflict = await tx.inventoryUnit.findFirst({
       where: {
-        OR: [
-          { equipmentId: { in: equipmentIds } },
-          { shelfId: { in: shelfIds } },
-        ],
+        OR: conditions,
         inventory: {
-          status: { notIn: UNLOCKED_INVENTORIES },
-          ...(inventoryId && { inventoryId: { not: inventoryId } }),
+          status: { notIn: ['FINALIZED', 'CANCELLED'] },
+          launchedAt: { not: null },
+          ...(targetCampaignRootId
+            ? {
+                AND: [
+                  { rootInventoryId: { not: targetCampaignRootId } },
+                  { inventoryId: { not: targetCampaignRootId } },
+                ],
+              }
+            : {}),
         },
       },
       select: { unitId: true },
     });
 
-    if (conflict)
+    if (conflict) {
       throw new ConflictException('Movement is blocked by an active inventory');
+    }
   }
 
   private async checkStandardSourceBalances(

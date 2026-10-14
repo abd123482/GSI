@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -23,7 +24,23 @@ import {
   saveDraftSchema,
   type SubmitTaskDTO,
   submitTaskSchema,
+  type UpdateRosterDTO,
+  updateRosterSchema,
 } from './dto/index.js';
+
+import {
+  calculateStockVariances,
+  compareInventoryRound,
+  compareUnitSubmissions,
+  parseCountSubmission,
+  type BaselineSerializedItem,
+  type BaselineStandardItem,
+  type ControllerInfo,
+  type FrozenBaselineSnapshot,
+  type NormalizedObservation,
+  type ParsedSubmission,
+  type RoundComparisonResult,
+} from './inventory-engine.js';
 
 type AttemptPurpose = 'PRIMARY_1' | 'PRIMARY_2' | 'FINAL_RECOUNT';
 
@@ -31,7 +48,9 @@ type UnitReconciliationStatus =
   | 'PENDING'
   | 'PRIMARY_MATCH'
   | 'THIRD_REQUIRED'
-  | 'THIRD_RESOLVED';
+  | 'THIRD_RESOLVED'
+  | 'CONVERGED'
+  | 'RECOUNT_REQUIRED';
 
 type ReportCell = {
   quantity: number;
@@ -44,6 +63,116 @@ type ReportCell = {
   isUnexpected: boolean;
   notes: string[];
 };
+
+async function buildFrozenBaselineSnapshot(
+  tx: Prisma.TransactionClient,
+  typeInventory: 'ByEquipment' | 'ByShelf',
+  units: Array<{ equipmentId: string | null; shelfId: string | null }>,
+): Promise<FrozenBaselineSnapshot> {
+  const scopedEquipmentIds = units.map((u) => u.equipmentId).filter(Boolean) as string[];
+  const scopedShelfIds = units.map((u) => u.shelfId).filter(Boolean) as string[];
+
+  const standardMovements = await tx.$queryRaw<
+    { equipmentId: string; shelfId: string; balance: number }[]
+  >(Prisma.sql`
+    SELECT 
+      CAST(d.equipmentId AS varchar(36)) AS equipmentId,
+      CAST(d.shelfId AS varchar(36)) AS shelfId,
+      SUM(d.qty) AS balance
+    FROM (
+      SELECT m.equipmentId, m.destinationShelfId AS shelfId, CAST(m.equipmentQuantity AS bigint) AS qty
+      FROM dbo.MovementEquipment m
+      JOIN dbo.Equipment e ON e.equipmentId = m.equipmentId
+      WHERE e.hasSerialNumber = 0 AND m.destinationShelfId IS NOT NULL
+
+      UNION ALL
+
+      SELECT m.equipmentId, m.sourceShelfId AS shelfId, -CAST(m.equipmentQuantity AS bigint) AS qty
+      FROM dbo.MovementEquipment m
+      JOIN dbo.Equipment e ON e.equipmentId = m.equipmentId
+      WHERE e.hasSerialNumber = 0 AND m.sourceShelfId IS NOT NULL
+    ) d
+    GROUP BY d.equipmentId, d.shelfId
+    HAVING SUM(d.qty) <> 0
+  `);
+
+  const serialMovements = await tx.$queryRaw<
+    { serialNumberId: string; equipmentId: string; shelfId: string; balance: number }[]
+  >(Prisma.sql`
+    SELECT 
+      CAST(d.serialNumberId AS varchar(36)) AS serialNumberId,
+      CAST(d.equipmentId AS varchar(36)) AS equipmentId,
+      CAST(d.shelfId AS varchar(36)) AS shelfId,
+      SUM(d.qty) AS balance
+    FROM (
+      SELECT m.serialNumberId, m.equipmentId, m.destinationShelfId AS shelfId, CAST(m.equipmentQuantity AS bigint) AS qty
+      FROM dbo.MovementEquipment m
+      WHERE m.serialNumberId IS NOT NULL AND m.destinationShelfId IS NOT NULL
+
+      UNION ALL
+
+      SELECT m.serialNumberId, m.equipmentId, m.sourceShelfId AS shelfId, -CAST(m.equipmentQuantity AS bigint) AS qty
+      FROM dbo.MovementEquipment m
+      WHERE m.serialNumberId IS NOT NULL AND m.sourceShelfId IS NOT NULL
+    ) d
+    GROUP BY d.serialNumberId, d.equipmentId, d.shelfId
+    HAVING SUM(d.qty) > 0
+  `);
+
+  const scopedEqSet = new Set(scopedEquipmentIds.map((id) => id.toLowerCase()));
+  const scopedShSet = new Set(scopedShelfIds.map((id) => id.toLowerCase()));
+
+  const inScope = (eqId?: string | null, shId?: string | null) => {
+    const eq = (eqId ?? '').toLowerCase();
+    const sh = (shId ?? '').toLowerCase();
+    if (typeInventory === 'ByEquipment') return Boolean(eq && scopedEqSet.has(eq));
+    if (typeInventory === 'ByShelf') return Boolean(sh && scopedShSet.has(sh));
+    return Boolean((eq && scopedEqSet.has(eq)) || (sh && scopedShSet.has(sh)));
+  };
+
+  const standardItems: BaselineStandardItem[] = [];
+  for (const row of standardMovements) {
+    if (inScope(row.equipmentId, row.shelfId)) {
+      standardItems.push({
+        equipmentId: row.equipmentId.toLowerCase(),
+        shelfId: row.shelfId.toLowerCase(),
+        expectedQuantity: Number(row.balance),
+      });
+    }
+  }
+
+  const allSerials = await tx.serialNumber.findMany({
+    select: { serialNumberId: true, serialNumberCode: true, equipmentId: true },
+  });
+  const serialById = new Map(allSerials.map((s) => [s.serialNumberId.toLowerCase(), s]));
+
+  const serializedItems: BaselineSerializedItem[] = [];
+  for (const row of serialMovements) {
+    if (!row.serialNumberId) continue;
+    const s = serialById.get(row.serialNumberId.toLowerCase());
+    if (!s) continue;
+    if (inScope(row.equipmentId, row.shelfId)) {
+      serializedItems.push({
+        serialNumberId: row.serialNumberId.toLowerCase(),
+        serialNumberCode: s.serialNumberCode.trim(),
+        equipmentId: row.equipmentId.toLowerCase(),
+        expectedShelfId: row.shelfId.toLowerCase(),
+      });
+    }
+  }
+
+  return {
+    version: 1,
+    frozenAt: new Date().toISOString(),
+    typeInventory,
+    scope: {
+      equipmentIds: scopedEquipmentIds,
+      shelfIds: scopedShelfIds,
+    },
+    standardItems,
+    serializedItems,
+  };
+}
 
 function extractObservations(resultData: string | null | undefined): any[] {
   if (!resultData) return [];
@@ -343,12 +472,11 @@ export class InventoryService {
     creatorId: string,
   ) {
     const data = createInventorySchema.parse(dto);
-    const policyVersion = data.policyVersion ?? 3;
     const users = data.users;
 
-    if (policyVersion >= 2 && users.length !== 3) {
+    if (users.length < 3) {
       throw new BadRequestException(
-        "L'inventaire courant requiert exactement trois contrôleurs distincts.",
+        "L'inventaire requiert au moins trois contrôleurs distincts.",
       );
     }
 
@@ -366,6 +494,7 @@ export class InventoryService {
           userId: {
             in: users.map((item) => item.userId),
           },
+          userStatus: 'ACTIVE',
         },
         include: {
           role: true,
@@ -379,7 +508,7 @@ export class InventoryService {
           .filter((id) => !found.has(id));
 
         throw new NotFoundException(
-          `Utilisateur(s) introuvable(s): ${missing.join(', ')}`,
+          `Utilisateur(s) introuvable(s) ou inactif(s): ${missing.join(', ')}`,
         );
       }
 
@@ -420,9 +549,16 @@ export class InventoryService {
           title: data.title,
           typeInventory: data.typeInventory,
           status: 'DRAFT',
-          policyVersion,
+          policyVersion: 4,
           creatorId: creatorId || null,
+          roundNumber: 1,
+          version: 1,
         },
+      });
+
+      await tx.inventory.update({
+        where: { inventoryId: inventory.inventoryId },
+        data: { rootInventoryId: inventory.inventoryId },
       });
 
       await tx.inventoryController.createMany({
@@ -435,20 +571,22 @@ export class InventoryService {
 
       if (data.typeInventory === 'ByEquipment' && equipmentIds.length > 0) {
         await tx.inventoryUnit.createMany({
-          data: equipmentIds.map((equipmentId) => ({
+          data: equipmentIds.map((equipmentId, index) => ({
             inventoryId: inventory.inventoryId,
             equipmentId,
             shelfId: null,
+            unitOrder: index,
             status: 'DRAFT',
             reconciliationStatus: 'PENDING',
           })),
         });
       } else if (data.typeInventory === 'ByShelf' && shelfIds.length > 0) {
         await tx.inventoryUnit.createMany({
-          data: shelfIds.map((shelfId) => ({
+          data: shelfIds.map((shelfId, index) => ({
             inventoryId: inventory.inventoryId,
             equipmentId: null,
             shelfId,
+            unitOrder: index,
             status: 'DRAFT',
             reconciliationStatus: 'PENDING',
           })),
@@ -460,18 +598,74 @@ export class InventoryService {
   }
 
   // --------------------------------------------------------------------------
+  // Update Draft Roster
+  // --------------------------------------------------------------------------
+
+  async updateDraftRoster(inventoryId: string, dto: UpdateRosterDTO) {
+    const data = updateRosterSchema.parse(dto);
+    return this.prisma.$transaction(async (tx) => {
+      const inventory = await tx.inventory.findUnique({
+        where: { inventoryId },
+        select: { inventoryId: true, status: true },
+      });
+
+      if (!inventory) {
+        throw new NotFoundException('Inventaire introuvable');
+      }
+
+      if (inventory.status !== 'DRAFT') {
+        throw new BadRequestException(
+          'Seul un inventaire en statut DRAFT permet de modifier les contrôleurs.',
+        );
+      }
+
+      const users = await tx.user.findMany({
+        where: {
+          userId: { in: data.users.map((u) => u.userId) },
+          userStatus: 'ACTIVE',
+        },
+        select: { userId: true },
+      });
+
+      if (users.length !== data.users.length) {
+        throw new BadRequestException('Un ou plusieurs utilisateurs sont invalides ou inactifs.');
+      }
+
+      await tx.inventoryController.deleteMany({
+        where: { inventoryId },
+      });
+
+      await tx.inventoryController.createMany({
+        data: data.users.map((item, index) => ({
+          inventoryId,
+          userId: item.userId,
+          round: index + 1,
+        })),
+      });
+
+      return {
+        success: true,
+        message: 'Contrôleurs mis à jour avec succès.',
+      };
+    });
+  }
+
+  // --------------------------------------------------------------------------
   // Launch inventory
   // --------------------------------------------------------------------------
 
   async launchInventory(inventoryId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const launchResult = await this.prisma.$transaction(async (tx) => {
       const inventory = await tx.inventory.findUnique({
         where: { inventoryId },
         include: {
           controllers: {
             orderBy: { round: 'asc' },
           },
-          units: true,
+          units: {
+            orderBy: { unitOrder: 'asc' },
+          },
+          rootInventory: true,
         },
       });
 
@@ -486,9 +680,9 @@ export class InventoryService {
       }
 
       const controllers = inventory.controllers ?? [];
-      if (controllers.length !== 3) {
+      if (controllers.length < 3) {
         throw new BadRequestException(
-          'Trois contrôleurs distincts doivent être préassignés avant le lancement.',
+          'Au moins trois contrôleurs distincts doivent être préassignés avant le lancement.',
         );
       }
 
@@ -497,48 +691,77 @@ export class InventoryService {
         throw new BadRequestException("Le périmètre de l'inventaire est vide.");
       }
 
+      const targetRootId = inventory.rootInventoryId ?? inventoryId;
+
+      // Check stock locking against other active campaigns
+      const equipmentIds = units.map((u) => u.equipmentId).filter(Boolean) as string[];
+      const shelfIds = units.map((u) => u.shelfId).filter(Boolean) as string[];
+
+      const conditions: Prisma.InventoryUnitWhereInput[] = [];
+      if (equipmentIds.length > 0) conditions.push({ equipmentId: { in: equipmentIds } });
+      if (shelfIds.length > 0) conditions.push({ shelfId: { in: shelfIds } });
+
+      if (conditions.length > 0) {
+        const conflict = await tx.inventoryUnit.findFirst({
+          where: {
+            OR: conditions,
+            inventory: {
+              status: { notIn: ['FINALIZED', 'CANCELLED'] },
+              launchedAt: { not: null },
+              AND: [
+                { rootInventoryId: { not: targetRootId } },
+                { inventoryId: { not: targetRootId } },
+              ],
+            },
+          },
+          select: { unitId: true },
+        });
+
+        if (conflict) {
+          throw new ConflictException(
+            'Le lancement est bloqué : un ou plusieurs éléments sont verrouillés par un autre inventaire actif.',
+          );
+        }
+      }
+
+      // Freeze baseline snapshotData if root round 1, or reuse root's snapshot
+      let snapshotDataString = inventory.snapshotData;
+      if (inventory.roundNumber === 1 || !snapshotDataString) {
+        if (inventory.rootInventory?.snapshotData) {
+          snapshotDataString = inventory.rootInventory.snapshotData;
+        } else {
+          const snapshotObj = await buildFrozenBaselineSnapshot(
+            tx,
+            inventory.typeInventory as 'ByEquipment' | 'ByShelf',
+            units,
+          );
+          snapshotDataString = JSON.stringify(snapshotObj);
+        }
+      }
+
+      // Create counts for ALL controllers and ALL units (batched insert)
+      const countRecords = units.flatMap((unit) =>
+        controllers.map((ctrl) => ({
+          unitId: unit.unitId,
+          inventoryControllerId: ctrl.inventoryControllerId,
+        })),
+      );
+
+      await tx.inventoryCount.createMany({
+        data: countRecords,
+      });
+
       await tx.inventoryUnit.updateMany({
         where: { inventoryId },
         data: { status: 'COUNTING' },
       });
-
-      const c1 = controllers.find((c) => c.round === 1)!;
-      const c2 = controllers.find((c) => c.round === 2)!;
-
-      // Assign initial counts only to C1 and C2.
-      // C3 (third controller) is ONLY called when C1 and C2 have divergent results!
-      for (const unit of units) {
-        await tx.inventoryCount.create({
-          data: {
-            unitId: unit.unitId,
-            inventoryControllerId: c1.inventoryControllerId,
-          },
-        });
-        await tx.inventoryCount.create({
-          data: {
-            unitId: unit.unitId,
-            inventoryControllerId: c2.inventoryControllerId,
-          },
-        });
-      }
 
       await tx.inventory.update({
         where: { inventoryId },
         data: {
           status: 'IN_PROGRESS',
           launchedAt: new Date(),
-        },
-      });
-
-      await tx.notification.create({
-        data: {
-          recipientId: c1.userId,
-          eventType: 'INVENTORY_TASK_AVAILABLE',
-          payload: JSON.stringify({
-            inventoryId,
-            title: inventory.title,
-            message: 'Les tâches de comptage sont disponibles.',
-          }),
+          snapshotData: snapshotDataString,
         },
       });
 
@@ -546,8 +769,39 @@ export class InventoryService {
         success: true,
         inventoryId,
         totalUnits: units.length,
+        controllersCount: controllers.length,
+        title: inventory.title,
+        recipientIds: controllers.map((c) => c.userId),
       };
     });
+
+    // Notify all controllers outside of the transaction
+    if (this.prisma.notification?.create) {
+      for (const recipientId of launchResult.recipientIds) {
+        try {
+          await this.prisma.notification.create({
+            data: {
+              recipientId,
+              eventType: 'INVENTORY_TASK_AVAILABLE',
+              payload: JSON.stringify({
+                inventoryId,
+                title: launchResult.title,
+                message: 'Les tâches de comptage sont disponibles.',
+              }),
+            },
+          });
+        } catch (err) {
+          this.logger.warn(`Failed to dispatch notification for controller ${recipientId}: ${(err as Error).message}`);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      inventoryId: launchResult.inventoryId,
+      totalUnits: launchResult.totalUnits,
+      controllersCount: launchResult.controllersCount,
+    };
   }
 
   // --------------------------------------------------------------------------
@@ -743,7 +997,7 @@ export class InventoryService {
   }
 
   // --------------------------------------------------------------------------
-  // Core Reconciliation: C1 vs C2 -> If diff, call C3
+  // Core Reconciliation: Unanimous agreement across all N controllers
   // --------------------------------------------------------------------------
 
   async submitCountAttempt(
@@ -761,12 +1015,18 @@ export class InventoryService {
       const count = await tx.inventoryCount.findUnique({
         where: { countId: attemptId },
         include: {
-          inventoryController: true,
-          unit: {
+          inventoryController: {
             include: {
-              inventory: true,
+              inventory: {
+                include: {
+                  controllers: { orderBy: { round: 'asc' } },
+                  units: { orderBy: { unitOrder: 'asc' } },
+                  rootInventory: true,
+                },
+              },
             },
           },
+          unit: true,
         },
       });
 
@@ -781,7 +1041,10 @@ export class InventoryService {
       }
 
       if (count.submittedAt) {
-        throw new BadRequestException('Cette tâche a déjà été soumise.');
+        return {
+          success: true,
+          message: 'Cette tâche a déjà été enregistrée.',
+        };
       }
 
       const submittedAt = new Date();
@@ -795,149 +1058,251 @@ export class InventoryService {
         },
       });
 
-      const currentRound = count.inventoryController.round;
-      const unitId = count.unitId;
-      const inventoryId = count.unit.inventoryId;
+      const inventory = count.inventoryController.inventory;
+      const inventoryId = inventory.inventoryId;
+      const controllers = inventory.controllers;
+      const units = inventory.units;
+      const totalUnits = units.length;
+      const totalControllers = controllers.length;
+      const totalRequired = totalUnits * totalControllers;
 
-      // ----------------------------------------------------------------------
-      // CASE 1: Round 3 (Controller 3 - Recount / Arbitration)
-      // ----------------------------------------------------------------------
-      if (currentRound === 3) {
-        await tx.inventoryUnit.update({
-          where: { unitId },
-          data: {
-            status: 'COMPLETED',
-            reconciliationStatus: 'THIRD_RESOLVED',
-            acceptedCountId: count.countId,
-            reconciledAt: submittedAt,
+      // Count submitted tasks across this round
+      const submittedCount = await tx.inventoryCount.count({
+        where: {
+          inventoryController: { inventoryId },
+          submittedAt: { not: null },
+        },
+      });
+
+      if (submittedCount < totalRequired) {
+        return {
+          success: true,
+          isRoundComplete: false,
+          status: 'IN_PROGRESS',
+          submittedCount,
+          totalRequired,
+        };
+      }
+
+      // ALL REQUIRED COUNTS SUBMITTED!
+      const roundUnits = await tx.inventoryUnit.findMany({
+        where: { inventoryId },
+        include: {
+          counts: {
+            include: { inventoryController: true },
           },
-        });
-      } else {
-        // --------------------------------------------------------------------
-        // CASE 2: Round 1 or 2 (C1 or C2)
-        // Check if the other primary counter has already submitted!
-        // --------------------------------------------------------------------
-        const otherRound = currentRound === 1 ? 2 : 1;
-        const otherCount = await tx.inventoryCount.findFirst({
-          where: {
-            unitId,
-            inventoryController: {
-              inventoryId,
-              round: otherRound,
-            },
-          },
-          include: {
-            inventoryController: true,
-          },
-        });
+        },
+        orderBy: { unitOrder: 'asc' },
+      });
 
-        if (otherCount && otherCount.submittedAt) {
-          // BOTH C1 AND C2 HAVE SUBMITTED THEIR COUNTS FOR THIS UNIT!
-          const c1Data = currentRound === 1 ? resultData : otherCount.resultData;
-          const c2Data = currentRound === 2 ? resultData : otherCount.resultData;
+      const unitSubmissions = new Map<string, Map<string, ParsedSubmission>>();
+      for (const u of roundUnits) {
+        const subMap = new Map<string, ParsedSubmission>();
+        for (const cnt of u.counts) {
+          const parsed = parseCountSubmission(
+            cnt.resultData,
+            cnt.inventoryControllerId,
+            cnt.inventoryController.userId,
+            cnt.submittedAt,
+          );
+          subMap.set(cnt.inventoryControllerId, parsed);
+        }
+        unitSubmissions.set(u.unitId, subMap);
+      }
 
-          const isMatch = areCountsIdentical(c1Data, c2Data);
+      const controllerInfos: ControllerInfo[] = controllers.map((c, idx) => ({
+        controllerId: c.inventoryControllerId,
+        userId: c.userId,
+        sequence: idx,
+        round: c.round,
+      }));
 
-          if (isMatch) {
-            // C1 and C2 agree! Primary match accepted directly.
-            await tx.inventoryUnit.update({
-              where: { unitId },
-              data: {
-                status: 'COMPLETED',
-                reconciliationStatus: 'PRIMARY_MATCH',
-                acceptedCountId: count.countId,
-                reconciledAt: submittedAt,
-              },
-            });
-          } else {
-            // ----------------------------------------------------------------
-            // C1 AND C2 DIFFER! CALL TO THE THIRD CONTROLLER (C3)!
-            // ----------------------------------------------------------------
-            await tx.inventoryUnit.update({
-              where: { unitId },
-              data: {
-                status: 'COUNTING',
-                reconciliationStatus: 'THIRD_REQUIRED',
-                acceptedCountId: null,
-                reconciledAt: null,
-              },
-            });
-
-            // Find Controller 3 (round 3) for this inventory:
-            const c3Controller = await tx.inventoryController.findFirst({
-              where: {
-                inventoryId,
-                round: 3,
-              },
-            });
-
-            if (c3Controller) {
-              // Create C3 count task if not already created
-              const existingC3 = await tx.inventoryCount.findFirst({
-                where: {
-                  unitId,
-                  inventoryControllerId: c3Controller.inventoryControllerId,
-                },
-              });
-
-              let c3CountId = existingC3?.countId;
-
-              if (!existingC3) {
-                const newC3 = await tx.inventoryCount.create({
-                  data: {
-                    unitId,
-                    inventoryControllerId: c3Controller.inventoryControllerId,
-                  },
-                });
-                c3CountId = newC3.countId;
-              }
-
-              // Send Notification to C3
-              await tx.notification.create({
-                data: {
-                  recipientId: c3Controller.userId,
-                  eventType: 'THIRD_COUNT_REQUIRED',
-                  payload: JSON.stringify({
-                    inventoryId,
-                    unitId,
-                    taskId: c3CountId,
-                    title: count.unit.inventory.title,
-                    message: `Divergence constatée entre Contrôleur 1 et Contrôleur 2. Votre arbitrage (3ème comptage) est requis sur cette unité.`,
-                  }),
-                },
-              });
-            }
-          }
+      let baselineSnapshot: FrozenBaselineSnapshot | null = null;
+      const rawSnapshot = inventory.snapshotData ?? inventory.rootInventory?.snapshotData;
+      if (rawSnapshot) {
+        try {
+          baselineSnapshot = JSON.parse(rawSnapshot);
+        } catch {
+          baselineSnapshot = null;
         }
       }
 
-      // Check if all units in inventory are resolved:
-      const allUnits = await tx.inventoryUnit.findMany({
-        where: { inventoryId },
-        select: { reconciliationStatus: true },
-      });
+      const roundResult = compareInventoryRound(
+        units.map((u) => ({ unitId: u.unitId, equipmentId: u.equipmentId, shelfId: u.shelfId })),
+        controllerInfos,
+        unitSubmissions,
+        baselineSnapshot,
+      );
 
-      const allResolved =
-        allUnits.length > 0 &&
-        allUnits.every(
-          (u) =>
-            u.reconciliationStatus === 'PRIMARY_MATCH' ||
-            u.reconciliationStatus === 'THIRD_RESOLVED',
-        );
+      if (roundResult.isUnanimous) {
+        // UNANIMOUS AGREEMENT ACROSS ALL CONTROLLERS AND UNITS!
+        const firstCtrl = controllers[0];
+        for (const u of roundUnits) {
+          const repCount = u.counts.find(
+            (c) => c.inventoryControllerId === firstCtrl.inventoryControllerId,
+          );
+          await tx.inventoryUnit.update({
+            where: { unitId: u.unitId },
+            data: {
+              status: 'COMPLETED',
+              reconciliationStatus: 'CONVERGED',
+              acceptedCountId: repCount?.countId ?? u.counts[0]?.countId,
+              reconciledAt: submittedAt,
+            },
+          });
+        }
 
-      if (allResolved) {
         await tx.inventory.update({
           where: { inventoryId },
           data: {
-            status: 'COMPLETED',
+            status: 'CONVERGED',
           },
         });
-      }
 
-      return {
-        success: true,
-        message: 'Comptage soumis avec succès.',
-      };
+        // Save stock variance issues if any
+        if (roundResult.stockVariances.length > 0) {
+          for (const variance of roundResult.stockVariances) {
+            await tx.inventoryIssue.create({
+              data: {
+                inventoryId,
+                unitId: variance.unitId || null,
+                type: variance.varianceType,
+                issueCategory: 'STOCK_VARIANCE',
+                status: 'OPEN',
+                originatingRound: inventory.roundNumber,
+                data: JSON.stringify(variance),
+              },
+            });
+          }
+        }
+
+        // Resolve historical disagreement issues from earlier rounds on this campaign
+        const rootId = inventory.rootInventoryId ?? inventoryId;
+        await tx.inventoryIssue.updateMany({
+          where: {
+            issueCategory: 'DISAGREEMENT',
+            inventory: {
+              OR: [{ rootInventoryId: rootId }, { inventoryId: rootId }],
+            },
+            status: 'OPEN',
+          },
+          data: {
+            status: 'RESOLVED',
+            resolutionDisposition: 'RESOLVED_BY_RECOUNT',
+            resolutionReason: `Résolu par recomptage unanime au tour ${inventory.roundNumber}`,
+            resolvedAt: submittedAt,
+          },
+        });
+
+        return {
+          success: true,
+          isRoundComplete: true,
+          isUnanimous: true,
+          status: 'CONVERGED',
+          message: 'Comptage validé avec accord unanime.',
+        };
+      } else {
+        // CONTROLLERS DISAGREED! RECOUNT REQUIRED!
+        for (const u of roundUnits) {
+          const unitComp = roundResult.unitResults.get(u.unitId);
+          if (unitComp && !unitComp.isMatch) {
+            await tx.inventoryUnit.update({
+              where: { unitId: u.unitId },
+              data: {
+                status: 'DIVERGENT',
+                reconciliationStatus: 'RECOUNT_REQUIRED',
+                reconciledAt: null,
+                acceptedCountId: null,
+              },
+            });
+
+            // Record disagreement issues
+            for (const d of unitComp.disagreements) {
+              await tx.inventoryIssue.create({
+                data: {
+                  inventoryId,
+                  unitId: u.unitId,
+                  type: 'CONTROLLER_DISAGREEMENT',
+                  issueCategory: 'DISAGREEMENT',
+                  status: 'OPEN',
+                  originatingRound: inventory.roundNumber,
+                  data: JSON.stringify(d),
+                },
+              });
+            }
+          } else {
+            await tx.inventoryUnit.update({
+              where: { unitId: u.unitId },
+              data: {
+                status: 'COMPLETED',
+                reconciliationStatus: 'RECOUNT_REQUIRED',
+              },
+            });
+          }
+        }
+
+        await tx.inventory.update({
+          where: { inventoryId },
+          data: {
+            status: 'RECOUNT_REQUIRED',
+          },
+        });
+
+        // Atomically create continuation child round in DRAFT if not already created
+        const rootId = inventory.rootInventoryId ?? inventoryId;
+        const rootInv = inventory.rootInventory ?? inventory;
+
+        const existingChild = await tx.inventory.findFirst({
+          where: { parentInventoryId: inventoryId },
+        });
+
+        const child = existingChild ?? await tx.inventory.create({
+          data: {
+            title: `${rootInv.title || 'Inventaire'} - Tour ${inventory.roundNumber + 1}`,
+            typeInventory: inventory.typeInventory,
+            status: 'DRAFT',
+            parentInventoryId: inventoryId,
+            rootInventoryId: rootId,
+            roundNumber: inventory.roundNumber + 1,
+            policyVersion: inventory.policyVersion ?? 4,
+            snapshotData: rawSnapshot ?? null,
+            creatorId: inventory.creatorId,
+          },
+        });
+
+        if (!existingChild) {
+          const childId = child.inventoryId;
+          // Inherit full original scope
+          await tx.inventoryUnit.createMany({
+            data: units.map((u, idx) => ({
+              inventoryId: childId,
+              equipmentId: u.equipmentId,
+              shelfId: u.shelfId,
+              unitOrder: idx,
+              status: 'DRAFT',
+              reconciliationStatus: 'PENDING',
+            })),
+          });
+
+          // Inherit default roster
+          await tx.inventoryController.createMany({
+            data: controllers.map((c, idx) => ({
+              inventoryId: childId,
+              userId: c.userId,
+              round: idx + 1,
+            })),
+          });
+        }
+
+        return {
+          success: true,
+          isRoundComplete: true,
+          isUnanimous: false,
+          status: 'RECOUNT_REQUIRED',
+          nextChildId: child.inventoryId,
+          message: 'Divergence constatée. Un nouveau tour de recomptage a été généré.',
+        };
+      }
     });
   }
 
@@ -979,6 +1344,10 @@ export class InventoryService {
               orderBy: { createdAt: 'asc' },
             },
           },
+          orderBy: { unitOrder: 'asc' },
+        },
+        subInventories: {
+          select: { inventoryId: true, status: true, roundNumber: true },
         },
       },
     });
@@ -991,109 +1360,89 @@ export class InventoryService {
     const units = inventory.units ?? [];
     const totalUnits = units.length;
 
-    const c1Completed = units.filter((unit) =>
-      unit.counts?.some(
-        (cnt) => cnt.inventoryController?.round === 1 && cnt.submittedAt,
-      ),
-    ).length;
-
-    const c2Completed = units.filter((unit) =>
-      unit.counts?.some(
-        (cnt) => cnt.inventoryController?.round === 2 && cnt.submittedAt,
-      ),
-    ).length;
-
-    const c3Required = units.filter((unit) =>
-      ['THIRD_REQUIRED', 'THIRD_RESOLVED'].includes(unit.reconciliationStatus),
-    ).length;
-
-    const c3Completed = units.filter((unit) =>
-      unit.counts?.some(
-        (cnt) => cnt.inventoryController?.round === 3 && cnt.submittedAt,
-      ),
-    ).length;
+    const dynamicControllers = controllers.map((c, idx) => {
+      const completed = units.filter((unit) =>
+        unit.counts?.some(
+          (cnt) => cnt.inventoryControllerId === c.inventoryControllerId && cnt.submittedAt,
+        ),
+      ).length;
+      return {
+        controllerId: c.inventoryControllerId,
+        userId: c.userId,
+        sequence: idx,
+        round: c.round,
+        user: c.user,
+        responsibility: `CONTROLLER_${c.round}`,
+        completedUnits: completed,
+        totalUnits,
+        isFinished: completed === totalUnits && totalUnits > 0,
+      };
+    });
 
     const reconciledUnits = units.filter((unit) =>
-      ['PRIMARY_MATCH', 'THIRD_RESOLVED'].includes(unit.reconciliationStatus),
+      ['CONVERGED', 'PRIMARY_MATCH', 'THIRD_RESOLVED'].includes(unit.reconciliationStatus),
     ).length;
 
-    const c1 = controllers.find((c) => c.round === 1);
-    const c2 = controllers.find((c) => c.round === 2);
-    const c3 = controllers.find((c) => c.round === 3);
+    const c1 = dynamicControllers[0];
+    const c2 = dynamicControllers[1];
+    const c3 = dynamicControllers[2];
+
+    const nextChild = inventory.subInventories?.[0];
 
     return {
       inventoryId: inventory.inventoryId,
+      rootInventoryId: inventory.rootInventoryId,
+      roundNumber: inventory.roundNumber,
+      validatedInventoryId: inventory.validatedInventoryId,
+      nextChildId: nextChild?.inventoryId ?? null,
       title: inventory.title,
       typeInventory: inventory.typeInventory,
       status: inventory.status,
       policyVersion: inventory.policyVersion,
       totalUnits,
       reconciledUnits,
+      controllersList: dynamicControllers,
       controllers: {
-        controller1: {
-          user: c1?.user ?? null,
-          responsibility: 'PRIMARY_COUNTER_1',
-          completedUnits: c1Completed,
-          totalUnits,
-          isFinished: c1Completed === totalUnits && totalUnits > 0,
-        },
-        controller2: {
-          user: c2?.user ?? null,
-          responsibility: 'PRIMARY_COUNTER_2',
-          completedUnits: c2Completed,
-          totalUnits,
-          isFinished: c2Completed === totalUnits && totalUnits > 0,
-        },
-        controller3: {
-          user: c3?.user ?? null,
-          responsibility: 'FINAL_CONTROLLER',
-          requiredUnits: c3Required,
-          completedUnits: c3Completed,
-          isActive: c3Required > c3Completed,
-          isFinished: c3Required > 0 && c3Completed === c3Required,
-        },
+        controller1: c1
+          ? {
+              user: c1.user,
+              responsibility: 'PRIMARY_COUNTER_1',
+              completedUnits: c1.completedUnits,
+              totalUnits,
+              isFinished: c1.isFinished,
+            }
+          : null,
+        controller2: c2
+          ? {
+              user: c2.user,
+              responsibility: 'PRIMARY_COUNTER_2',
+              completedUnits: c2.completedUnits,
+              totalUnits,
+              isFinished: c2.isFinished,
+            }
+          : null,
+        controller3: c3
+          ? {
+              user: c3.user,
+              responsibility: 'FINAL_CONTROLLER',
+              completedUnits: c3.completedUnits,
+              totalUnits,
+              isFinished: c3.isFinished,
+            }
+          : null,
       },
-      workUnits: units.map((unit, index) => {
-        const c1Count = unit.counts?.find(
-          (c) => c.inventoryController?.round === 1,
-        );
-        const c2Count = unit.counts?.find(
-          (c) => c.inventoryController?.round === 2,
-        );
-        const c3Count = unit.counts?.find(
-          (c) => c.inventoryController?.round === 3,
-        );
-
-        return {
-          unitId: unit.unitId,
-          unitOrder: index,
-          equipmentId: unit.equipmentId,
-          shelfId: unit.shelfId,
-          status: unit.status,
-          reconciliationStatus: unit.reconciliationStatus,
-          acceptedAttemptId: unit.acceptedCountId,
-          reconciledAt: unit.reconciledAt,
-          c1Status: c1Count?.submittedAt
-            ? 'SUBMITTED'
-            : c1Count
-              ? 'IN_PROGRESS'
-              : inventory.status === 'IN_PROGRESS'
-                ? 'AVAILABLE'
-                : 'BLOCKED',
-          c2Status: c2Count?.submittedAt
-            ? 'SUBMITTED'
-            : c2Count
-              ? 'IN_PROGRESS'
-              : 'BLOCKED',
-          c3Status: c3Count?.submittedAt
-            ? 'SUBMITTED'
-            : c3Count
-              ? 'IN_PROGRESS'
-              : unit.reconciliationStatus === 'THIRD_REQUIRED'
-                ? 'AVAILABLE'
-                : 'NOT_REQUIRED',
-        };
-      }),
+      workUnits: units.map((u, idx) => ({
+        unitId: u.unitId,
+        unitOrder: u.unitOrder ?? idx,
+        equipmentId: u.equipmentId,
+        shelfId: u.shelfId,
+        status: u.status,
+        reconciliationStatus: u.reconciliationStatus,
+        acceptedAttemptId: u.acceptedCountId,
+        reconciledAt: u.reconciledAt,
+        countsCount: u.counts?.length ?? 0,
+        submittedCount: u.counts?.filter((cnt) => cnt.submittedAt).length ?? 0,
+      })),
     };
   }
 
@@ -1134,8 +1483,9 @@ export class InventoryService {
             equipment: true,
             shelf: true,
           },
-          orderBy: { unitId: 'asc' },
+          orderBy: { unitOrder: 'asc' },
         },
+        rootInventory: true,
       },
     });
 
@@ -1143,32 +1493,46 @@ export class InventoryService {
       throw new NotFoundException('Inventaire introuvable');
     }
 
+    const controllers = inventory.controllers ?? [];
+    let baselineSnapshot: FrozenBaselineSnapshot | null = null;
+    const rawSnapshot = inventory.snapshotData ?? inventory.rootInventory?.snapshotData;
+    if (rawSnapshot) {
+      try {
+        baselineSnapshot = JSON.parse(rawSnapshot);
+      } catch {
+        baselineSnapshot = null;
+      }
+    }
+
     const units = (inventory.units ?? []).map((unit, index) => {
       const counts = unit.counts ?? [];
-      const c1Count = counts.find((c) => c.inventoryController?.round === 1);
-      const c2Count = counts.find((c) => c.inventoryController?.round === 2);
-      const c3Count = counts.find((c) => c.inventoryController?.round === 3);
       const acceptedCount = unit.acceptedCount;
 
-      const c1Obs = extractObservations(c1Count?.resultData);
-      const c2Obs = extractObservations(c2Count?.resultData);
-      const c3Obs = extractObservations(c3Count?.resultData);
+      const subByCtrlId = new Map<string, { obs: any[]; count: typeof counts[0] }>();
+      for (const ctrl of controllers) {
+        const cnt = counts.find((c) => c.inventoryControllerId === ctrl.inventoryControllerId);
+        subByCtrlId.set(ctrl.inventoryControllerId, {
+          obs: extractObservations(cnt?.resultData),
+          count: cnt!,
+        });
+      }
+
       const accObs = extractObservations(acceptedCount?.resultData);
 
       const allKeys = new Set<string>();
       const addKeys = (obsList: any[]) => {
         for (const o of obsList) {
           const s = (o.scannedSerialCode || o.serialNumberCode || '').toString().trim();
-          const eq = (o.observedEquipmentId || o.equipmentId || '').toString().trim();
-          const sh = (o.observedShelfId || o.shelfId || '').toString().trim();
+          const eq = (o.observedEquipmentId || o.equipmentId || unit.equipmentId || '').toString().trim();
+          const sh = (o.observedShelfId || o.shelfId || unit.shelfId || '').toString().trim();
           if (s) allKeys.add(`SER|${s.toLowerCase()}|${sh.toLowerCase()}`);
           else if (eq || sh) allKeys.add(`STD|${eq.toLowerCase()}|${sh.toLowerCase()}`);
         }
       };
 
-      addKeys(c1Obs);
-      addKeys(c2Obs);
-      addKeys(c3Obs);
+      for (const { obs } of subByCtrlId.values()) {
+        addKeys(obs);
+      }
       addKeys(accObs);
 
       const rows = Array.from(allKeys).map((key) => {
@@ -1191,17 +1555,34 @@ export class InventoryService {
           return obsList
             .filter(
               (o) =>
-                (o.observedEquipmentId || o.equipmentId || '').toString().trim().toLowerCase() ===
-                  eqId &&
-                (o.observedShelfId || o.shelfId || '').toString().trim().toLowerCase() === shId,
+                (o.observedEquipmentId || o.equipmentId || unit.equipmentId || '')
+                  .toString()
+                  .trim()
+                  .toLowerCase() === eqId &&
+                (o.observedShelfId || o.shelfId || unit.shelfId || '')
+                  .toString()
+                  .trim()
+                  .toLowerCase() === shId,
             )
             .reduce((sum, o) => sum + Number(o.quantityCalculated ?? 0), 0);
         };
 
-        const q1 = c1Count?.submittedAt ? findQty(c1Obs) : null;
-        const q2 = c2Count?.submittedAt ? findQty(c2Obs) : null;
-        const q3 = c3Count?.submittedAt ? findQty(c3Obs) : null;
+        const controllerCells: Record<string, { quantity: number | null; serialNumberCode: string | null; isSubmitted: boolean }> = {};
+        for (const ctrl of controllers) {
+          const data = subByCtrlId.get(ctrl.inventoryControllerId);
+          const isSub = Boolean(data?.count?.submittedAt);
+          controllerCells[ctrl.inventoryControllerId] = {
+            quantity: isSub ? findQty(data!.obs) : null,
+            serialNumberCode: serialCode,
+            isSubmitted: isSub,
+          };
+        }
+
         const qAcc = acceptedCount?.submittedAt ? findQty(accObs) : null;
+
+        const c1Data = controllers[0] ? controllerCells[controllers[0].inventoryControllerId] : null;
+        const c2Data = controllers[1] ? controllerCells[controllers[1].inventoryControllerId] : null;
+        const c3Data = controllers[2] ? controllerCells[controllers[2].inventoryControllerId] : null;
 
         return {
           key,
@@ -1211,83 +1592,67 @@ export class InventoryService {
           shelfId: unit.shelfId,
           shelfName: unit.shelf?.shelfName ?? null,
           serialNumberCode: serialCode,
-          controller1: q1 !== null ? { quantity: q1, serialNumberCode: serialCode } : null,
-          controller2: q2 !== null ? { quantity: q2, serialNumberCode: serialCode } : null,
-          controller3: q3 !== null ? { quantity: q3, serialNumberCode: serialCode } : null,
+          controllerCells,
+          controller1: c1Data?.quantity !== null && c1Data ? { quantity: c1Data.quantity, serialNumberCode: serialCode } : null,
+          controller2: c2Data?.quantity !== null && c2Data ? { quantity: c2Data.quantity, serialNumberCode: serialCode } : null,
+          controller3: c3Data?.quantity !== null && c3Data ? { quantity: c3Data.quantity, serialNumberCode: serialCode } : null,
           accepted: qAcc !== null ? { quantity: qAcc, serialNumberCode: serialCode } : null,
           controller1VsAccepted: {
-            status: q1 === qAcc ? 'CONFORME' : 'DIVERGENT',
-            delta: q1 !== null && qAcc !== null ? q1 - qAcc : null,
+            status: c1Data?.quantity === qAcc ? 'CONFORME' : 'DIVERGENT',
+            delta: c1Data?.quantity !== null && qAcc !== null && c1Data ? c1Data.quantity - qAcc : null,
           },
           controller2VsAccepted: {
-            status: q2 === qAcc ? 'CONFORME' : 'DIVERGENT',
-            delta: q2 !== null && qAcc !== null ? q2 - qAcc : null,
+            status: c2Data?.quantity === qAcc ? 'CONFORME' : 'DIVERGENT',
+            delta: c2Data?.quantity !== null && qAcc !== null && c2Data ? c2Data.quantity - qAcc : null,
           },
         };
       });
 
       return {
         unitId: unit.unitId,
-        unitOrder: index,
+        unitOrder: unit.unitOrder ?? index,
         equipmentId: unit.equipmentId,
         shelfId: unit.shelfId,
         status: unit.status,
         reconciliationStatus: unit.reconciliationStatus,
         acceptedAttemptId: unit.acceptedCountId,
-        acceptedPurpose: unit.acceptedCountId
-          ? unit.acceptedCountId === c3Count?.countId
-            ? 'FINAL_RECOUNT'
-            : unit.acceptedCountId === c2Count?.countId
-              ? 'PRIMARY_2'
-              : 'PRIMARY_1'
-          : null,
-        attempts: {
-          controller1: c1Count
-            ? {
-                attemptId: c1Count.countId,
-                user: c1Count.inventoryController.user,
-                submittedAt: c1Count.submittedAt,
-              }
-            : null,
-          controller2: c2Count
-            ? {
-                attemptId: c2Count.countId,
-                user: c2Count.inventoryController.user,
-                submittedAt: c2Count.submittedAt,
-              }
-            : null,
-          controller3: c3Count
-            ? {
-                attemptId: c3Count.countId,
-                user: c3Count.inventoryController.user,
-                submittedAt: c3Count.submittedAt,
-              }
-            : null,
-        },
+        attempts: counts.map((c) => ({
+          attemptId: c.countId,
+          controllerId: c.inventoryControllerId,
+          userId: c.inventoryController.userId,
+          user: c.inventoryController.user,
+          submittedAt: c.submittedAt,
+        })),
         rows,
       };
     });
 
     const summary = {
       totalUnits: units.length,
-      primaryMatchedUnits: units.filter(
-        (u) => u.reconciliationStatus === 'PRIMARY_MATCH',
-      ).length,
-      thirdRequiredUnits: units.filter(
-        (u) => u.reconciliationStatus === 'THIRD_REQUIRED',
-      ).length,
-      thirdResolvedUnits: units.filter(
-        (u) => u.reconciliationStatus === 'THIRD_RESOLVED',
-      ).length,
+      convergedUnits: units.filter((u) => u.reconciliationStatus === 'CONVERGED').length,
+      recountRequiredUnits: units.filter((u) => u.reconciliationStatus === 'RECOUNT_REQUIRED').length,
+      pendingUnits: units.filter((u) => u.reconciliationStatus === 'PENDING').length,
     };
 
     return {
       inventoryId: inventory.inventoryId,
+      rootInventoryId: inventory.rootInventoryId,
+      roundNumber: inventory.roundNumber,
+      validatedInventoryId: inventory.validatedInventoryId,
       title: inventory.title,
       status: inventory.status,
       typeInventory: inventory.typeInventory,
       units,
       summary,
+      controllers: controllers.map((c, idx) => ({
+        controllerId: c.inventoryControllerId,
+        sequence: idx,
+        round: c.round,
+        responsibility: `CONTROLLER_${c.round}`,
+        user: c.user,
+      })),
+      hasBaselineSnapshot: Boolean(baselineSnapshot),
+      baselineSnapshot: baselineSnapshot ?? null,
     };
   }
 
@@ -1468,16 +1833,23 @@ export class InventoryService {
         throw new BadRequestException('Cet inventaire est déjà finalisé.');
       }
 
-      const unresolved = inventory.units.filter(
-        (unit) =>
-          !['PRIMARY_MATCH', 'THIRD_RESOLVED'].includes(
-            unit.reconciliationStatus,
-          ) || !unit.acceptedCountId,
-      );
-
-      if (unresolved.length > 0) {
+      if (inventory.status !== 'CONVERGED') {
         throw new BadRequestException(
-          'Toutes les unités doivent être réconciliées avant la finalisation.',
+          'Seul un inventaire ayant convergé (CONVERGED) peut être finalisé.',
+        );
+      }
+
+      const openDisagreements = await tx.inventoryIssue.count({
+        where: {
+          inventoryId,
+          issueCategory: 'DISAGREEMENT',
+          status: 'OPEN',
+        },
+      });
+
+      if (openDisagreements > 0) {
+        throw new BadRequestException(
+          'Des divergences de comptage non résolues bloquent la finalisation.',
         );
       }
 
@@ -1752,7 +2124,7 @@ export class InventoryService {
         }
       }
 
-      // B. Serialized items
+      // B. Serialized items (Relocations: OUT first, then IN)
       const allSerialCodes = new Set([
         ...theoreticalSerials.keys(),
         ...countedSerials.keys(),
@@ -1764,7 +2136,6 @@ export class InventoryService {
 
         if (th && cnt) {
           if (th.shelfId.toLowerCase() !== cnt.shelfId.toLowerCase()) {
-            // Relocation / Transfer
             outItems.push({
               equipmentId: th.equipmentId,
               sourceShelfId: th.shelfId,
@@ -1783,7 +2154,6 @@ export class InventoryService {
             });
           }
         } else if (!th && cnt) {
-          // Newly found in stock
           let serialRecord = serialByCode.get(code);
           if (!serialRecord && cnt.equipmentId) {
             serialRecord = await tx.serialNumber.create({
@@ -1806,7 +2176,6 @@ export class InventoryService {
             });
           }
         } else if (th && !cnt) {
-          // Missing from shelf
           outItems.push({
             equipmentId: th.equipmentId,
             sourceShelfId: th.shelfId,
@@ -1819,27 +2188,9 @@ export class InventoryService {
       }
 
       // ----------------------------------------------------------------------
-      // 5. Create Mouvements in DB
+      // 5. Create OUT movements first, then IN movements in DB
       // ----------------------------------------------------------------------
       const title = inventory.title || inventory.inventoryId;
-
-      if (inItems.length > 0) {
-        await tx.mouvement.create({
-          data: {
-            mouvementStatus: false, // IN
-            createdByUserId: finalizerId || null,
-            inventoryId: inventory.inventoryId,
-            origin: false,
-            reason: `Régularisation inventaire (Entrée / Surplus) - ${title}`,
-            happenedAt: new Date(),
-            items: {
-              createMany: {
-                data: inItems,
-              },
-            },
-          },
-        });
-      }
 
       if (outItems.length > 0) {
         await tx.mouvement.create({
@@ -1859,6 +2210,24 @@ export class InventoryService {
         });
       }
 
+      if (inItems.length > 0) {
+        await tx.mouvement.create({
+          data: {
+            mouvementStatus: false, // IN
+            createdByUserId: finalizerId || null,
+            inventoryId: inventory.inventoryId,
+            origin: false,
+            reason: `Régularisation inventaire (Entrée / Surplus) - ${title}`,
+            happenedAt: new Date(),
+            items: {
+              createMany: {
+                data: inItems,
+              },
+            },
+          },
+        });
+      }
+
       affectedEquipmentIds = Array.from(
         new Set([
           ...inItems.map((i) => i.equipmentId),
@@ -1867,7 +2236,7 @@ export class InventoryService {
       );
 
       // ----------------------------------------------------------------------
-      // 6. Update inventory status to FINALIZED
+      // 6. Update inventory status to FINALIZED & link root validatedInventoryId
       // ----------------------------------------------------------------------
       const updated = await tx.inventory.update({
         where: { inventoryId },
@@ -1875,6 +2244,14 @@ export class InventoryService {
           status: 'FINALIZED',
           finalizedAt: new Date(),
           adjustmentApproverId: finalizerId || null,
+        },
+      });
+
+      const rootId = inventory.rootInventoryId ?? inventoryId;
+      await tx.inventory.update({
+        where: { inventoryId: rootId },
+        data: {
+          validatedInventoryId: inventoryId,
         },
       });
 
@@ -1897,7 +2274,7 @@ export class InventoryService {
   }
 
   // --------------------------------------------------------------------------
-  // Deletion
+  // Deletion & Cancellation
   // --------------------------------------------------------------------------
 
   async deleteInventory(inventoryId: string) {
@@ -1909,39 +2286,34 @@ export class InventoryService {
       throw new NotFoundException('Inventaire introuvable');
     }
 
+    if (existing.status === 'FINALIZED') {
+      throw new BadRequestException('Impossible de supprimer un inventaire déjà finalisé.');
+    }
+
+    const movementsCount = await this.prisma.mouvement.count({
+      where: { inventoryId: existing.inventoryId },
+    });
+
+    if (movementsCount > 0) {
+      throw new BadRequestException(
+        'Impossible de supprimer un inventaire avec des mouvements de stock enregistrés.',
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
-      await tx.movementEquipment.deleteMany({
-        where: { movement: { inventoryId: existing.inventoryId } },
-      });
-
-      await tx.mouvement.deleteMany({
+      await tx.inventoryIssue.deleteMany({
         where: { inventoryId: existing.inventoryId },
       });
 
-      const units = await tx.inventoryUnit.findMany({
-        where: { inventoryId: existing.inventoryId },
-        select: { unitId: true },
+      await tx.inventoryCount.deleteMany({
+        where: {
+          inventoryController: { inventoryId: existing.inventoryId },
+        },
       });
-      const unitIds = units.map((u) => u.unitId);
 
-      if (unitIds.length > 0) {
-        await tx.inventoryUnit.updateMany({
-          where: { inventoryId: existing.inventoryId },
-          data: { acceptedCountId: null },
-        });
-
-        await tx.inventoryIssue.deleteMany({
-          where: { inventoryId: existing.inventoryId },
-        });
-
-        await tx.inventoryCount.deleteMany({
-          where: { unitId: { in: unitIds } },
-        });
-
-        await tx.inventoryUnit.deleteMany({
-          where: { inventoryId: existing.inventoryId },
-        });
-      }
+      await tx.inventoryUnit.deleteMany({
+        where: { inventoryId: existing.inventoryId },
+      });
 
       await tx.inventoryController.deleteMany({
         where: { inventoryId: existing.inventoryId },
@@ -1953,8 +2325,82 @@ export class InventoryService {
     });
   }
 
+  async cancelInventory(inventoryId: string, reason?: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const inventory = await tx.inventory.findUnique({
+        where: { inventoryId },
+      });
+      if (!inventory) {
+        throw new NotFoundException('Inventaire introuvable');
+      }
+      if (inventory.status === 'FINALIZED') {
+        throw new BadRequestException('Un inventaire déjà finalisé ne peut pas être annulé.');
+      }
+
+      const updated = await tx.inventory.update({
+        where: { inventoryId },
+        data: {
+          status: 'CANCELLED',
+          cancellationReason: reason ?? 'Annulation manuelle autorisée',
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Inventaire annulé avec succès.',
+        inventory: updated,
+      };
+    });
+  }
+
+  async getInventoryRounds(inventoryId: string) {
+    const inv = await this.prisma.inventory.findUnique({
+      where: { inventoryId },
+      select: { rootInventoryId: true, inventoryId: true },
+    });
+    if (!inv) throw new NotFoundException('Inventaire introuvable');
+
+    const rootId = inv.rootInventoryId ?? inv.inventoryId;
+    const rounds = await this.prisma.inventory.findMany({
+      where: {
+        OR: [{ rootInventoryId: rootId }, { inventoryId: rootId }],
+      },
+      include: {
+        controllers: {
+          include: {
+            user: { select: { userId: true, userName: true, userEmail: true } },
+          },
+          orderBy: { round: 'asc' },
+        },
+        _count: {
+          select: { units: true, issues: true },
+        },
+      },
+      orderBy: { roundNumber: 'asc' },
+    });
+
+    return rounds.map((r) => ({
+      inventoryId: r.inventoryId,
+      roundNumber: r.roundNumber,
+      title: r.title,
+      status: r.status,
+      launchedAt: r.launchedAt,
+      finalizedAt: r.finalizedAt,
+      parentInventoryId: r.parentInventoryId,
+      rootInventoryId: r.rootInventoryId,
+      unitsCount: r._count.units,
+      issuesCount: r._count.issues,
+      controllers: r.controllers.map((c) => ({
+        controllerId: c.inventoryControllerId,
+        userId: c.userId,
+        round: c.round,
+        user: c.user,
+      })),
+    }));
+  }
+
   // --------------------------------------------------------------------------
-  // Adjudication & Manual Third User Assignment (Legacy/Admin routes)
+  // Adjudication & Manual Third User Assignment (Disabled for Unanimity)
   // --------------------------------------------------------------------------
 
   async getAdjudicationUnit(unitId: string) {
@@ -1987,12 +2433,6 @@ export class InventoryService {
         unitId: cnt.unitId,
         assignedUserId: cnt.inventoryController.userId,
         sequence: (cnt.inventoryController.round ?? 1) - 1,
-        purpose:
-          cnt.inventoryController.round === 1
-            ? 'PRIMARY_1'
-            : cnt.inventoryController.round === 2
-              ? 'PRIMARY_2'
-              : 'FINAL_RECOUNT',
         status: cnt.submittedAt ? 'SUBMITTED' : 'IN_PROGRESS',
         submittedAt: cnt.submittedAt,
         draftData: cnt.resultData,
@@ -2003,129 +2443,43 @@ export class InventoryService {
   }
 
   async manualAdjudicate(
-    unitId: string,
+    _unitId: string,
     _adjudicatorId: string,
-    data: AdjudicateDTO,
+    _data: AdjudicateDTO,
   ) {
-    const unit = await this.prisma.inventoryUnit.findUnique({
-      where: { unitId },
-      include: {
-        counts: true,
-      },
-    });
-
-    if (!unit) {
-      throw new NotFoundException('Unité introuvable');
-    }
-
-    const targetCountId = data.selectedAttemptId ?? data.selectedCountId;
-    const acceptedCount =
-      (targetCountId ? unit.counts.find((c) => c.countId === targetCountId) : null) ??
-      unit.counts[0];
-
-    await this.prisma.inventoryUnit.update({
-      where: { unitId },
-      data: {
-        status: 'COMPLETED',
-        reconciliationStatus: 'THIRD_RESOLVED',
-        acceptedCountId: acceptedCount?.countId ?? null,
-        reconciledAt: new Date(),
-      },
-    });
-
-    return {
-      success: true,
-      message: 'Adjudication effectuée avec succès.',
-    };
+    throw new BadRequestException(
+      "L'adjudication manuelle est désactivée. Le nouveau processus requiert un recomptage complet et unanime des contrôleurs.",
+    );
   }
 
   async assignThirdUser(
-    inventoryId: string,
-    unitId: string,
-    thirdUserId: string,
+    _inventoryId: string,
+    _unitId: string,
+    _thirdUserId: string,
     _currentUserId: string,
     _notes?: string,
   ) {
-    let c3 = await this.prisma.inventoryController.findFirst({
-      where: { inventoryId, round: 3 },
-    });
-
-    if (c3) {
-      await this.prisma.inventoryController.update({
-        where: { inventoryControllerId: c3.inventoryControllerId },
-        data: { userId: thirdUserId },
-      });
-    } else {
-      c3 = await this.prisma.inventoryController.create({
-        data: {
-          inventoryId,
-          userId: thirdUserId,
-          round: 3,
-        },
-      });
-    }
-
-    const existingCount = await this.prisma.inventoryCount.findFirst({
-      where: { unitId, inventoryControllerId: c3.inventoryControllerId },
-    });
-
-    if (!existingCount) {
-      await this.prisma.inventoryCount.create({
-        data: {
-          unitId,
-          inventoryControllerId: c3.inventoryControllerId,
-        },
-      });
-    }
-
-    await this.prisma.inventoryUnit.update({
-      where: { unitId },
-      data: {
-        reconciliationStatus: 'THIRD_REQUIRED',
-        status: 'COUNTING',
-      },
-    });
-
-    return {
-      success: true,
-      message: 'Troisième contrôleur assigné avec succès.',
-    };
+    throw new BadRequestException(
+      "L'assignation manuelle d'un contrôleur individuel est désactivée. Veuillez modifier le roster en statut DRAFT avant lancement.",
+    );
   }
 
   async assignThirdUserToAll(
-    inventoryId: string,
-    thirdUserId: string,
-    currentUserId: string,
-    notes?: string,
+    _inventoryId: string,
+    _thirdUserId: string,
+    _currentUserId: string,
+    _notes?: string,
   ) {
-    const units = await this.prisma.inventoryUnit.findMany({
-      where: { inventoryId },
-    });
-
-    for (const unit of units) {
-      await this.assignThirdUser(
-        inventoryId,
-        unit.unitId,
-        thirdUserId,
-        currentUserId,
-        notes,
-      );
-    }
-
-    return {
-      success: true,
-      message: 'Troisième contrôleur assigné à toutes les unités.',
-    };
+    throw new BadRequestException(
+      "L'assignation manuelle d'un contrôleur est désactivée. Veuillez modifier le roster en statut DRAFT.",
+    );
   }
 
   async autoCompleteCounts(
-    inventoryId: string,
+    _inventoryId: string,
     _currentUserId: string,
   ) {
-    return {
-      success: true,
-      message: 'Auto-complete bypass route',
-    };
+    throw new BadRequestException("L'auto-complétion est désactivée.");
   }
 
   async notifyPendingControllerForUnit(
