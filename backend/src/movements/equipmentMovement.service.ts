@@ -433,6 +433,18 @@ export class EquipmentMovementService {
         inventory: {
           status: { notIn: ['FINALIZED', 'CANCELLED'] },
           launchedAt: { not: null },
+          validatedInventoryId: null,
+          OR: [
+            { rootInventoryId: null },
+            {
+              rootInventory: {
+                is: {
+                  validatedInventoryId: null,
+                  status: { notIn: ['FINALIZED', 'CANCELLED'] },
+                },
+              },
+            },
+          ],
           ...(targetCampaignRootId
             ? {
                 AND: [

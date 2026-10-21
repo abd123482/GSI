@@ -145,6 +145,7 @@ export function useInventoryProgress(
   return useQuery<InventoryProgress>({
     queryKey: inventoryKeys.progress(userId, inventoryId),
     enabled: Boolean(authReady && inventoryId),
+    staleTime: 5000,
     queryFn: async () => {
       const response =
         await api.get<InventoryProgress>(
@@ -170,6 +171,7 @@ export function useInventoryReport(
   return useQuery<InventoryReport>({
     queryKey: inventoryKeys.report(userId, inventoryId),
     enabled: Boolean(authReady && inventoryId),
+    staleTime: 5000,
     queryFn: async () => {
       const response =
         await api.get<InventoryReport>(
@@ -195,6 +197,7 @@ export function useInventoryRounds(
   return useQuery<InventoryRoundSummary[]>({
     queryKey: inventoryKeys.rounds(userId, inventoryId),
     enabled: Boolean(authReady && inventoryId),
+    staleTime: 10000,
     queryFn: async () => {
       const response =
         await api.get<InventoryRoundSummary[]>(

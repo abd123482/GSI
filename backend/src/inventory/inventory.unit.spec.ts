@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { InventoryService } from './inventory.service.js';
 
 describe('InventoryService - New Redesign Workflow & Acceptance', () => {
@@ -184,6 +184,45 @@ describe('InventoryService - New Redesign Workflow & Acceptance', () => {
           expect.objectContaining({ unitId, inventoryControllerId: 'c4' }),
         ]),
       });
+    });
+
+    it('blocks launch if conflict is found in an active campaign', async () => {
+      tx.inventory.findUnique.mockResolvedValue({
+        inventoryId,
+        status: 'DRAFT',
+        typeInventory: 'ByEquipment',
+        controllers: fourControllers,
+        units: [{ unitId, equipmentId, shelfId: null }],
+      });
+      tx.inventoryUnit.findFirst.mockResolvedValue({ unitId: 'conflicting-unit' });
+
+      await expect(service.launchInventory(inventoryId)).rejects.toThrow(ConflictException);
+    });
+
+    it('queries conflict excluding validated campaigns and cancelled/finalized inventories', async () => {
+      tx.inventory.findUnique.mockResolvedValue({
+        inventoryId,
+        status: 'DRAFT',
+        typeInventory: 'ByEquipment',
+        controllers: fourControllers,
+        units: [{ unitId, equipmentId, shelfId: null }],
+      });
+      tx.inventoryUnit.findFirst.mockResolvedValue(null);
+      tx.inventory.update.mockResolvedValue({ inventoryId, status: 'IN_PROGRESS' });
+
+      await service.launchInventory(inventoryId);
+
+      expect(tx.inventoryUnit.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            inventory: expect.objectContaining({
+              status: { notIn: ['FINALIZED', 'CANCELLED'] },
+              launchedAt: { not: null },
+              validatedInventoryId: null,
+            }),
+          }),
+        }),
+      );
     });
   });
 

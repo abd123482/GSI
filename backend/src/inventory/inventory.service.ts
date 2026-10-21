@@ -708,6 +708,18 @@ export class InventoryService {
             inventory: {
               status: { notIn: ['FINALIZED', 'CANCELLED'] },
               launchedAt: { not: null },
+              validatedInventoryId: null,
+              OR: [
+                { rootInventoryId: null },
+                {
+                  rootInventory: {
+                    is: {
+                      validatedInventoryId: null,
+                      status: { notIn: ['FINALIZED', 'CANCELLED'] },
+                    },
+                  },
+                },
+              ],
               AND: [
                 { rootInventoryId: { not: targetRootId } },
                 { inventoryId: { not: targetRootId } },
@@ -765,34 +777,36 @@ export class InventoryService {
         },
       });
 
+      // On launch: ONLY notify the first controller (round 1)
+      const firstCtrl = controllers.find((c) => (c.round ?? 1) === 1) ?? controllers[0];
+      const firstControllerUserId = firstCtrl?.userId;
+
       return {
         success: true,
         inventoryId,
         totalUnits: units.length,
         controllersCount: controllers.length,
         title: inventory.title,
-        recipientIds: controllers.map((c) => c.userId),
+        firstControllerUserId,
       };
     });
 
-    // Notify all controllers outside of the transaction
-    if (this.prisma.notification?.create) {
-      for (const recipientId of launchResult.recipientIds) {
-        try {
-          await this.prisma.notification.create({
-            data: {
-              recipientId,
-              eventType: 'INVENTORY_TASK_AVAILABLE',
-              payload: JSON.stringify({
-                inventoryId,
-                title: launchResult.title,
-                message: 'Les tâches de comptage sont disponibles.',
-              }),
-            },
-          });
-        } catch (err) {
-          this.logger.warn(`Failed to dispatch notification for controller ${recipientId}: ${(err as Error).message}`);
-        }
+    // Notify ONLY the first controller to start counting the first unit
+    if (launchResult.firstControllerUserId && this.prisma.notification?.create) {
+      try {
+        await this.prisma.notification.create({
+          data: {
+            recipientId: launchResult.firstControllerUserId,
+            eventType: 'INVENTORY_TASK_AVAILABLE',
+            payload: JSON.stringify({
+              inventoryId: launchResult.inventoryId,
+              title: launchResult.title,
+              message: "L'inventaire est lancé. Vous pouvez commencer le comptage de vos unités.",
+            }),
+          },
+        });
+      } catch (err) {
+        this.logger.warn(`Failed to dispatch launch notification to ${launchResult.firstControllerUserId}: ${(err as Error).message}`);
       }
     }
 
@@ -844,30 +858,70 @@ export class InventoryService {
         },
       },
       orderBy: {
-        createdAt: 'asc',
+        unit: {
+          unitOrder: 'asc',
+        },
       },
     });
 
-    return counts.map((count, index) => ({
-      attemptId: count.countId,
-      unitId: count.unitId,
-      assignedUserId: count.inventoryController.userId,
-      sequence: (count.inventoryController.round ?? 1) - 1,
-      purpose:
-        count.inventoryController.round === 1
-          ? 'PRIMARY_1'
-          : count.inventoryController.round === 2
-            ? 'PRIMARY_2'
-            : 'FINAL_RECOUNT',
-      status: count.submittedAt ? 'SUBMITTED' : 'AVAILABLE',
-      submittedAt: count.submittedAt,
-      draftData: count.resultData,
-      assignedUser: count.inventoryController.user,
-      unit: {
-        ...count.unit,
-        unitOrder: index,
-      },
-    }));
+    // Check which units are ready (unlocked by predecessor completion)
+    const higherRoundCounts = counts.filter((c) => (c.inventoryController.round ?? 1) > 1);
+    let predecessorSubmittedSet = new Set<string>();
+
+    if (higherRoundCounts.length > 0) {
+      const predChecks = await this.prisma.inventoryCount.findMany({
+        where: {
+          unitId: { in: higherRoundCounts.map((c) => c.unitId) },
+          submittedAt: { not: null },
+        },
+        select: {
+          unitId: true,
+          inventoryController: {
+            select: {
+              inventoryId: true,
+              round: true,
+            },
+          },
+        },
+      });
+
+      predecessorSubmittedSet = new Set(
+        predChecks.map(
+          (p) => `${p.inventoryController.inventoryId}|${p.unitId}|${p.inventoryController.round}`,
+        ),
+      );
+    }
+
+    return counts.map((count, index) => {
+      const round = count.inventoryController.round ?? 1;
+      const isReady =
+        round === 1 ||
+        predecessorSubmittedSet.has(
+          `${count.inventoryController.inventoryId}|${count.unitId}|${round - 1}`,
+        );
+
+      return {
+        attemptId: count.countId,
+        unitId: count.unitId,
+        assignedUserId: count.inventoryController.userId,
+        sequence: round - 1,
+        purpose:
+          round === 1
+            ? 'PRIMARY_1'
+            : round === 2
+              ? 'PRIMARY_2'
+              : 'FINAL_RECOUNT',
+        status: count.submittedAt ? 'SUBMITTED' : isReady ? 'AVAILABLE' : 'WAITING_PREVIOUS',
+        isReady,
+        submittedAt: count.submittedAt,
+        draftData: count.resultData,
+        assignedUser: count.inventoryController.user,
+        unit: {
+          ...count.unit,
+          unitOrder: count.unit.unitOrder ?? index,
+        },
+      };
+    });
   }
 
   async getTask(attemptId: string, currentUserId?: string) {
@@ -915,6 +969,24 @@ export class InventoryService {
       );
     }
 
+    const currentRound = count.inventoryController.round ?? 1;
+    let isReady = true;
+    if (currentRound > 1) {
+      const unsubmittedPred = await this.prisma.inventoryCount.findFirst({
+        where: {
+          unitId: count.unitId,
+          inventoryController: {
+            inventoryId: count.inventoryController.inventoryId,
+            round: currentRound - 1,
+          },
+          submittedAt: null,
+        },
+      });
+      if (unsubmittedPred) {
+        isReady = false;
+      }
+    }
+
     const unit = count.unit;
     let scopeLabel = 'Unité de travail';
     let isSerialized = false;
@@ -934,20 +1006,21 @@ export class InventoryService {
       attemptId: count.countId,
       unitId: count.unitId,
       assignedUserId: count.inventoryController.userId,
-      sequence: (count.inventoryController.round ?? 1) - 1,
+      sequence: currentRound - 1,
       purpose:
-        count.inventoryController.round === 1
+        currentRound === 1
           ? 'PRIMARY_1'
-          : count.inventoryController.round === 2
+          : currentRound === 2
             ? 'PRIMARY_2'
             : 'FINAL_RECOUNT',
-      status: count.submittedAt ? 'SUBMITTED' : 'AVAILABLE',
+      status: count.submittedAt ? 'SUBMITTED' : isReady ? 'AVAILABLE' : 'WAITING_PREVIOUS',
+      isReady,
       submittedAt: count.submittedAt,
       draftData: count.resultData,
       assignedUser: count.inventoryController.user,
       unit: {
         ...unit,
-        unitOrder: 0,
+        unitOrder: unit.unitOrder ?? 0,
       },
       orders: parsedOrders,
       scopeLabel,
@@ -1011,7 +1084,7 @@ export class InventoryService {
       return this.saveDraft(attemptId, userId, data);
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const submitResult = await this.prisma.$transaction(async (tx) => {
       const count = await tx.inventoryCount.findUnique({
         where: { countId: attemptId },
         include: {
@@ -1026,7 +1099,12 @@ export class InventoryService {
               },
             },
           },
-          unit: true,
+          unit: {
+            include: {
+              equipment: true,
+              shelf: true,
+            },
+          },
         },
       });
 
@@ -1047,6 +1125,34 @@ export class InventoryService {
         };
       }
 
+      const inventory = count.inventoryController.inventory;
+      const inventoryId = inventory.inventoryId;
+      const controllers = inventory.controllers;
+      const units = inventory.units;
+      const totalUnits = units.length;
+      const totalControllers = controllers.length;
+      const totalRequired = totalUnits * totalControllers;
+
+      // Sequential check: if this controller is round > 1, predecessor must have submitted for this unit
+      const currentRound = count.inventoryController.round ?? 1;
+      if (currentRound > 1) {
+        const unsubmittedPred = await tx.inventoryCount.findFirst({
+          where: {
+            unitId: count.unitId,
+            inventoryController: {
+              inventoryId,
+              round: currentRound - 1,
+            },
+            submittedAt: null,
+          },
+        });
+        if (unsubmittedPred) {
+          throw new BadRequestException(
+            "Cette unité n'a pas encore été comptée par le contrôleur précédent. Les unités sont traitées dans l'ordre synchronisé.",
+          );
+        }
+      }
+
       const submittedAt = new Date();
       const resultData = JSON.stringify(data);
 
@@ -1058,13 +1164,39 @@ export class InventoryService {
         },
       });
 
-      const inventory = count.inventoryController.inventory;
-      const inventoryId = inventory.inventoryId;
-      const controllers = inventory.controllers;
-      const units = inventory.units;
-      const totalUnits = units.length;
-      const totalControllers = controllers.length;
-      const totalRequired = totalUnits * totalControllers;
+      // Synchronized notification by unit: notify the next controller for THIS UNIT
+      const nextController = controllers.find((c) => (c.round ?? 0) === currentRound + 1);
+      let nextUnitNotification: {
+        recipientId: string;
+        inventoryId: string;
+        unitId: string;
+        taskId?: string;
+        title: string;
+        unitName: string;
+      } | null = null;
+
+      if (nextController) {
+        const nextCount = await tx.inventoryCount.findFirst({
+          where: {
+            unitId: count.unitId,
+            inventoryControllerId: nextController.inventoryControllerId,
+          },
+        });
+
+        const unitLabel =
+          count.unit.equipment?.equipmentName ||
+          count.unit.shelf?.shelfName ||
+          (count.unit.unitOrder != null ? `Unité #${count.unit.unitOrder + 1}` : 'Unité de travail');
+
+        nextUnitNotification = {
+          recipientId: nextController.userId,
+          inventoryId,
+          unitId: count.unitId,
+          taskId: nextCount?.countId,
+          title: inventory.title ?? 'Inventaire',
+          unitName: unitLabel,
+        };
+      }
 
       // Count submitted tasks across this round
       const submittedCount = await tx.inventoryCount.count({
@@ -1081,6 +1213,7 @@ export class InventoryService {
           status: 'IN_PROGRESS',
           submittedCount,
           totalRequired,
+          nextUnitNotification,
         };
       }
 
@@ -1200,6 +1333,7 @@ export class InventoryService {
           isUnanimous: true,
           status: 'CONVERGED',
           message: 'Comptage validé avec accord unanime.',
+          nextUnitNotification,
         };
       } else {
         // CONTROLLERS DISAGREED! RECOUNT REQUIRED!
@@ -1301,9 +1435,35 @@ export class InventoryService {
           status: 'RECOUNT_REQUIRED',
           nextChildId: child.inventoryId,
           message: 'Divergence constatée. Un nouveau tour de recomptage a été généré.',
+          nextUnitNotification,
         };
       }
     });
+
+    // Unit-synchronized notification: alert the next controller for this specific unit
+    if (submitResult.nextUnitNotification && this.prisma.notification?.create) {
+      try {
+        await this.prisma.notification.create({
+          data: {
+            recipientId: submitResult.nextUnitNotification.recipientId,
+            eventType: 'INVENTORY_UNIT_AVAILABLE',
+            payload: JSON.stringify({
+              inventoryId: submitResult.nextUnitNotification.inventoryId,
+              unitId: submitResult.nextUnitNotification.unitId,
+              taskId: submitResult.nextUnitNotification.taskId,
+              title: submitResult.nextUnitNotification.title,
+              message: `L'unité "${submitResult.nextUnitNotification.unitName}" est maintenant prête pour votre comptage.`,
+            }),
+          },
+        });
+      } catch (err) {
+        this.logger.warn(
+          `Failed to dispatch unit notification to ${submitResult.nextUnitNotification.recipientId}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    return submitResult;
   }
 
   // --------------------------------------------------------------------------

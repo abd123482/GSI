@@ -28,6 +28,7 @@ export type AttemptPurpose =
 export type AttemptStatus =
   | 'BLOCKED'
   | 'AVAILABLE'
+  | 'WAITING_PREVIOUS'
   | 'IN_PROGRESS'
   | 'SUBMITTED'
   | 'SKIPPED'
@@ -209,6 +210,7 @@ export interface InventoryTask {
   sequence: number;
   purpose: AttemptPurpose;
   status: AttemptStatus;
+  isReady?: boolean;
   submittedAt?: string | null;
   draftData?: string | null;
   unit: InventoryWorkUnit & {

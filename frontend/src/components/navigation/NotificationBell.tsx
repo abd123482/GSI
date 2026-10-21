@@ -44,6 +44,7 @@ function notificationDestination(
   const taskLikeEvents =
     new Set([
       'INVENTORY_TASK_AVAILABLE',
+      'INVENTORY_UNIT_AVAILABLE',
       'INVENTORY_COUNT_REQUIRED',
       'INVENTORY_THIRD_COUNT_REQUIRED',
       'INVENTORY_TASK_REMINDER',
