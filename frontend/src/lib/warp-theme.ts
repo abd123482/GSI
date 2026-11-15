@@ -124,3 +124,33 @@ export const warpClerkAppearance = {
     },
   },
 };
+
+/**
+ * Appearance used by the standalone /sign-in and /sign-up pages.
+ * Same palette as the auth modal, but the page backdrop is the app canvas
+ * instead of the modal overlay surface.
+ */
+export const warpAuthAppearance = {
+  ...warpClerkAppearance,
+  variables: {
+    ...warpClerkAppearance.variables,
+    colorBackground: warpColors.canvas,
+  },
+  elements: {
+    ...warpClerkAppearance.elements,
+    // Social logins & divider are disabled for this project.
+    socialButtons: '!hidden',
+    socialButtonsBlockButton: '!hidden',
+    socialButtonsProviderIcon: '!hidden',
+    dividerRow: '!hidden',
+    dividerText: '!hidden',
+    dividerLine: '!hidden',
+    // Overriding rootBox drops Clerk's default centering, so keep it explicit.
+    rootBox: {
+      width: '100%',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+  },
+};

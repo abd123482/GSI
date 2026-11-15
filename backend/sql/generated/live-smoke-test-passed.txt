@@ -1,3 +1,0 @@
-﻿I CONFIRM LIVE SMOKE TEST PASSED
-ConfirmedAt=2026-09-22T22:48:56.0517734+01:00
-TestDatabase=yacinedb_rebuild_test

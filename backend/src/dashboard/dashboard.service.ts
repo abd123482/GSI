@@ -239,7 +239,7 @@ export class DashboardService {
       destinationShelfName: (m.items.length ? [...new Set(m.items.map((item: any) => item.destinationShelf?.shelfName).filter(Boolean))].join(', ') : m.destinationShelf?.shelfName) || null,
       serialNumberCode: m.items.length === 1 ? m.items[0].serialNumber?.serialNumberCode ?? null : m.serialNumber?.serialNumberCode ?? null,
       items: m.items.map((item: any) => ({
-        mouvementEquipmentId: item.mouvementEquipmentId,
+        mouvementEquipmentId: item.movementEquipmentId ?? item.mouvementEquipmentId,
         mouvementStatus: item.mouvementStatus,
         mouvementQuantity: item.mouvementQuantity,
         equipmentName: item.equipment.equipmentName,

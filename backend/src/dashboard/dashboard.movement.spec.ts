@@ -18,6 +18,7 @@ describe('dashboard movement documents', () => {
         ] }]),
       },
       inventory: { findMany: vi.fn().mockResolvedValue([]) },
+      inventoryUnit: { count: vi.fn().mockResolvedValue(0) },
       inventoryWorkUnit: { count: vi.fn().mockResolvedValue(0) },
     };
     const { movementOverview } = await new DashboardService(prisma).getDashboardStats();

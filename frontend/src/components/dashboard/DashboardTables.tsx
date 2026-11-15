@@ -55,15 +55,30 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#3f3f46]/60 text-[#f4f4f5]">
-                {movementOverview.recentMovements.flatMap(header =>
-                  header.items?.length ? header.items.map(item => ({ ...header, ...item, rowKey: item.mouvementEquipmentId })) : [{ ...header, rowKey: header.mouvementId }],
-                ).map((m) => {
+                {movementOverview.recentMovements.flatMap((header, headerIdx) =>
+                  header.items?.length
+                    ? header.items.map((item, itemIdx) => ({
+                        ...header,
+                        ...item,
+                        rowKey:
+                          item.mouvementEquipmentId ||
+                          (item as any).movementEquipmentId ||
+                          `${header.mouvementId || headerIdx}-item-${itemIdx}`,
+                      }))
+                    : [
+                        {
+                          ...header,
+                          mouvementEquipmentId: header.mouvementId,
+                          rowKey: header.mouvementId || `mvt-${headerIdx}`,
+                        },
+                      ],
+                ).map((m, rowIdx) => {
                   const typeUpper = m.mouvementStatus ? 'OUT' : 'IN';
                   const isIN = typeUpper === 'IN';
                   const isOUT = typeUpper === 'OUT';
 
                   return (
-                    <tr key={m.rowKey} className="hover:bg-[#18181b]/50 transition-colors">
+                    <tr key={m.rowKey || `mvt-row-${rowIdx}`} className="hover:bg-[#18181b]/50 transition-colors">
                       {/* Type Badge */}
                       <td className="py-2 px-2.5 whitespace-nowrap">
                         <span
@@ -144,9 +159,9 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
             </div>
           ) : (
             <div className="space-y-2.5">
-              {inventoryOverview.activeCampaigns.map((inv) => (
+              {inventoryOverview.activeCampaigns.map((inv, idx) => (
                 <Link
-                  key={inv.inventoryId}
+                  key={inv.inventoryId || `campaign-${idx}`}
                   href={`/inventory`}
                   className="block p-2.5 bg-[#18181b] hover:bg-[#322c28] border border-[#3f3f46] rounded-[3px] transition-colors"
                 >
@@ -198,9 +213,9 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
             </div>
           ) : (
             <div className="space-y-2">
-              {stockOverview.lowStockItems.map((item) => (
+              {stockOverview.lowStockItems.map((item, idx) => (
                 <div
-                  key={item.equipmentId}
+                  key={item.equipmentId || `low-stock-${idx}`}
                   className="p-2 bg-[#18181b] border border-[#451e1e] rounded-[3px] flex items-center justify-between text-xs font-mono"
                 >
                   <div className="min-w-0 pr-2">

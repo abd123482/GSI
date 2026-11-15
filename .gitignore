@@ -9,3 +9,8 @@ frontend/.env.local
 
 *.log
 *.tsbuildinfo
+*.bak
+repomix-output.xml
+scratch/
+backend/scratch/
+frontend/scratch/

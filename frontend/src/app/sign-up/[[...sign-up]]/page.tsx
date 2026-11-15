@@ -1,6 +1,6 @@
 import { SignUp } from '@clerk/nextjs';
 import { AuthPageShell } from '@/components/auth/AuthPageShell';
-import { notionClerkAppearance } from '@/lib/notion-theme';
+import { warpAuthAppearance } from '@/lib/warp-theme';
 
 export default function SignUpPage() {
   return (
@@ -8,7 +8,7 @@ export default function SignUpPage() {
       <SignUp
         signInUrl="/sign-in"
         forceRedirectUrl="/"
-        appearance={notionClerkAppearance}
+        appearance={warpAuthAppearance}
       />
     </AuthPageShell>
   );
