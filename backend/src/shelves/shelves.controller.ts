@@ -31,7 +31,7 @@ export class ShelfController {
     private readonly shelfService: ShelfService,
   ) { }
 
-  @RequirePermissions('shelf.read')
+  @RequirePermissions('shelf.read', 'inventory.count')
   @Get('search')
   searchShelves(
     @Query() query: SearchShelfDTO,
@@ -43,7 +43,7 @@ export class ShelfController {
     );
   }
 
-  @RequirePermissions('shelf.read')
+  @RequirePermissions('shelf.read', 'inventory.count')
   @Get('name/:name')
   getShelfByName(
     @Param('name') name: string,
@@ -57,7 +57,7 @@ export class ShelfController {
 
 
 
-  @RequirePermissions('shelf.read')
+  @RequirePermissions('shelf.read', 'inventory.count')
   @Get(':id/serial-numbers')
   getShelfSerialNumbers(
     @Param(
@@ -74,7 +74,7 @@ export class ShelfController {
     );
   }
 
-  @RequirePermissions('shelf.read')
+  @RequirePermissions('shelf.read', 'inventory.count')
   @Get(':id/equipments')
   getShelfEquipments(
     @Param('id', new ParseUUIDPipe())
@@ -88,7 +88,7 @@ export class ShelfController {
     );
   }
 
-  @RequirePermissions('shelf.read')
+  @RequirePermissions('shelf.read', 'inventory.count')
   @Get(':id')
   getShelfById(
     @Param(
@@ -100,7 +100,7 @@ export class ShelfController {
     return this.shelfService.getShelfById(id);
   }
 
-  @RequirePermissions('shelf.read')
+  @RequirePermissions('shelf.read', 'inventory.count')
   @Get()
   getAllShelves(
     @Query() pagination: PaginationDTO,

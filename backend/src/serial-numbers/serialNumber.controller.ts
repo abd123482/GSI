@@ -61,7 +61,7 @@ export class SerialNumberController {
    * GET /serial-numbers?serialNumberStatus=AVAILABLE
    * GET /serial-numbers?serialNumberCode=ABC
    */
-  @RequirePermissions('serial-number.read')
+  @RequirePermissions('serial-number.read', 'inventory.count')
   @Get()
   getSerialNumbers(
     @Query() query: SearchSerialNumberDTO,
@@ -76,7 +76,7 @@ export class SerialNumberController {
   /*
    * Compatibility route for exact code lookup.
    */
-  @RequirePermissions('serial-number.read')
+  @RequirePermissions('serial-number.read', 'inventory.count')
   @Get('code/:code')
   getSerialNumberByCode(
     @Param('code') code: string,
@@ -88,7 +88,7 @@ export class SerialNumberController {
   /*
    * Compatibility route for status filtering.
    */
-  @RequirePermissions('serial-number.read')
+  @RequirePermissions('serial-number.read', 'inventory.count')
   @Get('status/:status')
   getSerialNumbersByStatus(
     @Param('status') status: string,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -14,7 +14,6 @@ import {
   Send,
   ShieldCheck,
   Trash2,
-  Warehouse,
 } from 'lucide-react';
 
 import {
@@ -28,18 +27,12 @@ import { SerialCodeInput } from '@/components/inventory/SerialCodeInput';
 import type { CountObservationInput } from '@/types/inventory';
 import { getErrorMessage } from '@/lib/error-message';
 
-interface StandardRow {
+interface TaskRow {
   id: string;
   equipmentId: string;
   shelfId: string;
   quantity: number;
-}
-
-interface SerialRow {
-  id: string;
   code: string;
-  shelfId: string;
-  equipmentId?: string;
 }
 
 function newId() {
@@ -55,8 +48,8 @@ export default function InventoryTaskPage() {
   const saveDraft = useSaveInventoryTaskDraft();
   const submitTask = useSubmitInventoryTask();
 
-  const equipmentsQuery = useEquipments({ page: 1, limit: 100 });
-  const shelvesQuery = useShelves({ page: 1, limit: 100 });
+  const equipmentsQuery = useEquipments({ page: 1, limit: 500 });
+  const shelvesQuery = useShelves({ page: 1, limit: 500 });
 
   const task = taskQuery.data;
   const isSubmitted = Boolean(task?.status === 'SUBMITTED' || task?.submittedAt);
@@ -64,14 +57,7 @@ export default function InventoryTaskPage() {
   const byEquipment = task?.unit?.inventory?.typeInventory === 'ByEquipment';
   const byShelf = task?.unit?.inventory?.typeInventory === 'ByShelf';
 
-  const [standardRows, setStandardRows] = useState<StandardRow[]>([]);
-  const [serialRows, setSerialRows] = useState<SerialRow[]>([]);
-  const [selectedAdditionalShelves, setSelectedAdditionalShelves] = useState<string[]>([]);
-  const [selectedAdditionalEquipments, setSelectedAdditionalEquipments] = useState<string[]>([]);
-  const [shelfToAdd, setShelfToAdd] = useState('');
-  const [equipmentToAdd, setEquipmentToAdd] = useState('');
-  const [isAddingShelf, setIsAddingShelf] = useState(false);
-  const [isAddingEquipment, setIsAddingEquipment] = useState(false);
+  const [rows, setRows] = useState<TaskRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(true);
 
@@ -85,39 +71,32 @@ export default function InventoryTaskPage() {
           observations?: CountObservationInput[];
         };
 
-        const standard: StandardRow[] = [];
-        const serial: SerialRow[] = [];
-        const extraShelves: string[] = [];
-        const extraEquipments: string[] = [];
+        const initialRows: TaskRow[] = [];
 
         for (const obs of parsed.observations ?? []) {
           const sId = obs.observedShelfId ?? obs.shelfId ?? '';
           const eId = obs.observedEquipmentId ?? obs.equipmentId ?? '';
 
-          if (sId) extraShelves.push(sId);
-          if (eId) extraEquipments.push(eId);
-
           if (obs.scannedSerialCode) {
-            serial.push({
+            initialRows.push({
               id: newId(),
+              equipmentId: eId || (task.unit.equipmentId ?? ''),
+              shelfId: sId || (task.unit.shelfId ?? ''),
+              quantity: 1,
               code: obs.scannedSerialCode,
-              shelfId: sId,
-              equipmentId: eId,
             });
           } else {
-            standard.push({
+            initialRows.push({
               id: newId(),
               equipmentId: eId || (task.unit.equipmentId ?? ''),
               shelfId: sId || (task.unit.shelfId ?? ''),
               quantity: obs.quantityCalculated ?? 0,
+              code: '',
             });
           }
         }
 
-        setStandardRows(standard);
-        setSerialRows(serial);
-        setSelectedAdditionalShelves(Array.from(new Set(extraShelves)));
-        setSelectedAdditionalEquipments(Array.from(new Set(extraEquipments)));
+        setRows(initialRows);
         setIsSaved(true);
         return;
       } catch {
@@ -128,18 +107,28 @@ export default function InventoryTaskPage() {
     // Default row if none exists
     if (byEquipment && task.unit.equipmentId) {
       if (task.isSerialized) {
-        setSerialRows([{ id: newId(), code: '', shelfId: '' }]);
+        setRows([
+          {
+            id: newId(),
+            equipmentId: task.unit.equipmentId,
+            shelfId: '',
+            quantity: 1,
+            code: '',
+          },
+        ]);
       } else {
-        setStandardRows([{
-          id: newId(),
-          equipmentId: task.unit.equipmentId,
-          shelfId: '',
-          quantity: 0,
-        }]);
+        setRows([
+          {
+            id: newId(),
+            equipmentId: task.unit.equipmentId,
+            shelfId: '',
+            quantity: 0,
+            code: '',
+          },
+        ]);
       }
     } else if (byShelf && task.unit.shelfId) {
-      setStandardRows([]);
-      setSerialRows([]);
+      setRows([]);
     }
   }, [task, byEquipment, byShelf]);
 
@@ -155,40 +144,88 @@ export default function InventoryTaskPage() {
   function buildObservations(): CountObservationInput[] {
     if (!task) return [];
 
-    const standard: CountObservationInput[] = standardRows
-      .filter((row) => (byEquipment ? row.shelfId : row.equipmentId))
-      .map((row) => ({
-        equipmentId: byEquipment ? (task.unit.equipmentId ?? row.equipmentId) : row.equipmentId,
-        observedEquipmentId: byShelf ? row.equipmentId : undefined,
-        shelfId: byShelf ? (task.unit.shelfId ?? undefined) : row.shelfId || undefined,
-        observedShelfId: byEquipment ? row.shelfId || undefined : (task.unit.shelfId ?? undefined),
-        quantityCalculated: Math.max(0, Math.floor(row.quantity)),
-        isExplicitZero: row.quantity === 0,
-      }));
+    const currentShelfId = task.unit.shelfId ?? undefined;
+    const currentEquipmentId = task.unit.equipmentId ?? undefined;
 
-    const serial: CountObservationInput[] = serialRows
-      .filter((row) => row.code.trim())
-      .map((row) => ({
-        equipmentId: byEquipment ? (task.unit.equipmentId ?? undefined) : row.equipmentId,
-        observedEquipmentId: byShelf ? row.equipmentId : undefined,
-        shelfId: byShelf ? (task.unit.shelfId ?? undefined) : row.shelfId || undefined,
-        observedShelfId: byEquipment ? row.shelfId || undefined : (task.unit.shelfId ?? undefined),
-        scannedSerialCode: row.code.trim(),
-        quantityCalculated: 1,
-      }));
+    const observations: CountObservationInput[] = [];
 
-    return [...standard, ...serial];
+    for (const row of rows) {
+      const eqId = byEquipment ? currentEquipmentId : row.equipmentId;
+      const shId = byShelf ? currentShelfId : (row.shelfId || undefined);
+
+      if (!eqId || !shId) continue;
+
+      const eq = equipmentsQuery.equipments.find((e) => e.equipmentId === eqId);
+      const isSerializedItem = Boolean(eq?.hasSerialNumber || (byEquipment && task.isSerialized));
+
+      if (isSerializedItem) {
+        if (row.code.trim()) {
+          observations.push({
+            equipmentId: eqId,
+            observedEquipmentId: eqId,
+            shelfId: shId,
+            observedShelfId: shId,
+            scannedSerialCode: row.code.trim(),
+            quantityCalculated: 1,
+          });
+        }
+      } else {
+        observations.push({
+          equipmentId: eqId,
+          observedEquipmentId: eqId,
+          shelfId: shId,
+          observedShelfId: shId,
+          quantityCalculated: Math.max(0, Math.floor(row.quantity)),
+          isExplicitZero: row.quantity === 0,
+        });
+      }
+    }
+
+    return observations;
   }
 
   async function persist(submit: boolean, confirmEmpty: boolean = false) {
     setError(null);
     const observations = confirmEmpty ? [] : buildObservations();
 
-    if (submit && observations.length === 0 && !confirmEmpty) {
-      setError(
-        'Veuillez saisir au moins une observation ou confirmer explicitement un comptage vide (0 article).'
-      );
-      return;
+    if (submit && !confirmEmpty) {
+      if (byShelf) {
+        const incompleteRows = rows.some((r) => {
+          if (!r.equipmentId) return true;
+          const eq = equipmentsQuery.equipments.find((e) => e.equipmentId === r.equipmentId);
+          if (eq?.hasSerialNumber && !r.code.trim()) return true;
+          return false;
+        });
+
+        if (incompleteRows) {
+          setError(
+            'Veuillez renseigner tous les articles sélectionnés et saisir le numéro de série pour les articles sérialisés.',
+          );
+          return;
+        }
+      } else if (byEquipment) {
+        const incompleteRows = rows.some((r) => {
+          if (!r.shelfId) return true;
+          if (task?.isSerialized && !r.code.trim()) return true;
+          return false;
+        });
+
+        if (incompleteRows) {
+          setError(
+            task?.isSerialized
+              ? 'Veuillez renseigner le numéro de série et l’emplacement pour chaque ligne.'
+              : 'Veuillez sélectionner un emplacement pour chaque ligne.',
+          );
+          return;
+        }
+      }
+
+      if (observations.length === 0) {
+        setError(
+          'Veuillez saisir au moins une observation ou confirmer explicitement un comptage vide (0 article).'
+        );
+        return;
+      }
     }
 
     try {
@@ -348,85 +385,149 @@ export default function InventoryTaskPage() {
               {scopeShelf?.shelfName ?? task.scopeLabel ?? 'Emplacement'}
             </p>
             <p className="mt-1 text-xs text-[#a1a1aa]">
-              Indiquez l’intégralité des articles et numéros de série physiquement observés dans cet emplacement.
+              Indiquez l’intégralité des articles (standard et avec numéro de série) physiquement observés dans cet emplacement.
             </p>
           </div>
         )}
 
-        {/* Formulaire Article Standard */}
-        {!task.isSerialized && (
+        {/* SECTION UNIQUE POUR INVENTAIRE PAR EMPLACEMENT (ALL IN ONE) */}
+        {byShelf && (
           <section className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#27272a]">
             <div className="flex items-center justify-between border-b border-[#3f3f46] px-4 py-3 bg-[#27272a]/70">
-              <h2 className="flex items-center gap-1.5 text-xs font-semibold">
-                <Package className="h-3.5 w-3.5 text-[#d8a868]" />
-                Comptage quantitatif par emplacement
-              </h2>
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-[#d8a868]" />
+                <div>
+                  <h2 className="text-xs font-semibold">
+                    Articles observés sur cet emplacement
+                  </h2>
+                  <p className="text-[11px] text-[#a1a1aa]">
+                    Consignez tous les articles (standard ou avec numéro de série) présents sur cet emplacement
+                  </p>
+                </div>
+              </div>
 
               {!isSubmitted && (
                 <button
                   type="button"
-                  onClick={() => setIsAddingShelf(true)}
-                  className="inline-flex items-center gap-1 text-xs text-[#d8a868] hover:underline"
+                  onClick={() => {
+                    const lastRow = rows[rows.length - 1];
+                    const lastEq = lastRow
+                      ? equipmentsQuery.equipments.find((e) => e.equipmentId === lastRow.equipmentId)
+                      : null;
+                    const defaultEqId = lastEq?.hasSerialNumber ? lastRow.equipmentId : '';
+
+                    setRows((cur) => [
+                      ...cur,
+                      {
+                        id: newId(),
+                        equipmentId: defaultEqId,
+                        shelfId: task.unit.shelfId ?? '',
+                        quantity: 1,
+                        code: '',
+                      },
+                    ]);
+                    setIsSaved(false);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded bg-[#d8a868] px-3 py-1.5 text-xs font-medium text-[#18181b] hover:bg-[#e0b479] transition-colors"
                 >
-                  <Plus className="h-3 w-3" />
-                  Ajouter un emplacement
+                  <Plus className="h-3.5 w-3.5" />
+                  Ajouter un article
                 </button>
               )}
             </div>
 
             <div className="p-4 space-y-3">
-              {standardRows.length === 0 ? (
-                <div className="rounded border border-dashed border-[#3f3f46] p-6 text-center text-xs text-[#71717a]">
-                  Aucune ligne de comptage enregistrée. Cliquez sur &quot;Ajouter un emplacement&quot; pour consigner les quantités observées.
+              {rows.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 rounded border border-dashed border-[#3f3f46] p-8 text-center text-xs text-[#71717a]">
+                  <Package className="h-8 w-8 text-[#52525b]" />
+                  <p className="text-sm font-medium text-[#d4d4d8]">
+                    Aucun article consigné pour cet emplacement
+                  </p>
+                  <p className="max-w-md text-xs text-[#71717a]">
+                    Ajoutez chaque article présent sur cet emplacement. Pour les articles standard, indiquez la quantité observée. Pour les articles sérialisés, saisissez ou scannez le numéro de série.
+                  </p>
+                  {!isSubmitted && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRows([
+                          {
+                            id: newId(),
+                            equipmentId: '',
+                            shelfId: task.unit.shelfId ?? '',
+                            quantity: 1,
+                            code: '',
+                          },
+                        ]);
+                        setIsSaved(false);
+                      }}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded border border-[#3f3f46] bg-[#18181b] px-3 py-1.5 text-xs font-medium text-[#d8a868] hover:border-[#d8a868] hover:text-[#d8a868] transition-colors"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Ajouter un premier article
+                    </button>
+                  )}
                 </div>
               ) : (
-                standardRows.map((row, idx) => {
-                  const shelf = shelvesQuery.shelves.find((s) => s.shelfId === row.shelfId);
-                  const equip = equipmentsQuery.equipments.find((e) => e.equipmentId === row.equipmentId);
+                rows.map((row, idx) => {
+                  const selectedEq = equipmentsQuery.equipments.find(
+                    (e) => e.equipmentId === row.equipmentId,
+                  );
+                  const isSerialized = Boolean(selectedEq?.hasSerialNumber);
 
                   return (
                     <div
                       key={row.id}
-                      className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded border border-[#3f3f46] bg-[#18181b]/50"
+                      className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg border border-[#3f3f46] bg-[#18181b]/50 transition-colors hover:border-[#52525b]"
                     >
+                      <span className="w-6 text-right font-mono text-[11px] text-[#71717a] hidden sm:block">
+                        {idx + 1}.
+                      </span>
+
+                      {/* Sélecteur d'article */}
                       <div className="flex-1">
-                        <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
-                          {byEquipment ? 'Emplacement observé' : 'Article observé'}
-                        </label>
-                        {byEquipment ? (
-                          <select
-                            disabled={isSubmitted}
-                            value={row.shelfId}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setStandardRows((cur) =>
-                                cur.map((item) => (item.id === row.id ? { ...item, shelfId: val } : item))
-                              );
-                              setIsSaved(false);
-                            }}
-                            className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs text-white disabled:opacity-60"
-                          >
-                            <option value="">Sélectionnez un emplacement...</option>
-                            {shelvesQuery.shelves.map((s) => (
-                              <option key={s.shelfId} value={s.shelfId}>
-                                {s.shelfName}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <select
-                            disabled={isSubmitted}
-                            value={row.equipmentId}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setStandardRows((cur) =>
-                                cur.map((item) => (item.id === row.id ? { ...item, equipmentId: val } : item))
-                              );
-                              setIsSaved(false);
-                            }}
-                            className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs text-white disabled:opacity-60"
-                          >
-                            <option value="">Sélectionnez un article...</option>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[10px] uppercase tracking-wider text-[#71717a]">
+                            Article observé
+                          </label>
+                          {selectedEq && (
+                            <span
+                              className={`text-[10px] px-1.5 py-0.2 rounded font-medium ${
+                                isSerialized
+                                  ? 'bg-amber-950/40 text-amber-300 border border-amber-500/30'
+                                  : 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30'
+                              }`}
+                            >
+                              {isSerialized ? 'Sérialisé' : 'Standard'}
+                            </span>
+                          )}
+                        </div>
+                        <select
+                          disabled={isSubmitted || equipmentsQuery.isLoading}
+                          value={row.equipmentId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRows((cur) =>
+                              cur.map((item) =>
+                                item.id === row.id
+                                  ? { ...item, equipmentId: val, code: '', quantity: 1 }
+                                  : item,
+                              ),
+                            );
+                            setIsSaved(false);
+                          }}
+                          className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs text-white focus:border-[#d8a868] focus:outline-none disabled:opacity-60"
+                        >
+                          <option value="">
+                            {equipmentsQuery.isLoading
+                              ? 'Chargement des articles...'
+                              : equipmentsQuery.isError
+                                ? 'Erreur de chargement des articles'
+                                : equipmentsQuery.equipments.length === 0
+                                  ? 'Aucun article trouvé'
+                                  : 'Sélectionnez un article...'}
+                          </option>
+                          <optgroup label="Articles standard">
                             {equipmentsQuery.equipments
                               .filter((e) => !e.hasSerialNumber)
                               .map((e) => (
@@ -434,40 +535,85 @@ export default function InventoryTaskPage() {
                                   {e.equipmentName}
                                 </option>
                               ))}
-                          </select>
+                          </optgroup>
+                          <optgroup label="Articles avec numéro de série">
+                            {equipmentsQuery.equipments
+                              .filter((e) => e.hasSerialNumber)
+                              .map((e) => (
+                                <option key={e.equipmentId} value={e.equipmentId}>
+                                  {e.equipmentName} (Sérialisé)
+                                </option>
+                              ))}
+                          </optgroup>
+                        </select>
+                      </div>
+
+                      {/* Saisie quantité ou code série */}
+                      <div className="w-full sm:w-64">
+                        {isSerialized ? (
+                          <div>
+                            <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
+                              Numéro de série
+                            </label>
+                            <SerialCodeInput
+                              value={row.code}
+                              onChange={(value) => {
+                                setRows((cur) =>
+                                  cur.map((item) =>
+                                    item.id === row.id ? { ...item, code: value } : item,
+                                  ),
+                                );
+                                setIsSaved(false);
+                              }}
+                              placeholder="Code série (ex: SN-...)"
+                              className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 font-mono text-xs text-white focus:border-[#d8a868] focus:outline-none disabled:opacity-60"
+                            />
+                          </div>
+                        ) : selectedEq ? (
+                          <div>
+                            <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
+                              Quantité observée
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              disabled={isSubmitted}
+                              value={row.quantity}
+                              onChange={(e) => {
+                                const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                setRows((cur) =>
+                                  cur.map((item) =>
+                                    item.id === row.id ? { ...item, quantity: val } : item,
+                                  ),
+                                );
+                                setIsSaved(false);
+                              }}
+                              className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs font-mono text-white focus:border-[#d8a868] focus:outline-none disabled:opacity-60"
+                            />
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
+                              Détail
+                            </label>
+                            <div className="flex h-9 items-center rounded border border-dashed border-[#3f3f46] bg-[#18181b]/30 px-3 text-[11px] text-[#71717a]">
+                              Sélectionnez d’abord un article
+                            </div>
+                          </div>
                         )}
                       </div>
 
-                      <div className="w-full sm:w-44">
-                        <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
-                          Quantité observée
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          step={1}
-                          disabled={isSubmitted}
-                          value={row.quantity}
-                          onChange={(e) => {
-                            const val = Math.max(0, parseInt(e.target.value, 10) || 0);
-                            setStandardRows((cur) =>
-                              cur.map((item) => (item.id === row.id ? { ...item, quantity: val } : item))
-                            );
-                            setIsSaved(false);
-                          }}
-                          className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs font-mono text-white disabled:opacity-60"
-                        />
-                      </div>
-
+                      {/* Action Supprimer */}
                       {!isSubmitted && (
                         <div className="self-end sm:self-center pt-2 sm:pt-4">
                           <button
                             type="button"
                             onClick={() => {
-                              setStandardRows((cur) => cur.filter((item) => item.id !== row.id));
+                              setRows((cur) => cur.filter((item) => item.id !== row.id));
                               setIsSaved(false);
                             }}
-                            className="rounded p-2 text-rose-400 hover:bg-rose-950/20"
+                            className="rounded p-2 text-rose-400 hover:bg-rose-950/20 transition-colors"
                             title="Supprimer cette ligne"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -478,151 +624,202 @@ export default function InventoryTaskPage() {
                   );
                 })
               )}
-
-              {isAddingShelf && !isSubmitted && (
-                <div className="p-3 rounded border border-[#d8a868]/40 bg-[#18181b] flex flex-col sm:flex-row sm:items-center gap-2">
-                  <select
-                    value={shelfToAdd}
-                    onChange={(e) => setShelfToAdd(e.target.value)}
-                    className="h-9 flex-1 rounded border border-[#3f3f46] bg-[#27272a] px-3 text-xs text-white"
-                  >
-                    <option value="">Sélectionnez l&apos;emplacement...</option>
-                    {shelvesQuery.shelves.map((s) => (
-                      <option key={s.shelfId} value={s.shelfId}>
-                        {s.shelfName}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={!shelfToAdd}
-                      onClick={() => {
-                        setStandardRows((cur) => [
-                          ...cur,
-                          {
-                            id: newId(),
-                            equipmentId: task.unit.equipmentId ?? '',
-                            shelfId: shelfToAdd,
-                            quantity: 0,
-                          },
-                        ]);
-                        setShelfToAdd('');
-                        setIsAddingShelf(false);
-                        setIsSaved(false);
-                      }}
-                      className="h-9 rounded bg-[#d8a868] px-3 text-xs font-medium text-[#18181b] disabled:opacity-40"
-                    >
-                      Ajouter
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddingShelf(false);
-                        setShelfToAdd('');
-                      }}
-                      className="h-9 rounded border border-[#3f3f46] px-3 text-xs text-[#a1a1aa] hover:text-white"
-                    >
-                      Annuler
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           </section>
         )}
 
-        {/* Formulaire Article Sérialisé */}
-        {task.isSerialized && (
+        {/* SECTION INVENTAIRE PAR ARTICLE (BY EQUIPMENT) */}
+        {byEquipment && (
           <section className="overflow-hidden rounded-lg border border-[#3f3f46] bg-[#27272a]">
             <div className="flex items-center justify-between border-b border-[#3f3f46] px-4 py-3 bg-[#27272a]/70">
-              <h2 className="flex items-center gap-1.5 text-xs font-semibold">
-                <Warehouse className="h-3.5 w-3.5 text-[#d8a868]" />
-                Numéros de série observés
-              </h2>
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-[#d8a868]" />
+                <div>
+                  <h2 className="text-xs font-semibold">
+                    {task.isSerialized ? 'Numéros de série observés' : 'Comptage quantitatif par emplacement'}
+                  </h2>
+                  <p className="text-[11px] text-[#a1a1aa]">
+                    {task.isSerialized
+                      ? 'Scannez ou saisissez chaque numéro de série et son emplacement'
+                      : 'Indiquez la quantité observée pour chaque emplacement où cet article est présent'}
+                  </p>
+                </div>
+              </div>
 
               {!isSubmitted && (
                 <button
                   type="button"
                   onClick={() => {
-                    setSerialRows((cur) => [...cur, { id: newId(), code: '', shelfId: '' }]);
+                    setRows((cur) => [
+                      ...cur,
+                      {
+                        id: newId(),
+                        equipmentId: task.unit.equipmentId ?? '',
+                        shelfId: '',
+                        quantity: task.isSerialized ? 1 : 0,
+                        code: '',
+                      },
+                    ]);
                     setIsSaved(false);
                   }}
-                  className="inline-flex items-center gap-1 text-xs text-[#d8a868] hover:underline"
+                  className="inline-flex items-center gap-1.5 rounded bg-[#d8a868] px-3 py-1.5 text-xs font-medium text-[#18181b] hover:bg-[#e0b479] transition-colors"
                 >
-                  <Plus className="h-3 w-3" />
-                  Ajouter une série
+                  <Plus className="h-3.5 w-3.5" />
+                  {task.isSerialized ? 'Ajouter une série' : 'Ajouter un emplacement'}
                 </button>
               )}
             </div>
 
             <div className="p-4 space-y-3">
-              {serialRows.length === 0 ? (
-                <div className="rounded border border-dashed border-[#3f3f46] p-6 text-center text-xs text-[#71717a]">
-                  Aucun numéro de série saisi. Cliquez sur &quot;Ajouter une série&quot; ou scannez les codes-barres.
+              {rows.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 rounded border border-dashed border-[#3f3f46] p-8 text-center text-xs text-[#71717a]">
+                  <p className="text-sm font-medium text-[#d4d4d8]">
+                    {task.isSerialized ? 'Aucun numéro de série consigné' : 'Aucun emplacement consigné'}
+                  </p>
+                  {!isSubmitted && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRows([
+                          {
+                            id: newId(),
+                            equipmentId: task.unit.equipmentId ?? '',
+                            shelfId: '',
+                            quantity: task.isSerialized ? 1 : 0,
+                            code: '',
+                          },
+                        ]);
+                        setIsSaved(false);
+                      }}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded border border-[#3f3f46] bg-[#18181b] px-3 py-1.5 text-xs font-medium text-[#d8a868] hover:border-[#d8a868] hover:text-[#d8a868]"
+                    >
+                      <Plus className="h-3 w-3" />
+                      {task.isSerialized ? 'Ajouter une première série' : 'Ajouter un premier emplacement'}
+                    </button>
+                  )}
                 </div>
               ) : (
-                serialRows.map((row, idx) => (
+                rows.map((row, idx) => (
                   <div
                     key={row.id}
-                    className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded border border-[#3f3f46] bg-[#18181b]/50"
+                    className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg border border-[#3f3f46] bg-[#18181b]/50"
                   >
                     <span className="w-6 text-right font-mono text-[11px] text-[#71717a] hidden sm:block">
                       {idx + 1}.
                     </span>
 
-                    <div className="flex-1">
-                      <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
-                        Code série scanné / saisi
-                      </label>
-                      <SerialCodeInput
-                        value={row.code}
-                        onChange={(value) => {
-                          setSerialRows((cur) =>
-                            cur.map((item) => (item.id === row.id ? { ...item, code: value } : item))
-                          );
-                          setIsSaved(false);
-                        }}
-                        placeholder="Code série observé (ex: SN-...)"
-                        className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 font-mono text-xs text-white focus:border-[#d8a868] focus:outline-none"
-                      />
-                    </div>
+                    {task.isSerialized ? (
+                      <>
+                        <div className="flex-1">
+                          <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
+                            Code série scanné / saisi
+                          </label>
+                          <SerialCodeInput
+                            value={row.code}
+                            onChange={(value) => {
+                              setRows((cur) =>
+                                cur.map((item) =>
+                                  item.id === row.id ? { ...item, code: value } : item,
+                                ),
+                              );
+                              setIsSaved(false);
+                            }}
+                            placeholder="Code série observé (ex: SN-...)"
+                            className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 font-mono text-xs text-white focus:border-[#d8a868] focus:outline-none disabled:opacity-60"
+                          />
+                        </div>
 
-                    <div className="w-full sm:w-56">
-                      <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
-                        Emplacement observé
-                      </label>
-                      <select
-                        disabled={isSubmitted}
-                        value={row.shelfId}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setSerialRows((cur) =>
-                            cur.map((item) => (item.id === row.id ? { ...item, shelfId: val } : item))
-                          );
-                          setIsSaved(false);
-                        }}
-                        className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs text-white disabled:opacity-60"
-                      >
-                        <option value="">Sélectionnez un emplacement...</option>
-                        {shelvesQuery.shelves.map((s) => (
-                          <option key={s.shelfId} value={s.shelfId}>
-                            {s.shelfName}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                        <div className="w-full sm:w-56">
+                          <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
+                            Emplacement observé
+                          </label>
+                          <select
+                            disabled={isSubmitted}
+                            value={row.shelfId}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setRows((cur) =>
+                                cur.map((item) =>
+                                  item.id === row.id ? { ...item, shelfId: val } : item,
+                                ),
+                              );
+                              setIsSaved(false);
+                            }}
+                            className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs text-white focus:border-[#d8a868] focus:outline-none disabled:opacity-60"
+                          >
+                            <option value="">Sélectionnez un emplacement...</option>
+                            {shelvesQuery.shelves.map((s) => (
+                              <option key={s.shelfId} value={s.shelfId}>
+                                {s.shelfName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex-1">
+                          <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
+                            Emplacement observé
+                          </label>
+                          <select
+                            disabled={isSubmitted}
+                            value={row.shelfId}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setRows((cur) =>
+                                cur.map((item) =>
+                                  item.id === row.id ? { ...item, shelfId: val } : item,
+                                ),
+                              );
+                              setIsSaved(false);
+                            }}
+                            className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs text-white focus:border-[#d8a868] focus:outline-none disabled:opacity-60"
+                          >
+                            <option value="">Sélectionnez un emplacement...</option>
+                            {shelvesQuery.shelves.map((s) => (
+                              <option key={s.shelfId} value={s.shelfId}>
+                                {s.shelfName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="w-full sm:w-44">
+                          <label className="block text-[10px] uppercase tracking-wider text-[#71717a] mb-1">
+                            Quantité observée
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            disabled={isSubmitted}
+                            value={row.quantity}
+                            onChange={(e) => {
+                              const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                              setRows((cur) =>
+                                cur.map((item) =>
+                                  item.id === row.id ? { ...item, quantity: val } : item,
+                                ),
+                              );
+                              setIsSaved(false);
+                            }}
+                            className="h-9 w-full rounded border border-[#3f3f46] bg-[#18181b] px-3 text-xs font-mono text-white focus:border-[#d8a868] focus:outline-none disabled:opacity-60"
+                          />
+                        </div>
+                      </>
+                    )}
 
                     {!isSubmitted && (
                       <div className="self-end sm:self-center pt-2 sm:pt-4">
                         <button
                           type="button"
                           onClick={() => {
-                            setSerialRows((cur) => cur.filter((item) => item.id !== row.id));
+                            setRows((cur) => cur.filter((item) => item.id !== row.id));
                             setIsSaved(false);
                           }}
-                          className="rounded p-2 text-rose-400 hover:bg-rose-950/20"
-                          title="Supprimer cette série"
+                          className="rounded p-2 text-rose-400 hover:bg-rose-950/20 transition-colors"
+                          title="Supprimer cette ligne"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

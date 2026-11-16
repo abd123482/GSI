@@ -1664,6 +1664,26 @@ export class InventoryService {
       }
     }
 
+    const [allEquipments, allShelves, allSerials] = await Promise.all([
+      this.prisma.equipment.findMany({
+        select: { equipmentId: true, equipmentName: true, hasSerialNumber: true },
+      }),
+      this.prisma.shelf.findMany({
+        select: { shelfId: true, shelfName: true },
+      }),
+      this.prisma.serialNumber.findMany({
+        select: {
+          serialNumberCode: true,
+          equipmentId: true,
+          equipment: { select: { equipmentName: true } },
+        },
+      }),
+    ]);
+
+    const equipmentMap = new Map(allEquipments.map((e) => [e.equipmentId.toLowerCase(), e]));
+    const shelfMap = new Map(allShelves.map((s) => [s.shelfId.toLowerCase(), s]));
+    const serialMap = new Map(allSerials.map((s) => [s.serialNumberCode.trim().toLowerCase(), s]));
+
     const units = (inventory.units ?? []).map((unit, index) => {
       const counts = unit.counts ?? [];
       const acceptedCount = unit.acceptedCount;
@@ -1698,14 +1718,14 @@ export class InventoryService {
       const rows = Array.from(allKeys).map((key) => {
         const isSer = key.startsWith('SER|');
         const parts = key.split('|');
-        const serialCode = isSer ? parts[1] : null;
+        const rawSerialCode = isSer ? parts[1] : null;
 
         const findQty = (obsList: any[]) => {
           if (isSer) {
             return obsList.some(
               (o) =>
                 (o.scannedSerialCode || o.serialNumberCode || '').toString().trim().toLowerCase() ===
-                serialCode,
+                rawSerialCode,
             )
               ? 1
               : 0;
@@ -1715,6 +1735,7 @@ export class InventoryService {
           return obsList
             .filter(
               (o) =>
+                !(o.scannedSerialCode || o.serialNumberCode) &&
                 (o.observedEquipmentId || o.equipmentId || unit.equipmentId || '')
                   .toString()
                   .trim()
@@ -1727,13 +1748,88 @@ export class InventoryService {
             .reduce((sum, o) => sum + Number(o.quantityCalculated ?? 0), 0);
         };
 
+        let equipmentId: string | null = null;
+        let equipmentName: string | null = null;
+        let shelfId: string | null = null;
+        let shelfName: string | null = null;
+        let serialNumberCode: string | null = null;
+
+        if (isSer && rawSerialCode) {
+          const sObj = serialMap.get(rawSerialCode.toLowerCase());
+          let obsEqId: string | null = null;
+          let obsSerialRaw: string | null = null;
+
+          for (const { obs } of subByCtrlId.values()) {
+            const found = obs.find(
+              (o) =>
+                (o.scannedSerialCode || o.serialNumberCode || '')
+                  .toString()
+                  .trim()
+                  .toLowerCase() === rawSerialCode.toLowerCase(),
+            );
+            if (found) {
+              if (!obsSerialRaw) {
+                obsSerialRaw = (found.scannedSerialCode || found.serialNumberCode || '').toString().trim();
+              }
+              if (found.observedEquipmentId || found.equipmentId) {
+                obsEqId = (found.observedEquipmentId || found.equipmentId).toString().trim();
+                break;
+              }
+            }
+          }
+
+          if (!obsEqId && accObs) {
+            const found = accObs.find(
+              (o) =>
+                (o.scannedSerialCode || o.serialNumberCode || '')
+                  .toString()
+                  .trim()
+                  .toLowerCase() === rawSerialCode.toLowerCase(),
+            );
+            if (found) {
+              if (!obsSerialRaw) {
+                obsSerialRaw = (found.scannedSerialCode || found.serialNumberCode || '').toString().trim();
+              }
+              if (found.observedEquipmentId || found.equipmentId) {
+                obsEqId = (found.observedEquipmentId || found.equipmentId).toString().trim();
+              }
+            }
+          }
+
+          serialNumberCode = sObj?.serialNumberCode ?? obsSerialRaw ?? rawSerialCode;
+          equipmentId = sObj?.equipmentId ?? obsEqId ?? unit.equipmentId ?? null;
+          const eqObj = equipmentId ? equipmentMap.get(equipmentId.toLowerCase()) : null;
+          equipmentName =
+            eqObj?.equipmentName ??
+            sObj?.equipment?.equipmentName ??
+            unit.equipment?.equipmentName ??
+            'Article';
+
+          const shId = parts[2];
+          const shObj = shId ? shelfMap.get(shId.toLowerCase()) : null;
+          shelfId = shObj?.shelfId ?? (shId || unit.shelfId) ?? null;
+          shelfName = shObj?.shelfName ?? unit.shelf?.shelfName ?? null;
+        } else {
+          const eqId = parts[1];
+          const shId = parts[2];
+
+          const eqObj = eqId ? equipmentMap.get(eqId.toLowerCase()) : null;
+          equipmentId = eqObj?.equipmentId ?? (eqId || unit.equipmentId) ?? null;
+          equipmentName = eqObj?.equipmentName ?? unit.equipment?.equipmentName ?? 'Article';
+
+          const shObj = shId ? shelfMap.get(shId.toLowerCase()) : null;
+          shelfId = shObj?.shelfId ?? (shId || unit.shelfId) ?? null;
+          shelfName = shObj?.shelfName ?? unit.shelf?.shelfName ?? null;
+          serialNumberCode = null;
+        }
+
         const controllerCells: Record<string, { quantity: number | null; serialNumberCode: string | null; isSubmitted: boolean }> = {};
         for (const ctrl of controllers) {
           const data = subByCtrlId.get(ctrl.inventoryControllerId);
           const isSub = Boolean(data?.count?.submittedAt);
           controllerCells[ctrl.inventoryControllerId] = {
             quantity: isSub ? findQty(data!.obs) : null,
-            serialNumberCode: serialCode,
+            serialNumberCode: isSer ? serialNumberCode : null,
             isSubmitted: isSub,
           };
         }
@@ -1744,25 +1840,35 @@ export class InventoryService {
         const c2Data = controllers[1] ? controllerCells[controllers[1].inventoryControllerId] : null;
         const c3Data = controllers[2] ? controllerCells[controllers[2].inventoryControllerId] : null;
 
+        const statusFor = (cData: { quantity: number | null } | null) => {
+          if (qAcc !== null) {
+            return cData?.quantity === qAcc ? 'CONFORME' : 'DIVERGENT';
+          }
+          if (c1Data && c2Data && c1Data.quantity !== null && c2Data.quantity !== null) {
+            return c1Data.quantity === c2Data.quantity ? 'CONFORME' : 'DIVERGENT';
+          }
+          return 'PENDING';
+        };
+
         return {
           key,
           kind: isSer ? 'SERIALIZED' : 'STANDARD',
-          equipmentId: unit.equipmentId,
-          equipmentName: unit.equipment?.equipmentName ?? null,
-          shelfId: unit.shelfId,
-          shelfName: unit.shelf?.shelfName ?? null,
-          serialNumberCode: serialCode,
+          equipmentId,
+          equipmentName,
+          shelfId,
+          shelfName,
+          serialNumberCode: isSer ? serialNumberCode : null,
           controllerCells,
-          controller1: c1Data?.quantity !== null && c1Data ? { quantity: c1Data.quantity, serialNumberCode: serialCode } : null,
-          controller2: c2Data?.quantity !== null && c2Data ? { quantity: c2Data.quantity, serialNumberCode: serialCode } : null,
-          controller3: c3Data?.quantity !== null && c3Data ? { quantity: c3Data.quantity, serialNumberCode: serialCode } : null,
-          accepted: qAcc !== null ? { quantity: qAcc, serialNumberCode: serialCode } : null,
+          controller1: c1Data?.quantity !== null && c1Data ? { quantity: c1Data.quantity, serialNumberCode: isSer ? serialNumberCode : null } : null,
+          controller2: c2Data?.quantity !== null && c2Data ? { quantity: c2Data.quantity, serialNumberCode: isSer ? serialNumberCode : null } : null,
+          controller3: c3Data?.quantity !== null && c3Data ? { quantity: c3Data.quantity, serialNumberCode: isSer ? serialNumberCode : null } : null,
+          accepted: qAcc !== null ? { quantity: qAcc, serialNumberCode: isSer ? serialNumberCode : null } : null,
           controller1VsAccepted: {
-            status: c1Data?.quantity === qAcc ? 'CONFORME' : 'DIVERGENT',
+            status: statusFor(c1Data),
             delta: c1Data?.quantity !== null && qAcc !== null && c1Data ? c1Data.quantity - qAcc : null,
           },
           controller2VsAccepted: {
-            status: c2Data?.quantity === qAcc ? 'CONFORME' : 'DIVERGENT',
+            status: statusFor(c2Data),
             delta: c2Data?.quantity !== null && qAcc !== null && c2Data ? c2Data.quantity - qAcc : null,
           },
         };

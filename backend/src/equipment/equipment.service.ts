@@ -55,6 +55,7 @@ export class EquipmentService {
       await this.assertEquipmentNameAvailable(this.prisma, data.equipmentName);
       return this.prisma.equipment.create({
         data: {
+          
           equipmentName: data.equipmentName,
           hasSerialNumber: data.hasSerialNumber,
           minequipmentQuantity: data.minEquipmentQuantity,

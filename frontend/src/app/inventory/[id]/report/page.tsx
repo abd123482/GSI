@@ -541,12 +541,25 @@ export default function InventoryReportPage() {
                         <tr key={row.key} className="hover:bg-[#18181b]/30">
                           <td className="px-3 py-3">
                             <p className="font-semibold text-white">
-                              {row.serialNumberCode ?? row.equipmentName ?? 'Élément'}
+                              {row.equipmentName || 'Article'}
                             </p>
-                            <p className="mt-0.5 text-[10px] text-[#a1a1aa]">
-                              {row.kind}
-                              {row.shelfName ? ` • ${row.shelfName}` : ''}
-                            </p>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-[#a1a1aa]">
+                              <span
+                                className={`rounded px-1.5 py-0.5 font-medium ${
+                                  row.kind === 'SERIALIZED'
+                                    ? 'border border-amber-500/30 bg-amber-950/40 text-amber-300'
+                                    : 'border border-emerald-500/30 bg-emerald-950/40 text-emerald-300'
+                                }`}
+                              >
+                                {row.kind === 'SERIALIZED' ? 'SÉRIALISÉ' : 'STANDARD'}
+                              </span>
+                              {row.kind === 'SERIALIZED' && row.serialNumberCode && (
+                                <span className="font-mono text-amber-200 font-medium">
+                                  N° de série : {row.serialNumberCode}
+                                </span>
+                              )}
+                              {row.shelfName && <span>• {row.shelfName}</span>}
+                            </div>
                           </td>
 
                           {controllersList.map((_, idx) => {

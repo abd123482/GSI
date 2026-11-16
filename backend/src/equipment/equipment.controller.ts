@@ -31,7 +31,7 @@ export class EquipmentController {
     private readonly equipmentService: EquipmentService,
   ) { }
 
-  @RequirePermissions('equipment.read')
+  @RequirePermissions('equipment.read', 'inventory.count')
   @Get('search')
   searchEquipments(
     @Query() query: SearchEquipmentDTO,
@@ -65,7 +65,7 @@ export class EquipmentController {
     );
   }
 
-  @RequirePermissions('equipment.read')
+  @RequirePermissions('equipment.read', 'inventory.count')
   @Get(':id')
   getEquipmentById(
     @Param('id', new ParseUUIDPipe({ version: '4' }))
@@ -74,7 +74,7 @@ export class EquipmentController {
     return this.equipmentService.getEquipmentById(id);
   }
 
-  @RequirePermissions('equipment.read')
+  @RequirePermissions('equipment.read', 'inventory.count')
   @Get()
   getAllEquipments(
     @Query() pagination: PaginationDTO,

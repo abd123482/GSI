@@ -133,8 +133,9 @@ export function useEquipments(
       },
 
       enabled:
-        options?.enabled ??
-        true,
+        authReady &&
+        Boolean(userId) &&
+        (options?.enabled ?? true),
 
       placeholderData:
         keepPreviousData,
