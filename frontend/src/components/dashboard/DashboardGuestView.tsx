@@ -1,16 +1,14 @@
 'use client';
 
 import React from 'react';
-import { SignInButton } from '@clerk/nextjs';
+import { SignInButton, SignUpButton } from '@clerk/nextjs';
 import {
   Boxes,
   Layers,
   ClipboardCheck,
-  ShieldCheck,
-  Lock,
+  LogIn,
+  UserPlus,
   ArrowRight,
-  Activity,
-  Terminal,
 } from 'lucide-react';
 
 export function DashboardGuestView() {
@@ -54,19 +52,57 @@ export function DashboardGuestView() {
           </div>
         </div>
 
-        {/* Call to Action */}
-        <div className="pt-2 border-t border-[#3f3f46]">
-          <SignInButton mode="modal">
-            <button
-              type="button"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#fafafa] hover:bg-[#f4f4f5] text-[#18181b] text-sm font-semibold rounded-lg shadow-md transition-all cursor-pointer hover:scale-[1.01]"
-            >
-              <Lock className="w-4 h-4" />
-              <span>Se connecter à votre espace Somépharm</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </SignInButton>
-          <p className="text-[11px] font-mono text-[#a1a1aa] mt-2.5">
+        {/* Call to Action: Choix d'authentification */}
+        <div className="pt-4 border-t border-[#3f3f46] space-y-4">
+          <p className="text-xs font-mono text-[#a1a1aa]">
+            Accéder à la plateforme :
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto">
+            {/* Option 1: Compte existant */}
+            <SignInButton mode="modal">
+              <button
+                type="button"
+                className="w-full flex items-center gap-3 p-3.5 bg-[#fafafa] hover:bg-[#f4f4f5] text-[#18181b] rounded-xl shadow-md transition-all cursor-pointer hover:scale-[1.01] text-left group"
+              >
+                <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-[#18181b]/10 text-[#18181b] shrink-0">
+                  <LogIn className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold flex items-center justify-between">
+                    <span>Se connecter</span>
+                    <ArrowRight className="w-4 h-4 opacity-70 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                  </div>
+                  <span className="text-[11px] text-zinc-600 block truncate">
+                    J&apos;ai déjà un compte
+                  </span>
+                </div>
+              </button>
+            </SignInButton>
+
+            {/* Option 2: Nouveau compte */}
+            <SignUpButton mode="modal">
+              <button
+                type="button"
+                className="w-full flex items-center gap-3 p-3.5 bg-[#18181b] hover:bg-[#27272a] border border-[#3f3f46] hover:border-zinc-500 text-[#fafafa] rounded-xl shadow-md transition-all cursor-pointer hover:scale-[1.01] text-left group"
+              >
+                <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold flex items-center justify-between">
+                    <span>Créer un compte</span>
+                    <ArrowRight className="w-4 h-4 text-emerald-400/70 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                  </div>
+                  <span className="text-[11px] text-[#a1a1aa] block truncate">
+                    Nouveau compte (sans compte)
+                  </span>
+                </div>
+              </button>
+            </SignUpButton>
+          </div>
+
+          <p className="text-[11px] font-mono text-[#71717a]">
             Accès sécurisé par authentification unifiée & rôles RBAC.
           </p>
         </div>
