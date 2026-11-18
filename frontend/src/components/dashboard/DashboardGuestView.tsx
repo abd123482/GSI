@@ -14,7 +14,7 @@ export function DashboardGuestView() {
       <div className="w-full max-w-[420px] flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
         {/* Logo directly above the login panel */}
         <div className="mb-6 flex flex-col items-center">
-          <GSILogo className="h-10 w-auto drop-shadow-md" />
+          <GSILogo className="h-16 sm:h-20 w-auto drop-shadow-lg" />
         </div>
 
         {/* Switcher Tab between Login & Registration */}

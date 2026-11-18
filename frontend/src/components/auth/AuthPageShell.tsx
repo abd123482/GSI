@@ -26,7 +26,7 @@ export function AuthPageShell({ mode, children }: AuthPageShellProps) {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-[#18181b] px-4 py-12 text-[#fafafa]">
       <div className="flex w-full max-w-md flex-col items-center gap-6">
-        <GSILogo className="h-8 w-auto" />
+        <GSILogo className="h-16 sm:h-20 w-auto drop-shadow-lg" />
 
         <div className="w-full">{children}</div>
 
