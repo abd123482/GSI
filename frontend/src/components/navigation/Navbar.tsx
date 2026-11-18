@@ -11,8 +11,6 @@ import {
 import {
   useAuth,
   UserButton,
-  SignInButton,
-  SignUpButton,
 } from '@clerk/nextjs';
 import {
   ArrowRightLeft,
@@ -241,26 +239,7 @@ export function Navbar() {
                 </UserButton.MenuItems>
               </UserButton>
             </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <SignInButton mode="modal">
-                <button
-                  type="button"
-                  className="rounded border border-[#3f3f46] px-3 py-1.5 text-xs font-medium text-[#d4d4d8] hover:bg-[#27272a] hover:text-[#fafafa] transition-colors cursor-pointer"
-                >
-                  Connexion
-                </button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button
-                  type="button"
-                  className="rounded bg-[#fafafa] px-3 py-1.5 text-xs font-medium text-[#18181b] hover:bg-[#f4f4f5] transition-colors cursor-pointer"
-                >
-                  Inscription
-                </button>
-              </SignUpButton>
-            </div>
-          )}
+          ) : null}
 
           <button
             type="button"
