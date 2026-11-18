@@ -50,7 +50,7 @@ export default function HomePage() {
   // 2. Unauthenticated Guest View
   if (!isSignedIn) {
     return (
-      <main className="min-h-[calc(100vh-3.5rem)] bg-[#18181b] text-[#fafafa] flex flex-col">
+      <main className="min-h-screen bg-[#18181b] text-[#fafafa] flex flex-col">
         <DashboardGuestView />
       </main>
     );
