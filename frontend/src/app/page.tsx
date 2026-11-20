@@ -9,6 +9,7 @@ import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { DashboardKpiGrid } from '@/components/dashboard/DashboardKpiGrid';
 import { DashboardCharts } from '@/components/dashboard/DashboardCharts';
 import { DashboardTables } from '@/components/dashboard/DashboardTables';
+import { DashboardAnomaliesHub } from '@/components/dashboard/DashboardAnomaliesHub';
 import { DashboardGuestView } from '@/components/dashboard/DashboardGuestView';
 
 export default function HomePage() {
@@ -90,10 +91,13 @@ export default function HomePage() {
             {/* Row 1: KPI Cards Grid */}
             <DashboardKpiGrid stats={stats} />
 
-            {/* Row 2: Recharts Visualizations (Flux & Entrepôts) */}
+            {/* Row 2: Centralized Anomalies & Discrepancies Center */}
+            <DashboardAnomaliesHub stats={stats} />
+
+            {/* Row 3: Recharts Visualizations (Flux & Entrepôts) */}
             <DashboardCharts stats={stats} />
 
-            {/* Row 3: Operational Data Tables (Mouvements, Inventaires, Alertes) */}
+            {/* Row 4: Operational Data Tables (Mouvements, Inventaires, Alertes) */}
             <DashboardTables stats={stats} />
           </>
         ) : (

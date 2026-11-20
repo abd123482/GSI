@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
+  Boxes,
 } from 'lucide-react';
 import { DashboardStats } from '@/types/dashboard';
 
@@ -133,7 +134,7 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
         )}
       </div>
 
-      {/* Panel 2 & 3: Right Column (Inventories & Low Stock Alerts) */}
+      {/* Right Column: Inventory Campaigns & Stock Thresholds */}
       <div className="space-y-4">
         {/* Active Inventories */}
         <div className="p-4 bg-[#27272a] border border-[#3f3f46] rounded-[4px] shadow-2xs space-y-3">
@@ -141,7 +142,7 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4 text-[#f59e0b]" />
               <h2 className="text-xs font-mono font-medium text-[#fafafa] uppercase tracking-wider">
-                Campagnes d&apos;Inventaire
+                Campagnes d&apos;Inventaire ({inventoryOverview.activeInventoriesCount} actives)
               </h2>
             </div>
             <Link
@@ -162,21 +163,21 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
               {inventoryOverview.activeCampaigns.map((inv, idx) => (
                 <Link
                   key={inv.inventoryId || `campaign-${idx}`}
-                  href={`/inventory`}
+                  href="/inventory"
                   className="block p-2.5 bg-[#18181b] hover:bg-[#322c28] border border-[#3f3f46] rounded-[3px] transition-colors"
                 >
                   <div className="flex items-center justify-between text-xs font-mono">
                     <span className="font-medium text-[#fafafa] truncate max-w-[170px]">
                       {inv.title}
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-950/50 text-amber-300 border border-amber-500/30">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-950/50 text-amber-300 border border-amber-500/30">
                       {inv.status}
                     </span>
                   </div>
 
                   <div className="mt-2 space-y-1">
                     <div className="flex items-center justify-between text-[10px] font-mono text-[#a1a1aa]">
-                      <span>Comptage ({inv.completedWorkUnits}/{inv.totalWorkUnits})</span>
+                      <span>Unités complétées ({inv.completedWorkUnits}/{inv.totalWorkUnits})</span>
                       <span className="font-bold text-[#fafafa]">{inv.progressPercent}%</span>
                     </div>
                     <div className="w-full h-1.5 bg-[#1a1715] rounded-full overflow-hidden">
@@ -192,30 +193,53 @@ export function DashboardTables({ stats }: DashboardTablesProps) {
           )}
         </div>
 
-        {/* Low Stock Alerts */}
+        {/* Low Stock & Out of Stock Alerts */}
         <div className="p-4 bg-[#27272a] border border-[#3f3f46] rounded-[4px] shadow-2xs space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-[#ef4444]" />
               <h2 className="text-xs font-mono font-medium text-[#fafafa] uppercase tracking-wider">
-                Articles sous seuil d&apos;alerte
+                Surveillance Niveaux de Stock
               </h2>
             </div>
             <span className="text-[11px] font-mono text-[#ef4444] font-semibold">
-              {stockOverview.lowStockCount} alerte{stockOverview.lowStockCount > 1 ? 's' : ''}
+              {stockOverview.lowStockCount + stockOverview.outOfStockCount} alerte{stockOverview.lowStockCount + stockOverview.outOfStockCount > 1 ? 's' : ''}
             </span>
           </div>
 
-          {stockOverview.lowStockItems.length === 0 ? (
+          {stockOverview.lowStockItems.length === 0 && stockOverview.outOfStockItems.length === 0 ? (
             <div className="py-4 text-center text-xs font-mono text-[#10b981] flex items-center justify-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>Tous les articles respectent le seuil minimum.</span>
             </div>
           ) : (
             <div className="space-y-2">
+              {/* Out of Stock (0 units) */}
+              {stockOverview.outOfStockItems.map((item, idx) => (
+                <div
+                  key={`out-item-${item.equipmentId || idx}`}
+                  className="p-2 bg-[#18181b] border border-rose-900/60 rounded-[3px] flex items-center justify-between text-xs font-mono"
+                >
+                  <div className="min-w-0 pr-2">
+                    <p className="font-medium text-[#fafafa] truncate max-w-[150px]">
+                      {item.equipmentName}
+                    </p>
+                    <p className="text-[10px] text-rose-400">
+                      Rupture totale • Seuil: {item.minequipmentQuantity} u.
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-700 font-bold text-xs">
+                      0 u.
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {/* Low Stock items */}
               {stockOverview.lowStockItems.map((item, idx) => (
                 <div
-                  key={item.equipmentId || `low-stock-${idx}`}
+                  key={`low-item-${item.equipmentId || idx}`}
                   className="p-2 bg-[#18181b] border border-[#451e1e] rounded-[3px] flex items-center justify-between text-xs font-mono"
                 >
                   <div className="min-w-0 pr-2">
