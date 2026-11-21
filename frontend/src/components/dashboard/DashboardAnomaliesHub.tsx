@@ -23,11 +23,19 @@ interface DashboardAnomaliesHubProps {
 type AnomalyFilter = 'ALL' | 'INVENTORY' | 'STOCK' | 'SERIAL';
 
 export function DashboardAnomaliesHub({ stats }: DashboardAnomaliesHubProps) {
-  const { anomaliesOverview, inventoryOverview, stockOverview } = stats;
+  const anomaliesOverview = stats?.anomaliesOverview ?? {
+    totalAnomalies: 0,
+    criticalCount: 0,
+    warningCount: 0,
+    inventoryIssuesCount: 0,
+    stockAlertsCount: 0,
+    orphanSerialsCount: 0,
+    items: [],
+  };
   const [filter, setFilter] = useState<AnomalyFilter>('ALL');
 
   const filteredItems = useMemo(() => {
-    return anomaliesOverview.items.filter((item) => {
+    return (anomaliesOverview.items || []).filter((item) => {
       if (filter === 'ALL') return true;
       if (filter === 'INVENTORY') {
         return item.category === 'DISAGREEMENT' || item.category === 'STOCK_VARIANCE';

@@ -21,7 +21,49 @@ interface DashboardKpiGridProps {
 }
 
 export function DashboardKpiGrid({ stats }: DashboardKpiGridProps) {
-  const { stockOverview, inventoryOverview, anomaliesOverview } = stats;
+  const anomaliesOverview = stats?.anomaliesOverview ?? {
+    totalAnomalies: 0,
+    criticalCount: 0,
+    warningCount: 0,
+    inventoryIssuesCount: 0,
+    stockAlertsCount: 0,
+    orphanSerialsCount: 0,
+    items: [],
+  };
+
+  const stockOverview = {
+    totalArticles: stats?.stockOverview?.totalArticles ?? 0,
+    totalUnits: stats?.stockOverview?.totalUnits ?? 0,
+    totalSerials: stats?.stockOverview?.totalSerials ?? 0,
+    serialsWithShelf: stats?.stockOverview?.serialsWithShelf ?? 0,
+    unassignedSerials: stats?.stockOverview?.unassignedSerials ?? 0,
+    lowStockCount: stats?.stockOverview?.lowStockCount ?? 0,
+    outOfStockCount: stats?.stockOverview?.outOfStockCount ?? 0,
+    healthyStockCount: stats?.stockOverview?.healthyStockCount ?? 0,
+    totalShelves: stats?.stockOverview?.totalShelves ?? 0,
+    occupiedShelves: stats?.stockOverview?.occupiedShelves ?? 0,
+    emptyShelves: stats?.stockOverview?.emptyShelves ?? 0,
+    totalStocks: stats?.stockOverview?.totalStocks ?? 0,
+    lowStockItems: stats?.stockOverview?.lowStockItems ?? [],
+    outOfStockItems: stats?.stockOverview?.outOfStockItems ?? [],
+    stockDistribution: stats?.stockOverview?.stockDistribution ?? [],
+  };
+
+  const inventoryOverview = {
+    totalInventories: stats?.inventoryOverview?.totalInventories ?? 0,
+    activeInventoriesCount: stats?.inventoryOverview?.activeInventoriesCount ?? 0,
+    completedInventoriesCount: stats?.inventoryOverview?.completedInventoriesCount ?? 0,
+    pendingAdjudications: stats?.inventoryOverview?.pendingAdjudications ?? 0,
+    totalWorkUnits: stats?.inventoryOverview?.totalWorkUnits ?? 0,
+    convergedWorkUnits: stats?.inventoryOverview?.convergedWorkUnits ?? 0,
+    divergentWorkUnits: stats?.inventoryOverview?.divergentWorkUnits ?? 0,
+    pendingWorkUnits: stats?.inventoryOverview?.pendingWorkUnits ?? 0,
+    accuracyRate: stats?.inventoryOverview?.accuracyRate ?? 100,
+    totalIssues: stats?.inventoryOverview?.totalIssues ?? 0,
+    openIssuesCount: stats?.inventoryOverview?.openIssuesCount ?? 0,
+    resolvedIssuesCount: stats?.inventoryOverview?.resolvedIssuesCount ?? 0,
+    activeCampaigns: stats?.inventoryOverview?.activeCampaigns ?? [],
+  };
 
   const serialAssignmentRate =
     stockOverview.totalSerials > 0

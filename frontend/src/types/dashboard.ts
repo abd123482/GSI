@@ -81,7 +81,7 @@ export interface DashboardStats {
       progressPercent: number;
     }>;
   };
-  anomaliesOverview: {
+  anomaliesOverview?: {
     totalAnomalies: number;
     criticalCount: number;
     warningCount: number;

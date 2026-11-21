@@ -25,7 +25,18 @@ export function DashboardCharts({ stats }: DashboardChartsProps) {
     setIsMounted(true);
   }, []);
 
-  const { movementOverview, stockOverview } = stats;
+  const movementOverview = stats?.movementOverview ?? {
+    totalMovements: 0,
+    inCount: 0,
+    outCount: 0,
+    transferCount: 0,
+    recentMovements: [],
+  };
+
+  const stockOverview = {
+    ...stats?.stockOverview,
+    stockDistribution: stats?.stockOverview?.stockDistribution ?? [],
+  };
 
   const movementData = [
     {

@@ -17,7 +17,37 @@ interface DashboardTablesProps {
 }
 
 export function DashboardTables({ stats }: DashboardTablesProps) {
-  const { movementOverview, inventoryOverview, stockOverview } = stats;
+  const movementOverview = stats?.movementOverview ?? {
+    totalMovements: 0,
+    inCount: 0,
+    outCount: 0,
+    transferCount: 0,
+    recentMovements: [],
+  };
+
+  const inventoryOverview = {
+    totalInventories: stats?.inventoryOverview?.totalInventories ?? 0,
+    activeInventoriesCount: stats?.inventoryOverview?.activeInventoriesCount ?? 0,
+    completedInventoriesCount: stats?.inventoryOverview?.completedInventoriesCount ?? 0,
+    pendingAdjudications: stats?.inventoryOverview?.pendingAdjudications ?? 0,
+    totalWorkUnits: stats?.inventoryOverview?.totalWorkUnits ?? 0,
+    convergedWorkUnits: stats?.inventoryOverview?.convergedWorkUnits ?? 0,
+    divergentWorkUnits: stats?.inventoryOverview?.divergentWorkUnits ?? 0,
+    pendingWorkUnits: stats?.inventoryOverview?.pendingWorkUnits ?? 0,
+    accuracyRate: stats?.inventoryOverview?.accuracyRate ?? 100,
+    totalIssues: stats?.inventoryOverview?.totalIssues ?? 0,
+    openIssuesCount: stats?.inventoryOverview?.openIssuesCount ?? 0,
+    resolvedIssuesCount: stats?.inventoryOverview?.resolvedIssuesCount ?? 0,
+    activeCampaigns: stats?.inventoryOverview?.activeCampaigns ?? [],
+  };
+
+  const stockOverview = {
+    ...stats?.stockOverview,
+    lowStockCount: stats?.stockOverview?.lowStockCount ?? 0,
+    outOfStockCount: stats?.stockOverview?.outOfStockCount ?? 0,
+    lowStockItems: stats?.stockOverview?.lowStockItems ?? [],
+    outOfStockItems: stats?.stockOverview?.outOfStockItems ?? [],
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
